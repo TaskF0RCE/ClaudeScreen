@@ -1,0 +1,4 @@
+' Lance ClaudeEcran sans aucune fenetre (seulement l'icone dans la zone de notifications).
+Set fso = CreateObject("Scripting.FileSystemObject")
+dossier = fso.GetParentFolderName(WScript.ScriptFullName)
+CreateObject("WScript.Shell").Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -File """ & dossier & "\ClaudeEcran.ps1""", 0, False

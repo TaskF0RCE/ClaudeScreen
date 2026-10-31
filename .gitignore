@@ -1,0 +1,6 @@
+# Données privées et fichiers générés
+runs/
+journal.txt
+reglages.json
+modele.txt
+outils/*.dll
