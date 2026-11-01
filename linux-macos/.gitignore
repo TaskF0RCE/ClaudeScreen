@@ -1,0 +1,4 @@
+# Tout ce qui est généré (captures, journal, réglages, environnement Python, caches) est dans donnees/
+donnees/
+__pycache__/
+.DS_Store

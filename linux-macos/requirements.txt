@@ -1,0 +1,11 @@
+# Installé par installer.sh. pynput est installé à part avec --no-deps
+# (sous Linux, sa dépendance evdev doit être compilée et ne sert pas ici).
+pystray>=0.19
+mss>=9.0
+Pillow>=9.0
+Send2Trash>=1.8
+six>=1.16
+python-xlib>=0.33; sys_platform == "linux"
+pyobjc-framework-Cocoa>=9.0; sys_platform == "darwin"
+pyobjc-framework-Quartz>=9.0; sys_platform == "darwin"
+pyobjc-framework-ApplicationServices>=9.0; sys_platform == "darwin"
