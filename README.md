@@ -6,6 +6,8 @@ Il n'y a pas de fenêtre, seulement une icône dans la zone de notifications de 
 
 > Projet perso, non officiel, sans lien avec Anthropic. Il utilise [Claude Code](https://docs.claude.com/en/docs/claude-code) avec ton propre compte Claude.
 
+> **macOS et Linux :** une adaptation se trouve dans [`linux-macos/`](linux-macos/README.md).
+
 ## Fonctionnement
 
 1. Tu appuies sur **Ctrl+Alt+C** (ou **Ctrl+Alt+touche Copilot**).
