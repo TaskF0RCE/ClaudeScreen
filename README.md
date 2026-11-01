@@ -24,6 +24,15 @@ Il n'y a pas de fenêtre, seulement une icône dans la zone de notifications de 
 - **Échap** ou un clic ailleurs annule la tâche et efface la capture.
 - **Entrée** sur une barre vide lance une tâche normale.
 
+### Contexte permanent (facultatif)
+
+Le dossier `Documents\Claude-Travail\System-Context` est créé au premier lancement.
+
+- **`instructions.txt`** : tes consignes permanentes, une par ligne, ajoutées à chaque tâche. Par exemple : « je suis en BTS SIO », « ne clique jamais sur Terminer l'examen », « réponds en français ». Les lignes qui commencent par `#` sont ignorées : tant que tu n'écris rien d'autre, le fichier ne fait rien.
+- **Les autres fichiers du dossier** (cours, PDF, énoncés...) : Claude reçoit leur liste à chaque tâche et lit ceux qui sont utiles. Il n'a pas le droit de les modifier.
+
+Ordre de priorité : la consigne tapée dans la barre, puis `instructions.txt`, puis ce que Claude devine à l'écran.
+
 ### Packet Tracer
 
 Tu places les équipements et tu les relies. Claude ne touche ni aux équipements ni aux câbles : il configure chaque appareil via son onglet **CLI** (un fichier de commandes par appareil, tapé dans la console) et vérifie avec des commandes `show`. Pour les PC, il utilise Desktop > IP Configuration.
@@ -73,10 +82,17 @@ Prérequis : Windows 10 ou 11, avec PowerShell 5.1 (déjà présent dans Windows
    irm https://claude.ai/install.ps1 | iex
    ```
 2. Connecte-toi une fois : lance `%USERPROFILE%\.local\bin\claude.exe`, choisis la connexion avec ton compte Claude, puis tape `/exit`.
-3. Copie ce dossier dans `%LOCALAPPDATA%\ClaudeEcran` (ou ailleurs : les chemins sont relatifs au dossier du script).
-4. Double-clique sur `Lancer.vbs`. L'icône apparaît dans la zone de notifications.
+3. Copie ce dossier dans `%USERPROFILE%\ClaudeEcran` (ou ailleurs : les chemins sont relatifs au dossier du script).
+4. Fais-le démarrer avec Windows et lance-le tout de suite :
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\ClaudeEcran\Installer-Demarrage.ps1"
+   Start-ScheduledTask -TaskName ClaudeEcran
+   ```
+   L'icône apparaît dans la zone de notifications. Une tâche planifiée « ClaudeEcran » le relancera 20 s après chaque ouverture de session, sans fenêtre. Pour la retirer, ajoute `-Retirer` à la première commande.
 
-Pour le lancer avec Windows : `Win+R` → `shell:startup`, puis mets-y un raccourci vers `Lancer.vbs`.
+`Lancer.vbs` permet aussi de le lancer à la main (double-clic), mais Windows est en train d'abandonner VBScript : préfère la tâche planifiée.
+
+> **Ne mets pas le dossier dans `AppData`** si tu l'installes depuis Claude Desktop (appli du Microsoft Store). Windows redirige alors les fichiers vers un dossier privé de Claude Desktop, invisible au démarrage du PC, et tu obtiens « fichier introuvable ».
 
 ## Raccourcis
 
@@ -99,7 +115,8 @@ Ctrl+Alt+C est global : tant que l'appli tourne, il n'arrive plus aux autres log
 
 ```
 ClaudeEcran.ps1     appli de la zone de notifications : raccourcis, capture, tri du modèle, lancement de Claude
-Lancer.vbs          lance l'appli sans fenêtre
+Lancer.vbs          lance l'appli sans fenêtre (à la main)
+Installer-Demarrage.ps1  installe ou retire la tâche planifiée de démarrage
 outils/natif.cs     appels Windows (DPI, capture, souris, clavier, raccourcis globaux, fenêtre active)
 outils/natif.ps1    compile natif.cs en DLL une seule fois (le nom change si le source change)
 outils/pc.ps1       outil de contrôle du PC utilisé par Claude
