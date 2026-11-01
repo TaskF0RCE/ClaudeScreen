@@ -1,0 +1,5 @@
+# Chaque fichier est relu par un autre membre de l'équipe : GitHub demande
+# automatiquement la review aux autres (jamais à l'auteur de la PR).
+# Note : sur le plan gratuit, les CODEOWNERS ne sont actifs que dans les repos publics ;
+# pour les repos privés, le bouton « Prête pour review » du dashboard demande la review.
+* @snakeify @klem844 @Paul55672

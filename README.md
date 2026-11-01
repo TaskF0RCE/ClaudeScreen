@@ -119,3 +119,8 @@ Nettoyage automatique : au démarrage puis toutes les 6 heures, l'appli efface d
 - Il ne génère pas de fichier `.pkt` : c'est un format chiffré et fermé.
 - Pour les sites web, l'extension Claude in Chrome est souvent plus fiable : elle lit directement le contenu de la page au lieu de passer par des captures.
 - Un seul écran est capturé : celui où se trouve la souris au moment de l'appui.
+
+## Contribuer et versions
+
+Le cycle de travail (issue → branche → PR → review → merge) est décrit dans [CONTRIBUTING.md](CONTRIBUTING.md) ; le plus simple est de passer par le [dashboard VeD Opps](https://taskf0rce.github.io/VeD_Opps/).
+Les versions sont publiées automatiquement (bouton « Nouvelle release » du dashboard) : voir les [releases](../../releases) et le `CHANGELOG.md`.
