@@ -1,4 +1,4 @@
-# ClaudeEcran
+# ClaudeScreen
 
 Un raccourci clavier Windows qui donne à Claude ce qui est à l'écran, pour qu'il fasse la tâche à ta place : cocher un QCM, remplir un formulaire, taper des commandes dans Packet Tracer ou GNS3, créer un fichier (code, schéma, résumé...).
 
@@ -89,13 +89,13 @@ Prérequis : Windows 10 ou 11, avec PowerShell 5.1 (déjà présent dans Windows
    irm https://claude.ai/install.ps1 | iex
    ```
 2. Connecte-toi une fois : lance `%USERPROFILE%\.local\bin\claude.exe`, choisis la connexion avec ton compte Claude, puis tape `/exit`.
-3. Copie ce dossier dans `%USERPROFILE%\ClaudeEcran` (ou ailleurs : les chemins sont relatifs au dossier du script).
+3. Copie ce dossier dans `%USERPROFILE%\ClaudeScreen` (ou ailleurs : les chemins sont relatifs au dossier du script).
 4. Fais-le démarrer avec Windows et lance-le tout de suite :
    ```powershell
-   powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\ClaudeEcran\Installer-Demarrage.ps1"
-   Start-ScheduledTask -TaskName ClaudeEcran
+   powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\ClaudeScreen\Installer-Demarrage.ps1"
+   Start-ScheduledTask -TaskName ClaudeScreen
    ```
-   L'icône apparaît dans la zone de notifications. Une tâche planifiée « ClaudeEcran » le relancera 20 s après chaque ouverture de session, sans fenêtre. Pour la retirer, ajoute `-Retirer` à la première commande.
+   L'icône apparaît dans la zone de notifications. Une tâche planifiée « ClaudeScreen » le relancera 20 s après chaque ouverture de session, sans fenêtre. Pour la retirer, ajoute `-Retirer` à la première commande.
 
 **Lecture des PDF** : `Installer-Demarrage.ps1` télécharge aussi [Poppler pour Windows](https://github.com/oschwartz10612/poppler-windows) (`pdftotext`, `pdftoppm`, environ 16 Mo) dans `outils\poppler`, une seule fois. Si ce n'est pas encore fait, ClaudeEcran le télécharge en arrière-plan à son démarrage. La version est figée et le fichier est refusé si son empreinte SHA-256 ne correspond pas. Sans Poppler, Claude Code ne peut pas lire les PDF (il lui faut `pdftoppm`). Pour le réinstaller à la main : `powershell -ExecutionPolicy Bypass -File outils\poppler.ps1`.
 

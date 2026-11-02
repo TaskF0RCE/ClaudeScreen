@@ -1,9 +1,9 @@
-﻿# Fait démarrer ClaudeEcran à l'ouverture de session : tâche planifiée, sans fenêtre, sans VBScript.
+﻿# Fait démarrer ClaudeScreen à l'ouverture de session : tâche planifiée, sans fenêtre, sans VBScript.
 # Installer : powershell -ExecutionPolicy Bypass -File Installer-Demarrage.ps1
 # Retirer   : powershell -ExecutionPolicy Bypass -File Installer-Demarrage.ps1 -Retirer
 param([switch]$Retirer)
 $ErrorActionPreference = 'Stop'
-$nom = 'ClaudeEcran'
+$nom = 'ClaudeScreen'
 $utilisateur = "$env:USERDOMAIN\$env:USERNAME"
 
 if ($Retirer) {
@@ -12,7 +12,7 @@ if ($Retirer) {
     return
 }
 
-# Lecture des PDF : installe Poppler tout de suite (sinon ClaudeEcran le fait à son premier démarrage).
+# Lecture des PDF : installe Poppler tout de suite (sinon ClaudeScreen le fait à son premier démarrage).
 & (Join-Path $PSScriptRoot 'outils\poppler.ps1')
 
 $script = Join-Path $PSScriptRoot 'ClaudeEcran.ps1'
@@ -27,5 +27,5 @@ $reglages = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoi
     -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
 $principal = New-ScheduledTaskPrincipal -UserId $utilisateur -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskName $nom -Action $action -Trigger $declencheur -Settings $reglages -Principal $principal `
-    -Description 'Lance ClaudeEcran (icône Claude dans la zone de notifications).' -Force | Out-Null
+    -Description 'Lance ClaudeScreen (icône Claude dans la zone de notifications).' -Force | Out-Null
 "Démarrage automatique installé (tâche planifiée « $nom »)."
