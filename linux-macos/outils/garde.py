@@ -1,4 +1,5 @@
-"""Hook PreToolUse de Claude Code : bloque toute suppression définitive (et les arrêts de l'ordinateur).
+"""Hook PreToolUse de Claude Code : bloque toute suppression définitive (et les arrêts de l'ordinateur),
+et toute écriture dans le dossier de contexte System-Context (lecture seule).
 
 Équivalent de garde.ps1. Code de sortie 2 = commande refusée, le message va à Claude.
 """
@@ -28,12 +29,44 @@ MOTIFS = [
 ]
 
 
+def contexte():
+    """Dossier de contexte (transmis par ClaudeEcran ; sinon l'emplacement par défaut)."""
+    if os.environ.get('ECRAN_CONTEXTE'):
+        return os.environ['ECRAN_CONTEXTE']
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import natif
+    return os.path.join(natif.dossier_documents(), 'Claude-Travail', 'System-Context')
+
+
+def dans(chemin, dossier):
+    """chemin est-il dossier lui-même ou à l'intérieur ? (liens symboliques et « .. » résolus)"""
+    c, d = os.path.realpath(chemin), os.path.realpath(dossier)
+    if sys.platform == 'darwin':  # disque insensible à la casse par défaut sur macOS
+        c, d = c.lower(), d.lower()
+    return c == d or c.startswith(d.rstrip(os.sep) + os.sep)
+
+
 def main():
     try:
         entree = json.loads(sys.stdin.buffer.read().decode('utf-8', 'replace') or '{}')
     except ValueError:
         return 0
-    commande = str((entree.get('tool_input') or {}).get('command') or '')
+    entrees = entree.get('tool_input') or {}
+
+    # Outils qui écrivent des fichiers (Edit, Write, MultiEdit, NotebookEdit) : rien dans System-Context.
+    # Double sécurité avec la règle deny de reglages.json.
+    fichier = entrees.get('file_path') or entrees.get('notebook_path')
+    if fichier:
+        ctx = contexte()
+        cible = os.path.join(entree.get('cwd') or os.getcwd(), os.path.expanduser(str(fichier)))
+        if dans(cible, ctx):
+            sys.stderr.write('Bloqué : %s est en lecture seule (documents et instructions de l\'utilisateur). '
+                             'Tu peux lire ces fichiers, pas les modifier. Écris tes fichiers ailleurs dans le '
+                             'dossier courant.\n' % ctx)
+            return 2
+        return 0
+
+    commande = str(entrees.get('command') or '')
     if not commande:
         return 0
     for motif in MOTIFS:

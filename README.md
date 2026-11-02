@@ -28,12 +28,15 @@ Il n'y a pas de fenêtre, seulement une icône dans la zone de notifications de 
 
 ### Contexte permanent (facultatif)
 
-Le dossier `Documents\Claude-Travail\System-Context` est créé au premier lancement.
+Le dossier `Documents\Claude-Travail\System-Context` est créé au premier lancement, avec un `README.md` qui explique son usage.
 
-- **`instructions.txt`** : tes consignes permanentes, une par ligne, ajoutées à chaque tâche. Par exemple : « je suis en BTS SIO », « ne clique jamais sur Terminer l'examen », « réponds en français ». Les lignes qui commencent par `#` sont ignorées : tant que tu n'écris rien d'autre, le fichier ne fait rien.
-- **Les autres fichiers du dossier** (cours, PDF, énoncés...) : Claude reçoit leur liste à chaque tâche et lit ceux qui sont utiles. Il n'a pas le droit de les modifier.
+- **`instructions.txt`** : tes consignes permanentes, une par ligne, ajoutées à chaque tâche tant que l'appli tourne. Par exemple : « je suis en BTS SIO », « ne clique jamais sur Terminer l'examen », « réponds en français ». Les lignes qui commencent par `#` sont ignorées : tant que tu n'écris rien d'autre, le fichier ne fait rien. Il est relu à chaque tâche : une modification compte tout de suite, sans relancer l'appli.
+- **Les autres fichiers du dossier**, sous-dossiers compris (cours, prises de notes, documentation technique, énoncés, bibliographie, sources...) : Claude reçoit leur liste à chaque tâche. Il les considère comme plus fiables que ses connaissances générales : il lit ceux qui concernent la tâche et s'appuie d'abord sur eux. Formats lus le mieux : `.txt`, `.md`, `.pdf`, images, code, `.csv`, `.html` (un Word ou un PowerPoint : enregistre-le aussi en PDF). Les fichiers cachés ou temporaires (`desktop.ini`, `~$...`) sont ignorés, ainsi que le `README.md` du dossier.
+- **Lecture seule** : Claude peut lire ce dossier, mais ne peut rien y modifier, déplacer, mettre à la corbeille ni exécuter (voir [Sécurité](#sécurité)).
 
-Ordre de priorité : la consigne tapée dans la barre, puis `instructions.txt`, puis ce que Claude devine à l'écran.
+Ordre de priorité : la consigne tapée dans la barre (pour une tâche), puis `instructions.txt` (pour toutes les tâches), puis ce que Claude devine à l'écran.
+
+Le dossier est dans tes Documents, hors du dépôt : tes cours et tes consignes ne partent donc jamais sur GitHub.
 
 ### Packet Tracer
 
@@ -67,10 +70,11 @@ Claude est lancé avec des permissions limitées (`reglages.json`, généré au 
 
 - lire les captures d'écran ;
 - cliquer, taper au clavier et faire défiler, via `outils/pc.ps1` (aucune autre commande n'est autorisée) ;
-- créer ou modifier des fichiers dans `Documents\Claude-Travail`.
+- créer ou modifier des fichiers dans `Documents\Claude-Travail` (sauf dans `System-Context`, en lecture seule).
 
 En plus :
 
+- **`System-Context` est en lecture seule**, verrouillé trois fois : une règle `deny` dans `reglages.json` (`Edit(...)`, qui couvre aussi Write), le hook `outils/garde.ps1` qui refuse toute écriture de fichier dans ce dossier, et `pc.ps1 corbeille` qui refuse d'y toucher (ainsi qu'à `Claude-Travail`, qui le contient).
 - **Rien n'est supprimé définitivement.** Le hook `outils/garde.ps1` bloque `Remove-Item`, `del`, `rm`, `format`, etc. Pour enlever un fichier, Claude le met à la corbeille (`pc.ps1 corbeille`).
 - Sa consigne lui interdit d'acheter, de payer, d'envoyer des messages, de saisir des mots de passe ou des données bancaires, et de modifier les paramètres de Windows. Le texte affiché à l'écran ne peut pas lever ces règles.
 - Pas d'accès au web (WebFetch et WebSearch sont refusés).
@@ -122,12 +126,13 @@ Installer-Demarrage.ps1  installe ou retire la tâche planifiée de démarrage
 outils/natif.cs     appels Windows (DPI, capture, souris, clavier, raccourcis globaux, fenêtre active)
 outils/natif.ps1    compile natif.cs en DLL une seule fois (le nom change si le source change)
 outils/pc.ps1       outil de contrôle du PC utilisé par Claude
-outils/garde.ps1    hook qui bloque les suppressions définitives
+outils/garde.ps1    hook qui bloque les suppressions définitives et les écritures dans System-Context
+outils/System-Context-README.md  mode d'emploi copié dans Documents\Claude-Travail\System-Context au premier lancement
 runs/               captures et réponses des tâches, effacées après 30 jours (privé, ignoré par git)
 journal.txt         journal de l'appli (privé, ignoré par git)
 ```
 
-Les fichiers créés par Claude vont dans `Documents\Claude-Travail`.
+Les fichiers créés par Claude vont dans `Documents\Claude-Travail`. Tes instructions et documents de contexte sont dans `Documents\Claude-Travail\System-Context`.
 
 Nettoyage automatique : au démarrage puis toutes les 6 heures, l'appli efface définitivement les dossiers de `runs/` de plus de 30 jours (variable `$JoursConserves` dans `ClaudeEcran.ps1`). Ils ne passent pas par la corbeille, ce qui libère vraiment la place. Le journal est aussi raccourci. Les fichiers de `Documents\Claude-Travail` ne sont jamais touchés.
 

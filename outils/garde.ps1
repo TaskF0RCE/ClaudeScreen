@@ -1,6 +1,25 @@
-﻿# Hook PreToolUse : bloque toute suppression définitive dans les commandes de Claude.
+﻿# Hook PreToolUse : bloque toute suppression définitive dans les commandes de Claude,
+# et toute écriture dans le dossier de contexte (System-Context, en lecture seule).
 [Console]::InputEncoding = [Text.Encoding]::UTF8
 $entree = [Console]::In.ReadToEnd() | ConvertFrom-Json
+
+# Outils qui écrivent des fichiers (Edit, Write, MultiEdit, NotebookEdit) : rien dans System-Context.
+# Double sécurité avec la règle deny de reglages.json (dont la comparaison de chemins est peu fiable sous Windows).
+$fichier = [string]$entree.tool_input.file_path
+if (-not $fichier) { $fichier = [string]$entree.tool_input.notebook_path }
+if ($fichier) {
+    $contexte = $env:ECRAN_CONTEXTE
+    if (-not $contexte) { $contexte = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Claude-Travail\System-Context' }
+    $base = if ($entree.cwd) { [string]$entree.cwd } else { (Get-Location).Path }
+    $cible = [IO.Path]::GetFullPath([IO.Path]::Combine($base, $fichier)).Replace('/', '\').TrimEnd('\') + '\'
+    $racine = [IO.Path]::GetFullPath($contexte).Replace('/', '\').TrimEnd('\') + '\'
+    if ($cible.StartsWith($racine, [StringComparison]::OrdinalIgnoreCase)) {
+        [Console]::Error.WriteLine("Bloqué : $contexte est en lecture seule (documents et instructions de l'utilisateur). Tu peux lire ces fichiers, pas les modifier. Écris tes fichiers ailleurs dans le dossier courant.")
+        exit 2
+    }
+    exit 0
+}
+
 $commande = [string]$entree.tool_input.command
 if (-not $commande) { exit 0 }
 

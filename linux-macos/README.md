@@ -20,6 +20,18 @@ Identique à la version Windows :
 
 Réappuyer sur le raccourci pendant une tâche l'arrête (ou menu **Arrêter la tâche en cours**). Arrêt automatique au bout de 20 minutes. Pendant une tâche, ne touche ni à la souris ni au clavier.
 
+### Contexte permanent (facultatif)
+
+Comme sous Windows, le dossier **`~/Documents/Claude-Travail/System-Context`** est créé au premier lancement, avec un `README.md` qui explique son usage (menu **Ouvrir le dossier Claude-Travail** pour y accéder).
+
+- **`instructions.txt`** : tes consignes permanentes, une par ligne, ajoutées à chaque tâche tant que l'appli tourne (« je suis en BTS SIO », « ne clique jamais sur Terminer l'examen », « réponds en français »...). Les lignes qui commencent par `#` sont ignorées. Le fichier est relu à chaque tâche : une modification compte tout de suite.
+- **Les autres fichiers**, sous-dossiers compris (cours, prises de notes, documentation technique, énoncés, bibliographie, sources...) : Claude reçoit leur liste à chaque tâche, les considère comme plus fiables que ses connaissances générales, lit ceux qui concernent la tâche et s'appuie d'abord sur eux. Formats lus le mieux : `.txt`, `.md`, `.pdf`, images, code, `.csv`, `.html` (un Word ou un Keynote : exporte-le aussi en PDF). Les fichiers cachés ou temporaires (`.DS_Store`, `~$...`) sont ignorés, ainsi que le `README.md` du dossier.
+- **Lecture seule** : Claude peut lire ce dossier, mais ne peut rien y modifier, déplacer, mettre à la corbeille ni exécuter.
+
+Ordre de priorité : la consigne de la barre (pour une tâche), puis `instructions.txt` (pour toutes les tâches), puis ce que Claude devine à l'écran.
+
+Le dossier est dans tes Documents, hors du dépôt : son contenu ne part jamais sur GitHub.
+
 ### L'icône
 
 | Icône | Signification |
@@ -117,10 +129,11 @@ Comme sous Windows, Claude est lancé avec des permissions limitées (`reglages.
 
 - lire les captures d'écran ;
 - cliquer, taper au clavier et faire défiler, via `donnees/pc` (aucune autre commande n'est autorisée) ;
-- créer ou modifier des fichiers dans `~/Documents/Claude-Travail`.
+- créer ou modifier des fichiers dans `~/Documents/Claude-Travail` (sauf dans `System-Context`, en lecture seule).
 
 En plus :
 
+- **`System-Context` est en lecture seule**, verrouillé trois fois : une règle `deny` dans `reglages.json` (`Edit(//...)`, qui couvre aussi Write), le hook `outils/garde.py` qui refuse toute écriture de fichier dans ce dossier (y compris via un lien symbolique ou `..`), et `pc corbeille` qui refuse d'y toucher (ainsi qu'à `Claude-Travail`, qui le contient).
 - **Rien n'est supprimé définitivement.** Le hook `outils/garde.py` bloque `rm`, `rmdir`, `unlink`, `shred`, `find -delete`, `dd`, `mkfs`, `diskutil erase`, `git clean`, `shutdown`, etc. Pour enlever un fichier, Claude le met à la corbeille (`pc corbeille`).
 - Sa consigne lui interdit d'acheter, de payer, d'envoyer des messages, de saisir des mots de passe ou des données bancaires, et de modifier les réglages du système. Le texte affiché à l'écran ne peut pas lever ces règles.
 - Pas d'accès au web (WebFetch et WebSearch sont refusés).
@@ -140,7 +153,8 @@ outils/natif.py     appels système : écrans, capture, souris, clavier (XTest s
 outils/raccourcis.py raccourcis globaux (Carbon sur macOS, écouteur X11 sous Linux)
 outils/fenetres.py  fenêtre « dernier résultat » et barre de consigne (Tk, processus séparé)
 outils/pc.py        outil de contrôle de l'ordinateur utilisé par Claude
-outils/garde.py     hook qui bloque les suppressions définitives
+outils/garde.py     hook qui bloque les suppressions définitives et les écritures dans System-Context
+outils/System-Context-README.md  mode d'emploi copié dans ~/Documents/Claude-Travail/System-Context au premier lancement
 donnees/            TOUT ce qui est généré, à part du programme (privé, ignoré par git) :
   runs/               captures et réponses des tâches, effacées après 30 jours
   journal.txt         journal de l'appli

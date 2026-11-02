@@ -5,3 +5,7 @@ reglages.json
 modele.txt
 outils/*.dll
 .DS_Store
+
+# Contexte personnel (instructions, cours...) : il vit dans Documents\Claude-Travail\System-Context.
+# Si quelqu'un en met une copie dans le dépôt, elle n'est jamais envoyée sur GitHub.
+System-Context/

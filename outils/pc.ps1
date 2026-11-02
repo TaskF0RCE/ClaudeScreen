@@ -64,6 +64,14 @@ switch ($Action.ToLower()) {
     'corbeille' {
         Add-Type -AssemblyName Microsoft.VisualBasic
         $chemin = (Resolve-Path ($Valeurs -join ' ')).Path
+        # Le dossier de contexte (System-Context) est en lecture seule : ni lui, ni son contenu, ni un dossier qui le contient.
+        if ($env:ECRAN_CONTEXTE) {
+            $a = [IO.Path]::GetFullPath($chemin).Replace('/', '\').TrimEnd('\') + '\'
+            $b = [IO.Path]::GetFullPath($env:ECRAN_CONTEXTE).Replace('/', '\').TrimEnd('\') + '\'
+            if ($a.StartsWith($b, [StringComparison]::OrdinalIgnoreCase) -or $b.StartsWith($a, [StringComparison]::OrdinalIgnoreCase)) {
+                throw "Refusé : $($env:ECRAN_CONTEXTE) est en lecture seule (documents de l'utilisateur)."
+            }
+        }
         $fs = [Microsoft.VisualBasic.FileIO.FileSystem]
         $ui = [Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs
         $corbeille = [Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin

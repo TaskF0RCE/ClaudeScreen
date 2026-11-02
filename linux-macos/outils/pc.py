@@ -98,6 +98,15 @@ def main(argv):
         chemin = os.path.abspath(' '.join(valeurs))
         if not os.path.exists(chemin):
             raise SystemExit('Introuvable : %s' % chemin)
+        # Le dossier de contexte (System-Context) est en lecture seule : ni lui, ni son contenu,
+        # ni un dossier qui le contient.
+        ctx = os.environ.get('ECRAN_CONTEXTE')
+        if ctx:
+            a, b = os.path.realpath(chemin), os.path.realpath(ctx)
+            if sys.platform == 'darwin':  # disque insensible à la casse par défaut sur macOS
+                a, b = a.lower(), b.lower()
+            if a == b or a.startswith(b.rstrip(os.sep) + os.sep) or b.startswith(a.rstrip(os.sep) + os.sep):
+                raise SystemExit('Refusé : %s est en lecture seule (documents de l\'utilisateur).' % ctx)
         natif.corbeille(chemin)
         print('Mis à la corbeille : %s' % chemin)
     else:
