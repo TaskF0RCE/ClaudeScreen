@@ -1,4 +1,4 @@
-﻿# PC control for Claude. Coordinates are in screenshot pixels (see ecran.json).
+﻿# PC control for Claude. Coordinates are in screenshot pixels (see screen.json).
 param(
     [Parameter(Mandatory = $true, Position = 0)][string]$Action,
     [Parameter(Position = 1, ValueFromRemainingArguments = $true)][string[]]$Valeurs
@@ -10,7 +10,9 @@ $ErrorActionPreference = 'Stop'
 
 $run = $env:ECRAN_RUN
 if (-not $run) { throw 'ECRAN_RUN is not set: this script must be started by ClaudeScreen.' }
-$ecran = Get-Content (Join-Path $run 'ecran.json') -Raw | ConvertFrom-Json
+$ecran = Get-Content (Join-Path $run 'screen.json') -Raw | ConvertFrom-Json
+$images = Join-Path $run 'images'   # every image of the task: screenshots, zooms, PDF pages
+New-Item -ItemType Directory -Force $images | Out-Null
 
 function Nombre([int]$i) {
     if ($Valeurs.Count -le $i) { throw "Missing argument $($i + 1) for '$Action'." }
@@ -29,15 +31,15 @@ $touches = @{
 
 switch ($Action.ToLower()) {
     'capture' {
-        $n = @(Get-ChildItem $run -Filter 'capture-*.png').Count + 1
-        $png = Join-Path $run ('capture-{0:D2}.png' -f $n)
+        $n = @(Get-ChildItem $images -Filter 'screenshot-*.png').Count + 1
+        $png = Join-Path $images ('screenshot-{0:D2}.png' -f $n)
         [ClaudeScreen.Natif]::Capture($png, $ecran.gauche, $ecran.haut, $ecran.largeurEcran, $ecran.hauteurEcran, $ecran.echelle)
         "Screenshot: $png ($($ecran.largeur)x$($ecran.hauteur) px)"
     }
     'zoom' {
         # zoom X Y W H: enlarges an area of the screenshot to read small details (read-only).
-        $n = @(Get-ChildItem $run -Filter 'zoom-*.png').Count + 1
-        $png = Join-Path $run ('zoom-{0:D2}.png' -f $n)
+        $n = @(Get-ChildItem $images -Filter 'zoom-*.png').Count + 1
+        $png = Join-Path $images ('zoom-{0:D2}.png' -f $n)
         $l = [int][math]::Round((Nombre 2) * $ecran.echelle); $h = [int][math]::Round((Nombre 3) * $ecran.echelle)
         [ClaudeScreen.Natif]::Capture($png, (X (Nombre 0)), (Y (Nombre 1)), $l, $h, 1.0)
         "Zoom: $png (read-only, do not use its coordinates to click)"
@@ -85,8 +87,8 @@ switch ($Action.ToLower()) {
         $pdf = ($Valeurs[0..($Valeurs.Count - 2)] -join ' ')
         if ($pdf -notmatch '\.pdf$' -or -not (Test-Path -LiteralPath $pdf -PathType Leaf)) { throw "PDF not found: $pdf" }
         if (-not (Test-Poppler)) { throw 'Poppler (PDF reading) is not installed yet: try again in a minute.' }
-        $n = @(Get-ChildItem $run -Filter 'pdf-*.png').Count + 1
-        $png = Join-Path $run ('pdf-{0:D2}.png' -f $n)
+        $n = @(Get-ChildItem $images -Filter 'pdf-*.png').Count + 1
+        $png = Join-Path $images ('pdf-{0:D2}.png' -f $n)
         $numero = [int]$Valeurs[-1]
         $pages = Export-PdfPage (Resolve-Path -LiteralPath $pdf).Path $numero $png
         "Page $numero/$($pages): $png (read it with Read)"

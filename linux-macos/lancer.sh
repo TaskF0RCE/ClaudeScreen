@@ -5,8 +5,8 @@
 #   ./lancer.sh consigne      same as Ctrl+Alt+Shift+C
 #   ./lancer.sh arreter | resultat | quitter | etat | diagnostic
 DIR="$(cd "$(dirname "$0")" && pwd)"
-PY="$DIR/donnees/.venv/bin/python3"
-export PYTHONPYCACHEPREFIX="$DIR/donnees/cache"
+PY="$DIR/data/.venv/bin/python3"
+export PYTHONPYCACHEPREFIX="$DIR/data/cache"
 if [ ! -x "$PY" ]; then
     echo "Python environment missing: run ./installer.sh first" >&2
     exit 1
@@ -14,6 +14,6 @@ fi
 if [ $# -gt 0 ]; then
     exec "$PY" "$DIR/claude_screen.py" "$@"
 fi
-mkdir -p "$DIR/donnees"
-nohup "$PY" "$DIR/claude_screen.py" >/dev/null 2>>"$DIR/donnees/journal.txt" &
+mkdir -p "$DIR/data"
+nohup "$PY" "$DIR/claude_screen.py" >/dev/null 2>>"$DIR/data/log.txt" &
 disown 2>/dev/null || true

@@ -28,7 +28,7 @@ Like on Windows, the **`~/Documents/Claude-Travail/System-Context`** folder is c
 
 - **`instructions.txt`**: your standing instructions, one per line, added to every task while the app is running ("I'm a BTS SIO student", "never click Finish exam", "always answer in French"...). Lines starting with `#` are ignored. The file is re-read for every task: a change applies right away.
 - **The other files**, subfolders included (courses, notes, technical documentation, assignments, bibliography, sources...): Claude gets their list with every task, treats them as more reliable than its general knowledge, reads the ones related to the task and relies on them first. Best-read formats: `.pdf`, `.txt`, `.md`, images, code, `.csv`, `.html` (for a Word or Keynote file, also export it as PDF). Hidden or temporary files (`.DS_Store`, `~$...`) are ignored, as is the folder's `README.md`.
-- **PDFs**: the app extracts their text in advance, page by page, into `donnees/contexte/` (at startup, then only when a PDF changes), with the `pypdfium2` Python library: nothing extra to install, no need for `pdftoppm`. Claude reads that text, which is fast and saves quota, and can search it. For a diagram or a scanned PDF (no text), it shows the page as an image with the `page-pdf` action. If you installed ClaudeScreen before this feature, run `./installer.sh` again to add `pypdfium2`.
+- **PDFs**: the app extracts their text in advance, page by page, into `data/context-cache/` (at startup, then only when a PDF changes), with the `pypdfium2` Python library: nothing extra to install, no need for `pdftoppm`. Claude reads that text, which is fast and saves quota, and can search it. For a diagram or a scanned PDF (no text), it shows the page as an image with the `page-pdf` action. If you installed ClaudeScreen before this feature, run `./installer.sh` again to add `pypdfium2`.
 - **Read-only**: Claude can read this folder, but cannot change, move, send to the trash or run anything in it.
 
 Priority order: the instruction from the bar (for one task), then `instructions.txt` (for every task), then what Claude infers from the screen.
@@ -66,7 +66,7 @@ cd ~/ClaudeScreen/linux-macos      # adjust the path
 ./installer.sh
 ```
 
-The script creates a Python environment in `donnees/.venv`, installs the dependencies, creates the launcher, offers to start the app automatically and prints a diagnostic. Options: `--demarrage-auto` (autostart), `--sans-demarrage-auto` (no autostart), `--raccourcis-gnome` (GNOME shortcuts), `-y` (no questions), `--desinstaller` (uninstall).
+The script creates a Python environment in `data/.venv`, installs the dependencies, creates the launcher, offers to start the app automatically and prints a diagnostic. Options: `--demarrage-auto` (autostart), `--sans-demarrage-auto` (no autostart), `--raccourcis-gnome` (GNOME shortcuts), `-y` (no questions), `--desinstaller` (uninstall).
 
 ### macOS (10.15 or later)
 
@@ -128,15 +128,15 @@ Wayland deliberately prevents apps from listening to the keyboard, reading the s
 
 ## Security
 
-As on Windows, Claude is started with limited permissions (`reglages.json`, generated at startup). It can only:
+As on Windows, Claude is started with limited permissions (`data/settings.json`, generated at startup). It can only:
 
 - read the screenshots;
-- click, type and scroll, through `donnees/pc` (no other command is allowed);
+- click, type and scroll, through `data/pc` (no other command is allowed);
 - create or edit files in `~/Documents/Claude-Travail` (except in `System-Context`, which is read-only).
 
 On top of that:
 
-- **`System-Context` is read-only**, locked three times: a `deny` rule in `reglages.json` (`Edit(//...)`, which also covers Write), the hook `outils/garde.py` that refuses any file write in that folder (including through a symbolic link or `..`), and `pc corbeille` that refuses to touch it (or `Claude-Travail`, which contains it).
+- **`System-Context` is read-only**, locked three times: a `deny` rule in `data/settings.json` (`Edit(//...)`, which also covers Write), the hook `outils/garde.py` that refuses any file write in that folder (including through a symbolic link or `..`), and `pc corbeille` that refuses to touch it (or `Claude-Travail`, which contains it).
 - **Nothing is ever permanently deleted.** The hook `outils/garde.py` blocks `rm`, `rmdir`, `unlink`, `shred`, `find -delete`, `dd`, `mkfs`, `diskutil erase`, `git clean`, `shutdown`, etc. To remove a file, Claude sends it to the trash (`pc corbeille`).
 - Its instructions forbid buying, paying, sending messages, entering passwords or bank details, and changing system settings. Text displayed on screen cannot override these rules.
 - No web access (WebFetch and WebSearch are denied).
@@ -159,18 +159,24 @@ outils/pc.py        computer control tool used by Claude
 outils/garde.py     hook that blocks permanent deletions and writes to System-Context
 outils/pdf.py       PDF reading: text extracted in advance, page as an image (pypdfium2)
 outils/System-Context-README.md  user guide copied into ~/Documents/Claude-Travail/System-Context on first launch
-donnees/            EVERYTHING generated, kept apart from the program (private, ignored by git):
-  runs/               task screenshots and answers, deleted after 30 days
-  journal.txt         app log
-  contexte/           text extracted from the System-Context PDFs (rebuilt when needed)
-  reglages.json       permissions given to Claude (regenerated at each start)
+data/               EVERYTHING the app generates, kept apart from the program (private, ignored by git):
+  runs/<date>/        one folder per task, deleted after 30 days:
+    images/             screenshot-01.png, zoom-01.png, pdf-01.png...
+    prompts/            task.txt (instructions sent to Claude), triage.txt (model choice)
+    responses/          task.txt, task-errors.txt, triage.txt, triage-errors.txt
+    screen.json         position and scale of the captured screen
+  context-cache/      text extracted from the System-Context PDFs (rebuilt when needed)
+  log.txt             app log
+  settings.json       permissions given to Claude (regenerated at each start)
+  model.txt           model choice (Model menu)
+  last-result.txt     text shown by "Last result"
   pc                  launcher of outils/pc.py used by Claude (regenerated at each start)
-  modele.txt          model choice (Model menu)
-  dernier-resultat.txt
-  icone.png           applications menu icon (Linux)
+  icon.png            applications menu icon (Linux)
   .venv/              Python environment created by installer.sh
   cache/              compiled Python files
 ```
+
+Same `data/` layout as the Windows version. Coming from an older version (`donnees/` folder): run `./installer.sh` again, it moves your history into `data/` and rebuilds the Python environment.
 
 Mapping to the Windows version: `ClaudeScreen.ps1` → `claude_screen.py`, `Lancer.vbs` → `lancer.sh` / `ClaudeScreen.app`, `natif.cs` + `natif.ps1` → `natif.py` + `raccourcis.py`, `pc.ps1` → `pc.py`, `garde.ps1` → `garde.py`, `pdf.ps1` + `poppler.ps1` → `pdf.py` (pypdfium2, no external program).
 

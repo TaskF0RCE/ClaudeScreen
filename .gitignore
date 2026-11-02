@@ -1,14 +1,16 @@
-# Private data and generated files
+# Everything the app generates: screenshots, prompts, answers, log, settings, PDF cache
+data/
+outils/*.dll
+# Poppler (PDF reading), downloaded by outils/poppler.ps1
+outils/poppler/
+outils/poppler-provisoire/
+.DS_Store
+# Old layout (before data/), moved into data/ automatically at startup
 runs/
 journal.txt
 reglages.json
 modele.txt
-outils/*.dll
-# Poppler (PDF reading), downloaded by outils/poppler.ps1, and text extracted from the context PDFs
-outils/poppler/
-outils/poppler-provisoire/
 cache-contexte/
-.DS_Store
 
 # Personal context (instructions, course notes...) lives in Documents\Claude-Travail\System-Context.
 # If someone puts a copy in the repo, it is never pushed to GitHub.

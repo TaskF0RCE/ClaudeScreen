@@ -1,7 +1,7 @@
 """Computer control for Claude (equivalent of pc.ps1).
 
-Coordinates are in screenshot pixels (see ecran.json in the task folder).
-Claude calls it through the small donnees/pc script generated when the app starts.
+Coordinates are in screenshot pixels (see screen.json in the task folder).
+Claude calls it through the small data/pc script generated when the app starts.
 """
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ def main(argv):
     run = os.environ.get('ECRAN_RUN')
     if not run:
         raise SystemExit('ECRAN_RUN is not set: this script must be started by ClaudeScreen.')
-    with open(os.path.join(run, 'ecran.json'), encoding='utf-8') as f:
+    with open(os.path.join(run, 'screen.json'), encoding='utf-8') as f:
         ecran = json.load(f)
     e = ecran['echelle']
 
@@ -48,11 +48,13 @@ def main(argv):
         return ecran['haut'] + y * e
 
     def suivant(prefixe):
-        n = len(glob.glob(os.path.join(run, prefixe + '-*.png'))) + 1
-        return os.path.join(run, '%s-%02d.png' % (prefixe, n))
+        images = os.path.join(run, 'images')  # every image of the task: screenshots, zooms, PDF pages
+        os.makedirs(images, exist_ok=True)
+        n = len(glob.glob(os.path.join(images, prefixe + '-*.png'))) + 1
+        return os.path.join(images, '%s-%02d.png' % (prefixe, n))
 
     if action == 'capture':
-        png = suivant('capture')
+        png = suivant('screenshot')
         natif.capturer(png, ecran['gauche'], ecran['haut'], ecran['largeurEcran'], ecran['hauteurEcran'], e)
         print('Screenshot: %s (%dx%d px)' % (png, ecran['largeur'], ecran['hauteur']))
     elif action == 'zoom':

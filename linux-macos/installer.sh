@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Installs ClaudeScreen for macOS or Linux:
-#   - Python environment (donnees/.venv) and dependencies;
-#     everything generated goes to donnees/, apart from the program;
+#   - Python environment (data/.venv) and dependencies;
+#     everything generated goes to data/, apart from the program (same layout as on Windows);
 #   - macOS: the ~/Applications/ClaudeScreen.app app (+ open at login, optional);
 #   - Linux: an entry in the applications menu (+ autostart and
 #     GNOME keyboard shortcuts, optional).
@@ -14,7 +14,7 @@ set -euo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 OS="$(uname -s)"
-DONNEES="$DIR/donnees"
+DONNEES="$DIR/data"
 VENV="$DONNEES/.venv"
 PY="$VENV/bin/python3"
 APP="$HOME/Applications/ClaudeScreen.app"
@@ -166,29 +166,36 @@ EOF
     fi
 fi
 
-# ------------------------------------------------------------------ old layout
-# Early versions put generated files next to the program: move them into donnees/.
-if [ -x "$DIR/.venv/bin/python3" ]; then
-    "$DIR/.venv/bin/python3" "$DIR/claude_screen.py" quitter >/dev/null 2>&1 && sleep 2 || true
-fi
-mkdir -p "$DONNEES"
-for f in runs journal.txt reglages.json modele.txt dernier-resultat.txt; do
-    if [ -e "$DIR/$f" ]; then
-        if [ -e "$DONNEES/$f" ] && [ -d "$DIR/$f" ]; then
-            mv "$DIR/$f"/* "$DONNEES/$f"/ 2>/dev/null || true
-            rmdir "$DIR/$f" 2>/dev/null || true
-        elif [ ! -e "$DONNEES/$f" ]; then
-            mv "$DIR/$f" "$DONNEES/$f"
-        fi
+# ------------------------------------------------------------------ old layouts
+# Earlier versions put generated files next to the program, then in donnees/ with French names:
+# move what is worth keeping into data/ (English names). Everything else is regenerated.
+for ancien_py in "$DIR/.venv/bin/python3" "$DIR/donnees/.venv/bin/python3"; do
+    if [ -x "$ancien_py" ]; then
+        "$ancien_py" "$DIR/claude_screen.py" quitter >/dev/null 2>&1 && sleep 2 || true
     fi
 done
-[ -e "$DIR/outils/icone.png" ] && mv "$DIR/outils/icone.png" "$DONNEES/icone.png"
-# Automatically regenerated files (launcher, caches, old Python environment).
-rm -rf "$DIR/outils/pc" "$DIR/__pycache__" "$DIR/outils/__pycache__" "$DIR/.venv"
+mkdir -p "$DONNEES"
+for ancien in "$DIR" "$DIR/donnees"; do
+    for paire in runs:runs journal.txt:log.txt modele.txt:model.txt dernier-resultat.txt:last-result.txt \
+                 contexte:context-cache; do
+        source="$ancien/${paire%%:*}"
+        cible="$DONNEES/${paire#*:}"
+        [ -e "$source" ] || continue
+        if [ -d "$source" ] && [ -d "$cible" ]; then
+            mv "$source"/* "$cible"/ 2>/dev/null || true
+            rmdir "$source" 2>/dev/null || true
+        elif [ ! -e "$cible" ]; then
+            mv "$source" "$cible"
+        fi
+    done
+done
+# Automatically regenerated files (launcher, settings, caches, old Python environments, old icons).
+rm -rf "$DIR/outils/pc" "$DIR/outils/icone.png" "$DIR/__pycache__" "$DIR/outils/__pycache__" "$DIR/.venv" \
+       "$DIR/reglages.json" "$DIR/donnees"
 
 # ------------------------------------------------------------------ virtual environment
 if [ ! -x "$PY" ]; then
-    info "Creating the Python environment (donnees/.venv)..."
+    info "Creating the Python environment (data/.venv)..."
     if [ "$OS" = Linux ]; then
         # --system-site-packages: access to PyGObject (gi), installed by the system, for the AppIndicator icon.
         "$PYSYS" -m venv --system-site-packages "$VENV"
@@ -253,14 +260,14 @@ EOF
     fi
 else
     mkdir -p "$(dirname "$BUREAU")"
-    "$PY" "$DIR/claude_screen.py" --icone "$DONNEES/icone.png" || true
+    "$PY" "$DIR/claude_screen.py" --icone "$DONNEES/icon.png" || true
     cat > "$BUREAU" <<EOF
 [Desktop Entry]
 Type=Application
 Name=ClaudeScreen
 Comment=Claude does the task visible on screen (Ctrl+Alt+C)
 Exec="$DIR/lancer.sh"
-Icon=$DONNEES/icone.png
+Icon=$DONNEES/icon.png
 Terminal=false
 Categories=Utility;
 EOF

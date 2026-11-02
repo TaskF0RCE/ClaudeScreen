@@ -3,20 +3,31 @@
 $ErrorActionPreference = 'Stop'
 $Racine = $PSScriptRoot
 $Outils = Join-Path $Racine 'outils'
-$Runs = Join-Path $Racine 'runs'
-$Journal = Join-Path $Racine 'journal.txt'
-$FichierModele = Join-Path $Racine 'modele.txt'
+# Everything the app generates goes to data/ (same layout as the macOS/Linux version):
+#   data/runs/<date>/  one folder per task: images/, prompts/, responses/ + screen.json
+#   data/context-cache/, data/log.txt, data/settings.json, data/model.txt
+$Donnees = Join-Path $Racine 'data'
+$Runs = Join-Path $Donnees 'runs'
+$Journal = Join-Path $Donnees 'log.txt'
+$FichierModele = Join-Path $Donnees 'model.txt'
 $Travail = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Claude-Travail'
 # Optional context: instructions.txt (standing instructions) + documents (courses, assignments...).
 $Contexte = Join-Path $Travail 'System-Context'
 $FichierInstructions = Join-Path $Contexte 'instructions.txt'
 $FichierLisezMoi = Join-Path $Contexte 'README.md'
-$CacheContexte = Join-Path $Racine 'cache-contexte'   # text extracted from the context PDFs
+$CacheContexte = Join-Path $Donnees 'context-cache'   # text extracted from the context PDFs
 $Claude = Join-Path $env:USERPROFILE '.local\bin\claude.exe'
 $DureeMax = [TimeSpan]::FromMinutes(20)
 $JoursConserves = 30
 # Apps where triage is pointless: go straight to Opus (networking, maths).
 $AppsOpus = '^(PacketTracer|gns3|putty|MobaXterm|SecureCRT|Wireshark|winbox|matlab|Mathematica|GeoGebra)'
+# Earlier versions put the generated files at the root of the folder: move them into data/.
+New-Item -ItemType Directory -Force $Donnees | Out-Null
+foreach ($ancien in @(@('runs', $Runs), @('journal.txt', $Journal), @('modele.txt', $FichierModele), @('cache-contexte', $CacheContexte))) {
+    $source = Join-Path $Racine $ancien[0]
+    if ((Test-Path $source) -and -not (Test-Path $ancien[1])) { Move-Item $source $ancien[1] -ErrorAction SilentlyContinue }
+}
+Remove-Item (Join-Path $Racine 'reglages.json') -Force -ErrorAction SilentlyContinue   # regenerated as data/settings.json
 New-Item -ItemType Directory -Force $Runs, $Travail, $Contexte | Out-Null
 if (-not (Test-Path $FichierInstructions)) {
     $gabarit = @"
@@ -65,7 +76,7 @@ if (-not (Test-Poppler)) {
 # System-Context is read-only: any change there is refused (deny rule, which takes precedence).
 # The script is called directly (Claude Code refuses nested PowerShell calls).
 $PcCommande = (Join-Path $Outils 'pc.ps1').Replace('\', '/')
-$Reglages = Join-Path $Racine 'reglages.json'
+$Reglages = Join-Path $Donnees 'settings.json'
 $garde = (Join-Path $Outils 'garde.ps1').Replace('\', '/')
 @{
     permissions = @{
@@ -162,7 +173,7 @@ if (Test-Path $FichierModele) { $script:ChoixModele = (Get-Content $FichierModel
 
 function Demarrer-Claude([string]$modele, [string]$nom) {
     $run = $script:Run
-    $ligne = "`"`"$Claude`" -p --model $modele --settings `"$Reglages`" --add-dir `"$run`" --output-format text < `"$run\$nom.txt`" > `"$run\$nom-reponse.txt`" 2> `"$run\$nom-erreurs.txt`"`""
+    $ligne = "`"`"$Claude`" -p --model $modele --settings `"$Reglages`" --add-dir `"$run`" --output-format text < `"$run\prompts\$nom.txt`" > `"$run\responses\$nom.txt`" 2> `"$run\responses\$nom-errors.txt`"`""
     $psi = New-Object System.Diagnostics.ProcessStartInfo 'cmd.exe', "/d /s /c $ligne"
     $psi.UseShellExecute = $false
     $psi.CreateNoWindow = $true
@@ -195,15 +206,15 @@ function Capturer {
     $hwnd = [ClaudeScreen.Natif]::PremierPlan()
     $rect = [ClaudeScreen.Natif]::EcranSousCurseur()
     $run = Join-Path $Runs (Get-Date -Format 'yyyyMMdd-HHmmss')
-    New-Item -ItemType Directory -Force $run | Out-Null
+    New-Item -ItemType Directory -Force (Join-Path $run 'images'), (Join-Path $run 'prompts'), (Join-Path $run 'responses') | Out-Null
 
     # Scales the image down (≤ 1456 px per side, ≤ 1.1 Mpx): Claude sees it without resizing, so clicks stay accurate.
     $echelle = [math]::Max(1.0, [math]::Max([math]::Max($rect.Width, $rect.Height) / 1456.0, [math]::Sqrt($rect.Width * $rect.Height / 1100000.0)))
-    $png = Join-Path $run 'capture-01.png'
+    $png = Join-Path $run 'images\screenshot-01.png'
     [ClaudeScreen.Natif]::Capture($png, $rect.Left, $rect.Top, $rect.Width, $rect.Height, $echelle)
     $largeur = [int][math]::Round($rect.Width / $echelle); $hauteur = [int][math]::Round($rect.Height / $echelle)
     @{ gauche = $rect.Left; haut = $rect.Top; largeurEcran = $rect.Width; hauteurEcran = $rect.Height
-       echelle = $echelle; largeur = $largeur; hauteur = $hauteur } | ConvertTo-Json | Set-Content (Join-Path $run 'ecran.json') -Encoding UTF8
+       echelle = $echelle; largeur = $largeur; hauteur = $hauteur } | ConvertTo-Json | Set-Content (Join-Path $run 'screen.json') -Encoding UTF8
     @{ Run = $run; Png = $png; Fenetre = $fenetre; Hwnd = $hwnd; Rect = $rect; Largeur = $largeur; Hauteur = $hauteur }
 }
 
@@ -298,7 +309,7 @@ Strict rules:
 - Stay unobtrusive: do not open any window that is not needed for the task.
 "@
         $utf8 = New-Object System.Text.UTF8Encoding $false
-        [IO.File]::WriteAllText((Join-Path $run 'consigne.txt'), $consigne, $utf8)
+        [IO.File]::WriteAllText((Join-Path $run 'prompts\task.txt'), $consigne, $utf8)
 
         $modele = $script:ChoixModele
         if ($modele -eq 'auto' -and $fenetre[0] -match $AppsOpus) { $modele = 'opus' }
@@ -313,9 +324,9 @@ What is the task visible on screen? Answer OPUS if it requires calculations (mat
 Answer SONNET for a course multiple-choice quiz, a knowledge question, a simple form, a short text to write, or if it is unclear.
 Answer with a single word: OPUS or SONNET.
 "@
-        [IO.File]::WriteAllText((Join-Path $run 'tri.txt'), $tri, $utf8)
+        [IO.File]::WriteAllText((Join-Path $run 'prompts\triage.txt'), $tri, $utf8)
         $script:Etape = 'tri'
-        Demarrer-Claude 'haiku' 'tri'
+        Demarrer-Claude 'haiku' 'triage'
         Infobulle 'looking at the screen...'
     } catch {
         Echec "Could not start the task: $($_.Exception.Message)"
@@ -326,7 +337,7 @@ function Lancer-Travail([string]$modele) {
     try {
         $script:Modele = $modele
         $script:Etape = 'tache'
-        Demarrer-Claude $modele 'consigne'
+        Demarrer-Claude $modele 'task'
         Infobulle "working ($modele)..."
         Noter "Model: $modele"
     } catch {
@@ -415,7 +426,7 @@ function Processus-Fini {
     $script:Proc = $null
 
     if ($script:Arret) {
-        $script:Dernier = "Task stopped ($script:Arret).`n`n" + (Lire-Run 'consigne-reponse.txt')
+        $script:Dernier = "Task stopped ($script:Arret).`n`n" + (Lire-Run 'responses\task.txt')
         $icone.Icon = $IconeRepos; Infobulle 'stopped'
         Noter "Task stopped: $script:Run"
         Nettoyer-Runs
@@ -423,17 +434,17 @@ function Processus-Fini {
     }
 
     if ($script:Etape -eq 'tri') {
-        $modele = if ((Lire-Run 'tri-reponse.txt') -match 'OPUS') { 'opus' } else { 'sonnet' }
+        $modele = if ((Lire-Run 'responses\triage.txt') -match 'OPUS') { 'opus' } else { 'sonnet' }
         Lancer-Travail $modele
         return
     }
 
-    $reponse = Lire-Run 'consigne-reponse.txt'
+    $reponse = Lire-Run 'responses\task.txt'
     if ($code -eq 0 -and $reponse) {
         $script:Dernier = "[$script:Modele] $reponse"
         $icone.Icon = $IconeFini; Infobulle ('done: ' + $reponse)
     } else {
-        $script:Dernier = "The task failed (code $code, $script:Modele).`n$(Lire-Run 'consigne-erreurs.txt')`n$reponse".Trim()
+        $script:Dernier = "The task failed (code $code, $script:Modele).`n$(Lire-Run 'responses\task-errors.txt')`n$reponse".Trim()
         $icone.Icon = $IconeErreur; Infobulle 'error (click to see)'
     }
     Noter "Task finished (code $code): $script:Run"
