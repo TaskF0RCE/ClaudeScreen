@@ -1,0 +1,48 @@
+# Shared checks (TaskF0RCE/.github) + PowerShell lint specific to this project.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Used by the release workflow to test the release PR.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    uses: TaskF0RCE/.github/.github/workflows/ci.yml@main
+
+  # PSScriptAnalyzer reads the scripts without running them.
+  # Errors fail the check; warnings are only reported (annotations on the PR).
+  powershell:
+    name: lint PowerShell
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          if (-not (Get-Module -ListAvailable PSScriptAnalyzer)) {
+            Set-PSRepository PSGallery -InstallationPolicy Trusted
+            Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
+          }
+          $results = @(Invoke-ScriptAnalyzer -Path . -Recurse -Severity Warning, Error)
+          foreach ($r in $results) {
+            $level = if ($r.Severity -eq 'Error') { 'error' } else { 'warning' }
+            $file = [IO.Path]::GetRelativePath($PWD, $r.ScriptPath)
+            $message = ($r.Message -replace '\r?\n', ' ')
+            Write-Output "::$level file=$file,line=$($r.Line)::$($r.RuleName): $message"
+          }
+          $errors = @($results | Where-Object Severity -eq 'Error')
+          "PSScriptAnalyzer: $($errors.Count) error(s), $($results.Count - $errors.Count) warning(s)." | Tee-Object -Variable summary
+          "### PowerShell lint`n$summary" >> $env:GITHUB_STEP_SUMMARY
+          if ($errors.Count -gt 0) { exit 1 }
