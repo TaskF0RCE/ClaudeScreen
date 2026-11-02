@@ -1,6 +1,6 @@
-"""Hook PreToolUse de Claude Code : bloque toute suppression définitive (et les arrêts de l'ordinateur).
+"""Claude Code PreToolUse hook: blocks any permanent deletion (and shutting down the computer).
 
-Équivalent de garde.ps1. Code de sortie 2 = commande refusée, le message va à Claude.
+Equivalent of garde.ps1. Exit code 2 = command refused, the message goes to Claude.
 """
 import json
 import os
@@ -8,21 +8,21 @@ import re
 import sys
 
 MOTIFS = [
-    # Commandes de suppression (en début de commande ou après ; & | ( ` " ').
+    # Deletion commands (at the start of a command or after ; & | ( ` " ').
     r'(^|[\s;&|(`"\'])(rm|rmdir|unlink|shred|srm|wipe|del|erase|rd|ri)(\s|$)',
     r'\bRemove-Item\b', r'\bClear-RecycleBin\b', r'\bClear-Content\b',
     r'\bfind\b.*\s-delete\b', r'\bfind\b.*-exec(dir)?\s+(rm|shred|unlink)\b', r'\bxargs\b.*\b(rm|shred|unlink)\b',
     r'\btruncate\b', r'\bos\.(remove|unlink|rmdir)\b', r'\bshutil\.rmtree\b', r'\.unlink\s*\(', r'\.Delete\s*\(',
-    # Corbeille vidée.
+    # Emptying the trash.
     r'\bgio\s+trash\s+--empty\b', r'\btrash-empty\b', r'empty\s+(the\s+)?trash',
-    # Disques.
+    # Disks.
     r'\bmkfs(\.\w+)?\b', r'\bdd\b.*\bof=', r'\bwipefs\b', r'\b(s?fdisk|parted|gdisk)\b', r'\bblkdiscard\b',
     r'\bdiskutil\s+(erase\w*|zero\w*|secureErase|reformat|partitionDisk|apfs\s+delete\w*)',
     r'>\s*/dev/(sd|nvme|disk|hd|mmcblk)',
-    # Git destructif.
+    # Destructive git.
     r'\bgit\s+clean\b', r'\bgit\s+reset\s+--hard\b', r'\bgit\s+push\b.*(--force|\s-f\b)',
-    # Arrêt / redémarrage.
-    # (seulement en position de commande : « no shutdown » de Cisco tapé avec ecrire reste permis)
+    # Shutdown / reboot.
+    # (only in command position: Cisco's "no shutdown" typed with ecrire is still allowed)
     r'(^|[;&|(`]\s*|\bsudo\s+|\bexec\s+)(shutdown|reboot|halt|poweroff)\b', r'\bsystemctl\s+(poweroff|reboot|halt|kexec)\b',
     r'\b(shut\s+down|restart)\b.*System Events', r'\bpmset\b.*\b(sleepnow|halt)\b',
 ]
@@ -40,10 +40,10 @@ def main():
         if re.search(motif, commande, re.IGNORECASE):
             pc = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'donnees', 'pc')
             sys.stderr.write(
-                'Bloqué : les suppressions définitives (et arrêts de l\'ordinateur) sont interdites. '
-                'Pour enlever un fichier ou dossier, mets-le à la corbeille : %s corbeille CHEMIN. '
-                'Si c\'était du texte à taper qui a déclenché le blocage, écris-le dans un fichier '
-                'et utilise ecrire-fichier.\n' % pc)
+                'Blocked: permanent deletions (and shutting down the computer) are forbidden. '
+                'To remove a file or folder, send it to the trash: %s corbeille PATH. '
+                'If text you meant to type triggered the block, write it to a file '
+                'and use ecrire-fichier.\n' % pc)
             return 2
     return 0
 

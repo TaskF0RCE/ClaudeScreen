@@ -1,145 +1,146 @@
-# ClaudeEcran
+# ClaudeScreen
 
-Un raccourci clavier Windows qui donne à Claude ce qui est à l'écran, pour qu'il fasse la tâche à ta place : cocher un QCM, remplir un formulaire, taper des commandes dans Packet Tracer ou GNS3, créer un fichier (code, schéma, résumé...).
+A Windows keyboard shortcut that gives Claude what is on your screen, so it does the task for you: answer a multiple-choice quiz, fill in a form, type commands in Packet Tracer or GNS3, create a file (code, diagram, summary...).
 
-Il n'y a pas de fenêtre, seulement une icône dans la zone de notifications de la barre des tâches.
+There is no window, only an icon in the notification area of the taskbar.
 
-> Projet perso, non officiel, sans lien avec Anthropic. Il utilise [Claude Code](https://docs.claude.com/en/docs/claude-code) avec ton propre compte Claude.
+ClaudeScreen runs on top of the **[Claude Code](https://docs.claude.com/en/docs/claude-code) CLI**: it calls `claude` in non-interactive mode (`claude -p`) with your own Claude account, so there is no API to set up and no server to run. Install Claude Code, log in once, and the shortcut works.
 
-> **macOS et Linux :** une adaptation se trouve dans [`linux-macos/`](linux-macos/README.md).
+> Personal project, unofficial, not affiliated with Anthropic.
 
-## Fonctionnement
+> **macOS and Linux:** a port lives in [`linux-macos/`](linux-macos/README.md).
 
-1. Tu appuies sur **Ctrl+Alt+C** (ou **Ctrl+Alt+touche Copilot**).
-2. L'appli capture l'écran où se trouve ta souris.
-3. **Haiku** regarde la capture et choisit le modèle :
-   - **Sonnet** pour un QCM, une question de cours ou un formulaire simple (rapide, consomme peu) ;
-   - **Opus** pour les calculs, la programmation, le réseau et l'infra (sous-réseaux, VLAN, routeurs...).
-   Si la fenêtre active est Packet Tracer, GNS3, PuTTY, Wireshark, MATLAB, etc., Opus est choisi directement, sans tri.
-4. Claude fait la tâche avec la souris et le clavier, refait une capture après chaque action pour vérifier, puis écrit un court résumé.
-5. Clique sur l'icône pour voir le résumé.
+## How it works
 
-### Donner une consigne
+1. Press **Ctrl+Alt+C** (or **Ctrl+Alt+Copilot key**).
+2. The app takes a screenshot of the screen your mouse is on.
+3. **Haiku** looks at the screenshot and picks the model:
+   - **Sonnet** for a multiple-choice quiz, a course question or a simple form (fast, uses little quota);
+   - **Opus** for calculations, programming, networking and infrastructure (subnetting, VLANs, routers...).
+   If the active window is Packet Tracer, GNS3, PuTTY, Wireshark, MATLAB, etc., Opus is picked directly, without triage.
+4. Claude does the task with the mouse and keyboard, takes a new screenshot after each action to check, then writes a short summary (in French by default).
+5. Click the icon to see the summary.
 
-**Ctrl+Alt+Shift+C** capture l'écran puis ouvre une toute petite barre en bas à gauche de l'écran. Écris ta consigne, par exemple « fais seulement la question 4 » ou « configure OSPF sur R1 et R2 », puis appuie sur **Entrée**. La consigne passe avant le reste.
+### Giving an instruction
 
-- **Échap** ou un clic ailleurs annule la tâche et efface la capture.
-- **Entrée** sur une barre vide lance une tâche normale.
+**Ctrl+Alt+Shift+C** takes the screenshot, then opens a tiny bar in the bottom-left corner of the screen. Type your instruction, for example "only do question 4" or "configure OSPF on R1 and R2", then press **Enter**. The instruction takes priority over everything else.
 
-### Contexte permanent (facultatif)
+- **Esc** or clicking elsewhere cancels the task and deletes the screenshot.
+- **Enter** on an empty bar starts a normal task.
 
-Le dossier `Documents\Claude-Travail\System-Context` est créé au premier lancement.
+### Standing context (optional)
 
-- **`instructions.txt`** : tes consignes permanentes, une par ligne, ajoutées à chaque tâche. Par exemple : « je suis en BTS SIO », « ne clique jamais sur Terminer l'examen », « réponds en français ». Les lignes qui commencent par `#` sont ignorées : tant que tu n'écris rien d'autre, le fichier ne fait rien.
-- **Les autres fichiers du dossier** (cours, PDF, énoncés...) : Claude reçoit leur liste à chaque tâche et lit ceux qui sont utiles. Il n'a pas le droit de les modifier.
+The `Documents\Claude-Travail\System-Context` folder is created on first launch.
 
-Ordre de priorité : la consigne tapée dans la barre, puis `instructions.txt`, puis ce que Claude devine à l'écran.
+- **`instructions.txt`**: your standing instructions, one per line, added to every task. For example: "I'm a BTS SIO student", "always answer in French". Lines starting with `#` are ignored: as long as you write nothing else, the file does nothing.
+- **The other files in the folder** (courses, PDFs, assignments...): Claude gets their list with every task and reads the useful ones. It is not allowed to modify them.
+
+Priority order: the instruction typed in the bar, then `instructions.txt`, then what Claude infers from the screen.
 
 ### Packet Tracer
 
-Tu places les équipements et tu les relies. Claude ne touche ni aux équipements ni aux câbles : il configure chaque appareil via son onglet **CLI** (un fichier de commandes par appareil, tapé dans la console) et vérifie avec des commandes `show`. Pour les PC, il utilise Desktop > IP Configuration.
+You place the devices and connect them. Claude touches neither devices nor cables: it configures each device through its **CLI** tab (one command file per device, typed into the console) and checks with `show` commands. For PCs, it uses Desktop > IP Configuration.
 
-### L'icône
+### The icon
 
-| Icône | Signification |
+| Icon | Meaning |
 |---|---|
-| Étoile fixe | Prêt |
-| Étoile qui tourne | En train de travailler |
-| Point vert | Fini : clique pour voir le résultat |
-| Point rouge | Erreur : clique pour voir le message |
+| Still star | Ready |
+| Spinning star | Working |
+| Green dot | Done: click to see the result |
+| Red dot | Error: click to see the message |
 
-Clic droit sur l'icône :
-- **Dernier résultat**
-- **Modèle** : Auto, Toujours Sonnet ou Toujours Opus (le choix est gardé)
-- **Ouvrir le dossier Claude-Travail**
-- **Arrêter la tâche en cours**
-- **Quitter**
+Right-click the icon:
+- **Last result**
+- **Model**: Auto, Always Sonnet or Always Opus (the choice is remembered)
+- **Open the Claude-Travail folder**
+- **Stop the current task**
+- **Quit**
 
-### Arrêter une tâche
+### Stopping a task
 
-Réappuie sur **Ctrl+Alt+C** pendant que l'étoile tourne, ou utilise le menu **Arrêter la tâche en cours**. Une tâche est aussi arrêtée automatiquement au bout de 20 minutes.
+Press **Ctrl+Alt+C** again while the star is spinning, or use **Stop the current task** in the menu. A task is also stopped automatically after 20 minutes.
 
-Pendant une tâche, ne touche ni à la souris ni au clavier : Claude utilise les vrais. Si une autre fenêtre passe devant, il s'arrête de lui-même pour ne pas écrire au mauvais endroit.
+During a task, don't touch the mouse or keyboard: Claude uses the real ones. If another window comes to the front, it stops by itself so it doesn't type in the wrong place.
 
-## Sécurité
+## Security
 
-Claude est lancé avec des permissions limitées (`reglages.json`, généré au démarrage). Il peut seulement :
+Claude is started with limited permissions (`reglages.json`, generated at startup). It can only:
 
-- lire les captures d'écran ;
-- cliquer, taper au clavier et faire défiler, via `outils/pc.ps1` (aucune autre commande n'est autorisée) ;
-- créer ou modifier des fichiers dans `Documents\Claude-Travail`.
+- read the screenshots;
+- click, type and scroll, through `outils/pc.ps1` (no other command is allowed);
+- create or edit files in `Documents\Claude-Travail`.
 
-En plus :
+On top of that:
 
-- **Rien n'est supprimé définitivement.** Le hook `outils/garde.ps1` bloque `Remove-Item`, `del`, `rm`, `format`, etc. Pour enlever un fichier, Claude le met à la corbeille (`pc.ps1 corbeille`).
-- Sa consigne lui interdit d'acheter, de payer, d'envoyer des messages, de saisir des mots de passe ou des données bancaires, et de modifier les paramètres de Windows. Le texte affiché à l'écran ne peut pas lever ces règles.
-- Pas d'accès au web (WebFetch et WebSearch sont refusés).
+- **Nothing is ever permanently deleted.** The hook `outils/garde.ps1` blocks `Remove-Item`, `del`, `rm`, `format`, etc. To remove a file, Claude sends it to the Recycle Bin (`pc.ps1 corbeille`).
+- Its instructions forbid buying, paying, sending messages, entering passwords or bank details, and changing Windows settings. Text displayed on screen cannot override these rules.
+- No web access (WebFetch and WebSearch are denied).
 
 ## Installation
 
-Prérequis : Windows 10 ou 11, avec PowerShell 5.1 (déjà présent dans Windows). Rien d'autre à installer à part Claude Code.
+Requirements: Windows 10 or 11, with PowerShell 5.1 (built into Windows). Nothing else to install besides Claude Code.
 
-1. Installe Claude Code :
+1. Install the Claude Code CLI:
    ```powershell
    irm https://claude.ai/install.ps1 | iex
    ```
-2. Connecte-toi une fois : lance `%USERPROFILE%\.local\bin\claude.exe`, choisis la connexion avec ton compte Claude, puis tape `/exit`.
-3. Copie ce dossier dans `%USERPROFILE%\ClaudeEcran` (ou ailleurs : les chemins sont relatifs au dossier du script).
-4. Fais-le démarrer avec Windows et lance-le tout de suite :
+2. Log in once: run `%USERPROFILE%\.local\bin\claude.exe`, choose to log in with your Claude account, then type `/exit`.
+3. Copy this folder to `%USERPROFILE%\ClaudeEcran` (or anywhere else: paths are relative to the script's folder).
+4. Make it start with Windows and launch it right away:
    ```powershell
    powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\ClaudeEcran\Installer-Demarrage.ps1"
    Start-ScheduledTask -TaskName ClaudeEcran
    ```
-   L'icône apparaît dans la zone de notifications. Une tâche planifiée « ClaudeEcran » le relancera 20 s après chaque ouverture de session, sans fenêtre. Pour la retirer, ajoute `-Retirer` à la première commande.
+   The icon appears in the notification area. A scheduled task named "ClaudeEcran" restarts it 20 s after each logon, without any window. To remove it, add `-Retirer` to the first command.
 
-`Lancer.vbs` permet aussi de le lancer à la main (double-clic), mais Windows est en train d'abandonner VBScript : préfère la tâche planifiée.
+`Lancer.vbs` can also start it by hand (double-click), but Windows is phasing out VBScript: prefer the scheduled task.
 
-> **Ne mets pas le dossier dans `AppData`** si tu l'installes depuis Claude Desktop (appli du Microsoft Store). Windows redirige alors les fichiers vers un dossier privé de Claude Desktop, invisible au démarrage du PC, et tu obtiens « fichier introuvable ».
+> **Don't put the folder in `AppData`** if you install it from Claude Desktop (Microsoft Store app). Windows then redirects the files to a private Claude Desktop folder that is invisible at startup, and you get "file not found".
 
-## Raccourcis
+## Shortcuts
 
-| Raccourci | État |
+| Shortcut | Status |
 |---|---|
-| Ctrl+Alt+C | Actif |
-| Ctrl+Alt+touche Copilot | Actif |
-| Ctrl+Alt+Shift+C | Actif, avec barre de consigne |
-| Touche Copilot seule (Win+Shift+F23) | Réservée par Windows, en général indisponible |
+| Ctrl+Alt+C | Active |
+| Ctrl+Alt+Copilot key | Active |
+| Ctrl+Alt+Shift+C | Active, with the instruction bar |
+| Copilot key alone (Win+Shift+F23) | Reserved by Windows, usually unavailable |
 
-Ctrl+Alt+C est global : tant que l'appli tourne, il n'arrive plus aux autres logiciels. Quelques-uns l'utilisent, par exemple Visual Studio (fenêtre « Pile des appels » en débogage) ou Photoshop (« Taille de la zone de travail »). Si ça te gêne, utilise Ctrl+Alt+Copilot ou change le raccourci dans `ClaudeEcran.ps1` (`$raccourcis.Enregistrer(...)`).
+Ctrl+Alt+C is global: while the app is running, other programs no longer receive it. A few use it, for example Visual Studio (the "Call Stack" window while debugging) or Photoshop ("Canvas Size"). If that bothers you, use Ctrl+Alt+Copilot or change the shortcut in `ClaudeEcran.ps1` (`$raccourcis.Enregistrer(...)`).
 
-## Abonnement et consommation
+## Subscription and usage
 
-- Chaque tâche consomme ton quota Claude : un appel Haiku très court, puis Sonnet ou Opus. Les captures d'écran comptent beaucoup ; un QCM de 50 questions en demande plusieurs dizaines.
-- Si ton abonnement expire ou si la limite est atteinte, la tâche échoue avec un point rouge et le message d'erreur. Rien d'autre ne se passe.
-- Sans abonnement, Claude Code peut aussi fonctionner avec une clé API payée à l'usage (variable d'environnement `ANTHROPIC_API_KEY`).
+- Each task uses your Claude quota: one very short Haiku call, then Sonnet or Opus. Screenshots weigh a lot; a 50-question quiz needs several dozen of them.
+- If your subscription expires or the limit is reached, the task fails with a red dot and the error message. Nothing else happens.
+- Without a subscription, Claude Code can also run with a pay-as-you-go API key (`ANTHROPIC_API_KEY` environment variable).
 
 ## Structure
 
 ```
-ClaudeEcran.ps1     appli de la zone de notifications : raccourcis, capture, tri du modèle, lancement de Claude
-Lancer.vbs          lance l'appli sans fenêtre (à la main)
-Installer-Demarrage.ps1  installe ou retire la tâche planifiée de démarrage
-outils/natif.cs     appels Windows (DPI, capture, souris, clavier, raccourcis globaux, fenêtre active)
-outils/natif.ps1    compile natif.cs en DLL une seule fois (le nom change si le source change)
-outils/pc.ps1       outil de contrôle du PC utilisé par Claude
-outils/garde.ps1    hook qui bloque les suppressions définitives
-runs/               captures et réponses des tâches, effacées après 30 jours (privé, ignoré par git)
-journal.txt         journal de l'appli (privé, ignoré par git)
+ClaudeEcran.ps1     notification-area app: shortcuts, screenshot, model triage, starting Claude
+Lancer.vbs          starts the app without a window (by hand)
+Installer-Demarrage.ps1  installs or removes the startup scheduled task
+outils/natif.cs     Windows calls (DPI, screenshot, mouse, keyboard, global hotkeys, active window)
+outils/natif.ps1    compiles natif.cs into a DLL only once (the name changes when the source changes)
+outils/pc.ps1       PC control tool used by Claude
+outils/garde.ps1    hook that blocks permanent deletions
+runs/               task screenshots and answers, deleted after 30 days (private, ignored by git)
+journal.txt         app log (private, ignored by git)
 ```
 
-Les fichiers créés par Claude vont dans `Documents\Claude-Travail`.
+Files created by Claude go to `Documents\Claude-Travail`.
 
-Nettoyage automatique : au démarrage puis toutes les 6 heures, l'appli efface définitivement les dossiers de `runs/` de plus de 30 jours (variable `$JoursConserves` dans `ClaudeEcran.ps1`). Ils ne passent pas par la corbeille, ce qui libère vraiment la place. Le journal est aussi raccourci. Les fichiers de `Documents\Claude-Travail` ne sont jamais touchés.
+Automatic cleanup: at startup and then every 6 hours, the app permanently deletes the `runs/` folders older than 30 days (`$JoursConserves` variable in `ClaudeEcran.ps1`). They don't go through the Recycle Bin, so the space is really freed. The log is trimmed too. Files in `Documents\Claude-Travail` are never touched.
 
-## Limites
+## Limitations
 
-- Claude ne peut lancer aucun programme ni aucune commande, à part l'outil de contrôle. Par exemple, il ne peut pas générer une image avec Python, mais il peut écrire un schéma en SVG ou en HTML.
-- Le glisser-déposer précis (câbles dans Packet Tracer, par exemple) est lent et pas toujours fiable : c'est pour ça que tu fais le câblage et que Claude configure par la console.
-- Il ne génère pas de fichier `.pkt` : c'est un format chiffré et fermé.
-- Pour les sites web, l'extension Claude in Chrome est souvent plus fiable : elle lit directement le contenu de la page au lieu de passer par des captures.
-- Un seul écran est capturé : celui où se trouve la souris au moment de l'appui.
+- Claude cannot run any program or command other than the control tool. For example, it cannot generate an image with Python, but it can write a diagram in SVG or HTML.
+- Precise drag and drop (cables in Packet Tracer, for example) is slow and not always reliable: that's why you do the cabling and Claude configures through the console.
+- For websites, the Claude in Chrome extension is often more reliable: it reads the page content directly instead of going through screenshots.
+- Only one screen is captured: the one the mouse is on when you press the shortcut.
 
-## Contribuer et versions
+## Contributing and versions
 
-Le cycle de travail (issue → branche → PR → review → merge) est décrit dans [CONTRIBUTING.md](CONTRIBUTING.md) ; le plus simple est de passer par le [dashboard VeD Opps](https://taskf0rce.github.io/VeD_Opps/).
-Les versions sont publiées automatiquement (bouton « Nouvelle release » du dashboard) : voir les [releases](../../releases) et le `CHANGELOG.md`.
+The workflow (issue → branch → PR → review → merge) is described in [CONTRIBUTING.md](CONTRIBUTING.md); the easiest way is through the [VeD Opps dashboard](https://taskf0rce.github.io/VeD_Opps/).
+Versions are published automatically (the dashboard's « Nouvelle release » button): see the [releases](../../releases) and `CHANGELOG.md`.

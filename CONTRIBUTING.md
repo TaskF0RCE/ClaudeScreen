@@ -1,246 +1,246 @@
-# Contribuer au projet
+# Contributing
 
-Ce guide explique comment on travaille en équipe sans se marcher dessus. Pour chaque étape, il y a **trois façons de faire**, de la plus simple à la plus technique :
+This guide explains how we work as a team without stepping on each other's toes. Every step can be done in **three ways**, from the simplest to the most technical:
 
-- 📊 **Dashboard** : https://taskf0rce.github.io/VeD_Opps/ (des boutons, rien à installer)
-- 🖥️ **GitHub Desktop** : https://desktop.github.com (l'appli pour copier le code sur ton PC)
-- 🧑‍💻 **VS Code** (ou le terminal, pour ceux qui aiment)
+- 📊 **Dashboard**: https://taskf0rce.github.io/VeD_Opps/ (buttons, nothing to install; its interface is in French)
+- 🖥️ **GitHub Desktop**: https://desktop.github.com (the app that copies the code to your PC)
+- 🧑‍💻 **VS Code** (or the terminal, if you like it)
 
-Prends celle que tu préfères. Le résultat est le même.
+Pick the one you prefer. The result is the same.
 
 ---
 
-## Le principe en 30 secondes
+## The idea in 30 seconds
 
 ```
-  Issue          Branche              PR                 Review        Merge          Release
- (la tâche) → feature/ma-tache → (demande d'ajout) → (un autre relit) → (dans main) → (v0.2.0)
+  Issue          Branch               PR                 Review           Merge          Release
+ (the task) → feature/my-task → (merge request) → (someone else reads) → (into main) → (v0.2.0)
 ```
 
-1. **`main` est toujours stable** : c'est la version qui marche. On n'y pousse **jamais** directement.
-2. **Une tâche = une issue = une branche** (`feature/...` pour une nouveauté, `fix/...` pour une correction).
-3. Quand c'est prêt, on ouvre une **pull request (PR)** : « voici mes changements, je propose de les ajouter à `main` ».
-4. **Un autre membre relit** et approuve. On review toujours le code des autres, jamais le sien.
-5. Quand la CI est verte ✅ et la PR approuvée 👍, on **merge**.
-6. De temps en temps, on publie une **release** : la version est calculée toute seule.
+1. **`main` is always stable**: it is the version that works. Nobody **ever** pushes to it directly.
+2. **One task = one issue = one branch** (`feature/...` for something new, `fix/...` for a fix).
+3. When it's ready, open a **pull request (PR)**: "here are my changes, I propose adding them to `main`".
+4. **Another member reviews** and approves. You always review other people's code, never your own.
+5. When CI is green ✅ and the PR is approved 👍, you **merge**.
+6. From time to time, you publish a **release**: the version number is computed automatically.
 
 ---
 
-## 1. Créer la tâche
+## 1. Create the task
 
-### 📊 Dashboard (recommandé)
+### 📊 Dashboard (recommended)
 
-Clique sur **＋ Nouvelle feature**, choisis le projet, le type (fonctionnalité ou correction) et un nom, par exemple « page de connexion ».
+Click **＋ Nouvelle feature** (new feature), pick the project, the type (feature or fix) and a name, for example "login page".
 
-D'un seul clic, le dashboard crée :
-- l'**issue** « page de connexion », qui t'est assignée,
-- la **branche** `feature/page-de-connexion`,
-- une **PR en brouillon** « feat: page de connexion », liée à l'issue,
-- les cartes dans le **kanban**, colonne « En cours ».
+In one click, the dashboard creates:
+- the **issue** "login page", assigned to you,
+- the **branch** `feature/login-page`,
+- a **draft PR** "feat: login page", linked to the issue,
+- the cards on the **kanban**, in the "En cours" (in progress) column.
 
-### Sur github.com
+### On github.com
 
-1. Onglet **Issues** → **New issue** → formulaire « ✨ Feature » ou « 🐛 Bug ».
-2. Dans l'issue, colonne de droite → **Development** → **Create a branch**. Nomme-la `feature/page-de-connexion`.
+1. **Issues** tab → **New issue** → the "✨ Feature" or "🐛 Bug" form.
+2. In the issue, right-hand column → **Development** → **Create a branch**. Name it `feature/login-page`.
 
 ---
 
-## 2. Récupérer la branche sur ton PC
+## 2. Get the branch on your PC
 
-> La première fois seulement, il faut **cloner** le projet (le copier sur ton PC).
-> GitHub Desktop : **File → Clone repository** → onglet *GitHub.com* → choisis `TaskF0RCE/le-projet`.
-> VS Code : **Ctrl+Maj+P** → `Git: Clone` → *Clone from GitHub*.
+> The first time only, you need to **clone** the project (copy it to your PC).
+> GitHub Desktop: **File → Clone repository** → *GitHub.com* tab → pick `TaskF0RCE/the-project`.
+> VS Code: **Ctrl+Shift+P** → `Git: Clone` → *Clone from GitHub*.
 
 ### 🖥️ GitHub Desktop
-1. **Fetch origin**, le bouton en haut à droite.
-2. **Current branch** → choisis `feature/page-de-connexion`.
+1. **Fetch origin**, the button at the top right.
+2. **Current branch** → pick `feature/login-page`.
 
 ### 🧑‍💻 VS Code
-1. Clique sur le **nom de branche** en bas à gauche (souvent `main`).
-2. Choisis `origin/feature/page-de-connexion`.
+1. Click the **branch name** at the bottom left (often `main`).
+2. Pick `origin/feature/login-page`.
 
 ### Terminal
 ```bash
 git fetch
-git switch feature/page-de-connexion
+git switch feature/login-page
 ```
 
-✅ Vérifie que tu es bien sur **ta** branche avant de coder, pas sur `main`.
+✅ Check that you are on **your** branch before coding, not on `main`.
 
 ---
 
-## 3. Coder et enregistrer (commit)
+## 3. Code and save (commit)
 
-Un **commit**, c'est une sauvegarde de ton travail avec un petit message. Fais-en souvent : un commit par petite étape qui marche.
+A **commit** is a snapshot of your work with a short message. Commit often: one commit per small step that works.
 
 ### 🖥️ GitHub Desktop
-1. À gauche, coche les fichiers modifiés.
-2. En bas à gauche, écris un résumé : `ajoute le formulaire de connexion`.
-3. **Commit to feature/page-de-connexion**.
+1. On the left, tick the changed files.
+2. At the bottom left, write a summary: `add the login form`.
+3. **Commit to feature/login-page**.
 
 ### 🧑‍💻 VS Code
-1. Icône **Source Control** (la 3e à gauche, ou **Ctrl+Maj+G**).
-2. **+** à côté des fichiers à inclure, écris le message, puis **✓ Commit**.
+1. **Source Control** icon (3rd on the left, or **Ctrl+Shift+G**).
+2. **+** next to the files to include, write the message, then **✓ Commit**.
 
 ### Terminal
 ```bash
 git add .
-git commit -m "ajoute le formulaire de connexion"
+git commit -m "add the login form"
 ```
 
-> 💡 Les messages des commits intermédiaires sont libres. Seul le **titre de la PR** compte pour la version (voir [Conventional Commits](#conventional-commits-les-titres-de-pr)).
+> 💡 Intermediate commit messages are free-form. Only the **PR title** matters for the version (see [Conventional Commits](#conventional-commits-pr-titles)).
 
 ---
 
-## 4. Envoyer sur GitHub (push)
+## 4. Send it to GitHub (push)
 
-Tant que tu n'as pas poussé, ton travail n'existe que sur ton PC.
+Until you push, your work only exists on your PC.
 
-- 🖥️ **GitHub Desktop** : bouton **Push origin** en haut.
-- 🧑‍💻 **VS Code** : bouton **Sync Changes** (ou **⋯ → Push**).
-- **Terminal** : `git push`
+- 🖥️ **GitHub Desktop**: **Push origin** button at the top.
+- 🧑‍💻 **VS Code**: **Sync Changes** button (or **⋯ → Push**).
+- **Terminal**: `git push`
 
-La **CI** se lance alors toute seule sur ta PR : elle vérifie que le code se construit et que les tests passent.
-
----
-
-## 5. Demander la review
-
-Quand ta tâche est finie et que la CI est verte :
-
-- 📊 **Dashboard** : onglet **Pull requests** → ta PR → **Prête pour review**. Les autres membres sont prévenus automatiquement et la carte passe dans « En review ».
-- **github.com** : ouvre ta PR → **Ready for review**, puis colonne de droite → **Reviewers** → choisis les autres membres.
-
-Pense à remplir la description de la PR : ce que ça change et comment tester.
+**CI** then runs on its own on your PR: it checks that the code builds, that the tests pass and that the PowerShell scripts have no errors.
 
 ---
 
-## 6. Reviewer le code des autres
+## 5. Ask for a review
 
-L'onglet **Pull requests** du dashboard montre en haut ce que **tu** dois reviewer.
+When your task is done and CI is green:
 
-1. Ouvre la PR sur GitHub → onglet **Files changed** pour voir les modifications.
-2. Clique sur le **+** à côté d'une ligne pour laisser un commentaire.
-3. Termine avec **Review changes** :
-   - **Approve** ✅ si c'est bon (ou le bouton **Approuver** du dashboard),
-   - **Request changes** ✋ s'il faut corriger quelque chose,
-   - **Comment** 💬 pour une simple question.
+- 📊 **Dashboard**: **Pull requests** tab → your PR → **Prête pour review** (ready for review). The other members are notified automatically and the card moves to "En review".
+- **github.com**: open your PR → **Ready for review**, then right-hand column → **Reviewers** → pick the other members.
 
-**Une bonne review :**
-- reste gentille et précise : « ce cas plante si la liste est vide, non ? » plutôt que « c'est faux » ;
-- pose des questions si tu ne comprends pas, ça compte aussi ;
-- n'exige pas la perfection : est-ce que ça marche, et est-ce que c'est lisible ?
-
-Si on te demande des modifications : corrige sur ta branche, commit, push. La PR se met à jour toute seule.
+Remember to fill in the PR description: what it changes and how to test it.
 
 ---
 
-## 7. Merger
+## 6. Review other people's code
 
-Quand la CI est verte ✅ **et** la PR approuvée 👍 :
+The **Pull requests** tab of the dashboard shows at the top what **you** need to review.
 
-- 📊 **Dashboard** : bouton **Merger**. Il reste grisé tant qu'il manque quelque chose, et le survoler indique quoi.
-- **github.com** : bouton **Squash and merge** en bas de la PR.
+1. Open the PR on GitHub → **Files changed** tab to see the changes.
+2. Click the **+** next to a line to leave a comment.
+3. Finish with **Review changes**:
+   - **Approve** ✅ if it's good (or the dashboard's **Approuver** button),
+   - **Request changes** ✋ if something needs fixing,
+   - **Comment** 💬 for a simple question.
 
-Tous les commits de la branche deviennent **un seul commit** sur `main`, avec le titre de la PR. La branche est supprimée, l'issue est fermée et la carte du kanban passe dans « Fini ».
+**A good review:**
+- stays kind and precise: "this case crashes if the list is empty, right?" rather than "this is wrong";
+- asks questions when you don't understand, that counts too;
+- doesn't demand perfection: does it work, and is it readable?
 
-**Ensuite, reviens sur `main` et mets-la à jour** avant la tâche suivante :
-- 🖥️ GitHub Desktop : **Current branch → main**, puis **Fetch origin → Pull origin**.
-- 🧑‍💻 VS Code : nom de branche en bas à gauche → `main`, puis **Sync Changes**.
-- Terminal : `git switch main && git pull`
-
----
-
-## 8. Publier une version (release)
-
-Quand plusieurs features sont mergées et que vous voulez « figer » une version :
-
-1. 📊 Dashboard → **🏷 Nouvelle release** → choisis le projet.
-2. Une minute plus tard, une PR **« chore(main): release 0.2.0 »** apparaît : elle contient la nouvelle version et le CHANGELOG.
-3. Approuvez-la, puis **Merger**.
-4. La release `v0.2.0` est publiée sur GitHub et visible dans l'onglet **Historique** du dashboard.
-
-Sans dashboard : onglet **Actions** du repo → **Release** → **Run workflow**.
+If you are asked for changes: fix them on your branch, commit, push. The PR updates by itself.
 
 ---
 
-## Conventional Commits (les titres de PR)
+## 7. Merge
 
-Le titre de chaque PR commence par un **type**. C'est lui qui décide de la prochaine version :
+When CI is green ✅ **and** the PR is approved 👍:
 
-| Titre de PR | Pour… | Effet sur la version |
+- 📊 **Dashboard**: **Merger** (merge) button. It stays greyed out while something is missing, and hovering it tells you what.
+- **github.com**: **Squash and merge** button at the bottom of the PR.
+
+All the commits of the branch become **a single commit** on `main`, with the PR title. The branch is deleted, the issue is closed and the kanban card moves to "Fini" (done).
+
+**Then go back to `main` and update it** before the next task:
+- 🖥️ GitHub Desktop: **Current branch → main**, then **Fetch origin → Pull origin**.
+- 🧑‍💻 VS Code: branch name at the bottom left → `main`, then **Sync Changes**.
+- Terminal: `git switch main && git pull`
+
+---
+
+## 8. Publish a version (release)
+
+When several features are merged and you want to "freeze" a version:
+
+1. 📊 Dashboard → **🏷 Nouvelle release** (new release) → pick the project.
+2. A minute later, a PR **"chore(main): release 0.2.0"** appears: it contains the new version and the CHANGELOG.
+3. Approve it, then **Merger**.
+4. The `v0.2.0` release is published on GitHub and visible in the dashboard's **Historique** (history) tab.
+
+Without the dashboard: the repo's **Actions** tab → **Release** → **Run workflow**.
+
+---
+
+## Conventional Commits (PR titles)
+
+Every PR title starts with a **type**. It decides the next version:
+
+| PR title | For… | Effect on the version |
 | --- | --- | --- |
-| `feat: ajoute la page profil` | une nouvelle fonctionnalité | 0.1.0 → **0.2.0** |
-| `fix: corrige le crash au démarrage` | une correction de bug | 0.1.0 → **0.1.1** |
-| `feat!: change le format des sauvegardes` | un changement qui casse l'existant | **1.0.0 → 2.0.0** (après la 1.0.0) |
-| `docs: explique l'installation` | la documentation | pas de nouvelle version |
-| `refactor: simplifie le calcul du score` | réorganiser du code sans changer le comportement | pas de nouvelle version |
-| `test: ajoute les tests du panier` | les tests | pas de nouvelle version |
-| `chore: met à jour les dépendances` | l'entretien | pas de nouvelle version |
+| `feat: add the profile page` | a new feature | 0.1.0 → **0.2.0** |
+| `fix: fix the crash at startup` | a bug fix | 0.1.0 → **0.1.1** |
+| `feat!: change the save format` | a breaking change | **1.0.0 → 2.0.0** (after 1.0.0) |
+| `docs: explain the installation` | documentation | no new version |
+| `refactor: simplify the score computation` | reorganising code without changing behaviour | no new version |
+| `test: add the cart tests` | tests | no new version |
+| `chore: update dependencies` | maintenance | no new version |
 
-On peut préciser une partie du projet entre parenthèses : `fix(api): …`, `feat(ui): …`.
-Un titre mal formé met la CI au rouge, avec un exemple pour corriger. Modifie le titre de la PR et c'est reparti.
-
----
-
-## Problèmes fréquents
-
-<details>
-<summary><b>La CI est rouge ❌</b></summary>
-
-Dans la PR, clique sur **Details** à côté du check rouge pour lire l'erreur. Corrige sur ta branche, commit, push : la CI se relance toute seule.
-Si c'est le check **« titre conventionnel »**, il suffit de modifier le titre de la PR (bouton **Edit** à côté du titre).
-</details>
-
-<details>
-<summary><b>« This branch has conflicts » (conflit)</b></summary>
-
-`main` a changé pendant que tu travaillais, et vous avez modifié les mêmes lignes.
-
-- **github.com** : bouton **Resolve conflicts** dans la PR (pour les cas simples).
-- 🖥️ **GitHub Desktop** : sur ta branche, **Branch → Update from main**, ouvre les fichiers en conflit, garde le bon code, puis commit et push.
-- 🧑‍💻 **VS Code** : ouvre les fichiers marqués **!**, choisis *Accept Current / Incoming / Both*, puis commit et push.
-
-Les marques `<<<<<<<`, `=======` et `>>>>>>>` délimitent les deux versions : il faut les supprimer.
-</details>
-
-<details>
-<summary><b>J'ai codé sur <code>main</code> par erreur</b></summary>
-
-Pas de panique, tant que tu n'as pas poussé :
-- 🖥️ **GitHub Desktop** : **Current branch → New branch**. Desktop propose d'emmener tes changements (*Bring my changes*).
-- **Terminal** : `git switch -c feature/mon-truc`. Tes modifications non commitées te suivent.
-
-Si tu as déjà poussé sur `main`, préviens l'équipe : le check « garde-fou main » sera rouge.
-</details>
-
-<details>
-<summary><b>Le bouton « Merger » est grisé</b></summary>
-
-Survole-le : le dashboard dit ce qui manque (CI pas verte, pas encore approuvée, encore en brouillon, conflit, titre non conforme…).
-</details>
-
-<details>
-<summary><b>Mettre ma branche à jour avec main</b></summary>
-
-- **github.com** : bouton **Update branch** dans la PR.
-- 🖥️ GitHub Desktop : **Branch → Update from main**.
-- Terminal : `git fetch && git merge origin/main`
-</details>
+You can name a part of the project in parentheses: `fix(api): …`, `feat(ui): …`.
+A badly formed title turns CI red, with an example of how to fix it. Edit the PR title and you're good to go.
 
 ---
 
-## Lexique
+## Common problems
 
-| Mot | Ça veut dire |
+<details>
+<summary><b>CI is red ❌</b></summary>
+
+In the PR, click **Details** next to the red check to read the error. Fix it on your branch, commit, push: CI runs again by itself.
+If it's the **"titre conventionnel"** (conventional title) check, just edit the PR title (**Edit** button next to the title).
+</details>
+
+<details>
+<summary><b>"This branch has conflicts"</b></summary>
+
+`main` changed while you were working, and you both changed the same lines.
+
+- **github.com**: **Resolve conflicts** button in the PR (for simple cases).
+- 🖥️ **GitHub Desktop**: on your branch, **Branch → Update from main**, open the conflicting files, keep the right code, then commit and push.
+- 🧑‍💻 **VS Code**: open the files marked **!**, choose *Accept Current / Incoming / Both*, then commit and push.
+
+The `<<<<<<<`, `=======` and `>>>>>>>` markers delimit the two versions: they must be removed.
+</details>
+
+<details>
+<summary><b>I coded on <code>main</code> by mistake</b></summary>
+
+Don't panic, as long as you haven't pushed:
+- 🖥️ **GitHub Desktop**: **Current branch → New branch**. Desktop offers to bring your changes along (*Bring my changes*).
+- **Terminal**: `git switch -c feature/my-thing`. Your uncommitted changes follow you.
+
+If you already pushed to `main`, tell the team: the "garde-fou main" (main guard) check will be red.
+</details>
+
+<details>
+<summary><b>The "Merger" button is greyed out</b></summary>
+
+Hover it: the dashboard tells you what is missing (CI not green, not approved yet, still a draft, conflict, invalid title…).
+</details>
+
+<details>
+<summary><b>Update my branch with main</b></summary>
+
+- **github.com**: **Update branch** button in the PR.
+- 🖥️ GitHub Desktop: **Branch → Update from main**.
+- Terminal: `git fetch && git merge origin/main`
+</details>
+
+---
+
+## Glossary
+
+| Word | Meaning |
 | --- | --- |
-| **Repo** | Le dossier du projet sur GitHub, avec tout son historique. |
-| **Branche** | Une copie du code où l'on travaille sans toucher à `main`. |
-| **Commit** | Une sauvegarde de modifications, avec un message. |
-| **Push / Pull** | Envoyer ses commits sur GitHub / récupérer ceux des autres. |
-| **PR (pull request)** | La demande pour ajouter une branche dans `main`. C'est là qu'on discute et qu'on review. |
-| **Review** | La relecture du code d'un autre membre. |
-| **Merge** | Ajouter les changements d'une PR dans `main`. |
-| **CI** | Les vérifications automatiques (build, tests) lancées par GitHub Actions. |
-| **Release** | Une version publiée (ex. `v0.2.0`), avec la liste des changements. |
-| **SemVer** | La numérotation `MAJEUR.MINEUR.CORRECTIF` des versions. |
+| **Repo** | The project folder on GitHub, with its whole history. |
+| **Branch** | A copy of the code where you work without touching `main`. |
+| **Commit** | A snapshot of changes, with a message. |
+| **Push / Pull** | Send your commits to GitHub / get the others' commits. |
+| **PR (pull request)** | The request to add a branch into `main`. That's where you discuss and review. |
+| **Review** | Reading another member's code. |
+| **Merge** | Adding the changes of a PR into `main`. |
+| **CI** | The automatic checks (build, tests, lint) run by GitHub Actions. |
+| **Release** | A published version (e.g. `v0.2.0`), with the list of changes. |
+| **SemVer** | The `MAJOR.MINOR.PATCH` version numbering. |

@@ -1,7 +1,7 @@
-"""Contrôle de l'ordinateur pour Claude (équivalent de pc.ps1).
+"""Computer control for Claude (equivalent of pc.ps1).
 
-Les coordonnées sont en pixels de la capture (voir ecran.json dans le dossier de la tâche).
-Claude l'appelle via le petit script donnees/pc généré au démarrage de l'appli.
+Coordinates are in screenshot pixels (see ecran.json in the task folder).
+Claude calls it through the small donnees/pc script generated when the app starts.
 """
 from __future__ import annotations
 
@@ -14,10 +14,10 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import natif  # noqa: E402
 
-USAGE = """Actions :
-  capture | zoom X Y L H | clic X Y | doubleclic X Y | clicdroit X Y | survol X Y
-  glisser X1 Y1 X2 Y2 | defiler X Y N | ecrire "texte" | ecrire-fichier CHEMIN
-  touche COMBO | attendre MS | corbeille CHEMIN"""
+USAGE = """Actions:
+  capture | zoom X Y W H | clic X Y | doubleclic X Y | clicdroit X Y | survol X Y
+  glisser X1 Y1 X2 Y2 | defiler X Y N | ecrire "text" | ecrire-fichier PATH
+  touche COMBO | attendre MS | corbeille PATH"""
 
 
 def main(argv):
@@ -28,18 +28,18 @@ def main(argv):
 
     run = os.environ.get('ECRAN_RUN')
     if not run:
-        raise SystemExit('ECRAN_RUN non défini : ce script doit être lancé par ClaudeEcran.')
+        raise SystemExit('ECRAN_RUN is not set: this script must be started by ClaudeEcran.')
     with open(os.path.join(run, 'ecran.json'), encoding='utf-8') as f:
         ecran = json.load(f)
     e = ecran['echelle']
 
     def nombre(i):
         if len(valeurs) <= i:
-            raise SystemExit("Argument %d manquant pour '%s'." % (i + 1, action))
+            raise SystemExit("Missing argument %d for '%s'." % (i + 1, action))
         try:
             return float(valeurs[i].replace(',', '.'))
         except ValueError:
-            raise SystemExit("Argument %d invalide pour '%s' : %s" % (i + 1, action, valeurs[i]))
+            raise SystemExit("Invalid argument %d for '%s': %s" % (i + 1, action, valeurs[i]))
 
     def X(x):
         return ecran['gauche'] + x * e
@@ -54,12 +54,12 @@ def main(argv):
     if action == 'capture':
         png = suivant('capture')
         natif.capturer(png, ecran['gauche'], ecran['haut'], ecran['largeurEcran'], ecran['hauteurEcran'], e)
-        print('Capture : %s (%dx%d px)' % (png, ecran['largeur'], ecran['hauteur']))
+        print('Screenshot: %s (%dx%d px)' % (png, ecran['largeur'], ecran['hauteur']))
     elif action == 'zoom':
-        # Agrandit une zone pour lire les petits détails (lecture seule).
+        # Enlarges an area to read small details (read-only).
         png = suivant('zoom')
         natif.capturer(png, X(nombre(0)), Y(nombre(1)), nombre(2) * e, nombre(3) * e, None, cote_max=1600)
-        print('Zoom : %s (lecture seule, ne pas utiliser ses coordonnées pour cliquer)' % png)
+        print('Zoom: %s (read-only, do not use its coordinates to click)' % png)
     elif action == 'clic':
         natif.clic(X(nombre(0)), Y(nombre(1)))
         print('OK')
@@ -97,11 +97,11 @@ def main(argv):
     elif action == 'corbeille':
         chemin = os.path.abspath(' '.join(valeurs))
         if not os.path.exists(chemin):
-            raise SystemExit('Introuvable : %s' % chemin)
+            raise SystemExit('Not found: %s' % chemin)
         natif.corbeille(chemin)
-        print('Mis à la corbeille : %s' % chemin)
+        print('Sent to the trash: %s' % chemin)
     else:
-        raise SystemExit('Action inconnue : %s\n%s' % (action, USAGE))
+        raise SystemExit('Unknown action: %s\n%s' % (action, USAGE))
 
 
 if __name__ == '__main__':
