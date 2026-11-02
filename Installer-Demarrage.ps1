@@ -5,6 +5,8 @@ param([switch]$Retirer)
 $ErrorActionPreference = 'Stop'
 $nom = 'ClaudeScreen'
 $utilisateur = "$env:USERDOMAIN\$env:USERNAME"
+# Le projet s'appelait ClaudeEcran : on retire l'ancienne tâche planifiée (elle lançait ClaudeEcran.ps1).
+Unregister-ScheduledTask -TaskName 'ClaudeEcran' -Confirm:$false -ErrorAction SilentlyContinue
 
 if ($Retirer) {
     Unregister-ScheduledTask -TaskName $nom -Confirm:$false -ErrorAction SilentlyContinue
@@ -15,7 +17,7 @@ if ($Retirer) {
 # Lecture des PDF : installe Poppler tout de suite (sinon ClaudeScreen le fait à son premier démarrage).
 & (Join-Path $PSScriptRoot 'outils\poppler.ps1')
 
-$script = Join-Path $PSScriptRoot 'ClaudeEcran.ps1'
+$script = Join-Path $PSScriptRoot 'ClaudeScreen.ps1'
 # conhost --headless : lance PowerShell sans aucune fenêtre, même pas un éclair.
 $action = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\conhost.exe" `
     -Argument "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File `"$script`"" `

@@ -62,7 +62,7 @@ def extraire(pdf, cache):
         doc.close()
     scanne = pages > 0 and total / pages < SEUIL_SCANNE
     # 1re ligne : métadonnées lues ci-dessus (source|pages|texte/scanne).
-    entete = 'ClaudeEcran : texte extrait de %s|%d|%s\n' % (pdf, pages, 'scanne' if scanne else 'texte')
+    entete = 'ClaudeScreen : texte extrait de %s|%d|%s\n' % (pdf, pages, 'scanne' if scanne else 'texte')
     fd, tmp = tempfile.mkstemp(dir=cache, suffix='.tmp')
     with os.fdopen(fd, 'w', encoding='utf-8') as f:
         f.write(entete + ''.join(morceaux))

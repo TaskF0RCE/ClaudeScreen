@@ -6,10 +6,10 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'natif.ps1')
 . (Join-Path $PSScriptRoot 'pdf.ps1')
-[ClaudeEcran.Natif]::DpiAware()
+[ClaudeScreen.Natif]::DpiAware()
 
 $run = $env:ECRAN_RUN
-if (-not $run) { throw 'ECRAN_RUN non défini : ce script doit être lancé par ClaudeEcran.' }
+if (-not $run) { throw 'ECRAN_RUN non défini : ce script doit être lancé par ClaudeScreen.' }
 $ecran = Get-Content (Join-Path $run 'ecran.json') -Raw | ConvertFrom-Json
 
 function Nombre([int]$i) {
@@ -31,7 +31,7 @@ switch ($Action.ToLower()) {
     'capture' {
         $n = @(Get-ChildItem $run -Filter 'capture-*.png').Count + 1
         $png = Join-Path $run ('capture-{0:D2}.png' -f $n)
-        [ClaudeEcran.Natif]::Capture($png, $ecran.gauche, $ecran.haut, $ecran.largeurEcran, $ecran.hauteurEcran, $ecran.echelle)
+        [ClaudeScreen.Natif]::Capture($png, $ecran.gauche, $ecran.haut, $ecran.largeurEcran, $ecran.hauteurEcran, $ecran.echelle)
         "Capture : $png ($($ecran.largeur)x$($ecran.hauteur) px)"
     }
     'zoom' {
@@ -39,18 +39,18 @@ switch ($Action.ToLower()) {
         $n = @(Get-ChildItem $run -Filter 'zoom-*.png').Count + 1
         $png = Join-Path $run ('zoom-{0:D2}.png' -f $n)
         $l = [int][math]::Round((Nombre 2) * $ecran.echelle); $h = [int][math]::Round((Nombre 3) * $ecran.echelle)
-        [ClaudeEcran.Natif]::Capture($png, (X (Nombre 0)), (Y (Nombre 1)), $l, $h, 1.0)
+        [ClaudeScreen.Natif]::Capture($png, (X (Nombre 0)), (Y (Nombre 1)), $l, $h, 1.0)
         "Zoom : $png (lecture seule, ne pas utiliser ses coordonnées pour cliquer)"
     }
-    'clic'      { [ClaudeEcran.Natif]::Clic((X (Nombre 0)), (Y (Nombre 1)), $false, 1); 'OK' }
-    'doubleclic' { [ClaudeEcran.Natif]::Clic((X (Nombre 0)), (Y (Nombre 1)), $false, 2); 'OK' }
-    'clicdroit' { [ClaudeEcran.Natif]::Clic((X (Nombre 0)), (Y (Nombre 1)), $true, 1); 'OK' }
-    'survol'    { [ClaudeEcran.Natif]::Deplacer((X (Nombre 0)), (Y (Nombre 1))); 'OK' }
-    'glisser'   { [ClaudeEcran.Natif]::Glisser((X (Nombre 0)), (Y (Nombre 1)), (X (Nombre 2)), (Y (Nombre 3))); 'OK' }
-    'defiler'   { [ClaudeEcran.Natif]::Molette((X (Nombre 0)), (Y (Nombre 1)), [int](Nombre 2)); 'OK' }
-    'ecrire'    { [ClaudeEcran.Natif]::Taper(($Valeurs -join ' ')); 'OK' }
+    'clic'      { [ClaudeScreen.Natif]::Clic((X (Nombre 0)), (Y (Nombre 1)), $false, 1); 'OK' }
+    'doubleclic' { [ClaudeScreen.Natif]::Clic((X (Nombre 0)), (Y (Nombre 1)), $false, 2); 'OK' }
+    'clicdroit' { [ClaudeScreen.Natif]::Clic((X (Nombre 0)), (Y (Nombre 1)), $true, 1); 'OK' }
+    'survol'    { [ClaudeScreen.Natif]::Deplacer((X (Nombre 0)), (Y (Nombre 1))); 'OK' }
+    'glisser'   { [ClaudeScreen.Natif]::Glisser((X (Nombre 0)), (Y (Nombre 1)), (X (Nombre 2)), (Y (Nombre 3))); 'OK' }
+    'defiler'   { [ClaudeScreen.Natif]::Molette((X (Nombre 0)), (Y (Nombre 1)), [int](Nombre 2)); 'OK' }
+    'ecrire'    { [ClaudeScreen.Natif]::Taper(($Valeurs -join ' ')); 'OK' }
     'ecrire-fichier' {
-        [ClaudeEcran.Natif]::Taper([IO.File]::ReadAllText(($Valeurs -join ' '), [Text.Encoding]::UTF8)); 'OK'
+        [ClaudeScreen.Natif]::Taper([IO.File]::ReadAllText(($Valeurs -join ' '), [Text.Encoding]::UTF8)); 'OK'
     }
     'touche' {
         $vks = foreach ($nom in ($Valeurs -join '').ToLower().Split('+')) {
@@ -59,7 +59,7 @@ switch ($Action.ToLower()) {
             elseif ($nom -match '^[a-z0-9]$') { [int][char]$nom.ToUpper() }
             else { throw "Touche inconnue : $nom" }
         }
-        [ClaudeEcran.Natif]::Combo([uint16[]]$vks); 'OK'
+        [ClaudeScreen.Natif]::Combo([uint16[]]$vks); 'OK'
     }
     'attendre'  { Start-Sleep -Milliseconds ([int](Nombre 0)); 'OK' }
     'corbeille' {

@@ -1,5 +1,5 @@
 ﻿# Lecture des PDF avec Poppler (outils\poppler, installé par poppler.ps1).
-# Claude Code a besoin de pdftoppm pour lire un PDF lui-même : ClaudeEcran extrait donc le texte des PDF
+# Claude Code a besoin de pdftoppm pour lire un PDF lui-même : ClaudeScreen extrait donc le texte des PDF
 # du contexte à l'avance (fichier .txt en cache, avec les numéros de page) et rend les pages en image
 # à la demande (pc.ps1 page-pdf).
 $PopplerBin = Join-Path $PSScriptRoot 'poppler\Library\bin'
@@ -66,7 +66,7 @@ function Export-PdfTexte([string]$pdf, [string]$cache) {
     $scanne = $n -gt 0 -and ($total / $n) -lt $SeuilScanne
     $genre = if ($scanne) { 'scanne' } else { 'texte' }
     $provisoire = "$txt.tmp"
-    [IO.File]::WriteAllText($provisoire, "ClaudeEcran : texte extrait de $($f.FullName)|$n|$genre`n" + ($pages -join ''), (New-Object Text.UTF8Encoding $false))
+    [IO.File]::WriteAllText($provisoire, "ClaudeScreen : texte extrait de $($f.FullName)|$n|$genre`n" + ($pages -join ''), (New-Object Text.UTF8Encoding $false))
     Move-Item -LiteralPath $provisoire -Destination $txt -Force
     [pscustomobject]@{ Txt = $txt; Pages = $n; Scanne = $scanne }
 }

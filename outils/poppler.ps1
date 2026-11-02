@@ -1,8 +1,8 @@
 ﻿# Installe Poppler pour Windows (pdftotext, pdftoppm, pdfinfo) dans outils\poppler, une seule fois.
-# Sans lui, Claude Code ne peut pas lire les PDF (il lui faut pdftoppm), et ClaudeEcran ne peut pas
+# Sans lui, Claude Code ne peut pas lire les PDF (il lui faut pdftoppm), et ClaudeScreen ne peut pas
 # extraire le texte des PDF du contexte.
 # Version figée et empreinte SHA-256 vérifiée : un fichier modifié est refusé.
-# Lancé en arrière-plan par ClaudeEcran.ps1 si besoin, ou à la main :
+# Lancé en arrière-plan par ClaudeScreen.ps1 si besoin, ou à la main :
 #   powershell -ExecutionPolicy Bypass -File outils\poppler.ps1
 param([string]$Journal)
 $ErrorActionPreference = 'Stop'

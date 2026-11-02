@@ -30,7 +30,7 @@ MOTIFS = [
 
 
 def contexte():
-    """Dossier de contexte (transmis par ClaudeEcran ; sinon l'emplacement par défaut)."""
+    """Dossier de contexte (transmis par ClaudeScreen ; sinon l'emplacement par défaut)."""
     if os.environ.get('ECRAN_CONTEXTE'):
         return os.environ['ECRAN_CONTEXTE']
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

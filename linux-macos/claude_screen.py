@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""ClaudeEcran pour macOS et Linux : icône dans la barre des menus (macOS) ou la zone de notifications (Linux).
+"""ClaudeScreen pour macOS et Linux : icône dans la barre des menus (macOS) ou la zone de notifications (Linux).
 
 Ctrl+Alt+C (⌃⌥C sur Mac) -> capture -> Claude fait la tâche. Réappuyer pendant une tâche l'arrête.
 Ctrl+Alt+Shift+C (⌃⌥⇧C) -> capture puis petite barre pour écrire une consigne.
 
 Commandes (pour les raccourcis du bureau sous Wayland, ou les scripts) :
-  claude_ecran.py                 lance l'appli
-  claude_ecran.py declencher      comme Ctrl+Alt+C
-  claude_ecran.py consigne        comme Ctrl+Alt+Shift+C
-  claude_ecran.py arreter         arrête la tâche en cours
-  claude_ecran.py resultat        affiche le dernier résultat
-  claude_ecran.py quitter         ferme l'appli
-  claude_ecran.py diagnostic      vérifie l'installation (capture, autorisations, Claude Code...)
+  claude_screen.py                 lance l'appli
+  claude_screen.py declencher      comme Ctrl+Alt+C
+  claude_screen.py consigne        comme Ctrl+Alt+Shift+C
+  claude_screen.py arreter         arrête la tâche en cours
+  claude_screen.py resultat        affiche le dernier résultat
+  claude_screen.py quitter         ferme l'appli
+  claude_screen.py diagnostic      vérifie l'installation (capture, autorisations, Claude Code...)
 """
 from __future__ import annotations
 
@@ -66,7 +66,7 @@ CACHE_CONTEXTE = os.path.join(DONNEES, 'contexte')  # texte extrait des PDF du c
 DUREE_MAX = 20 * 60
 JOURS_CONSERVES = 30
 ANTI_REBOND = 0.7  # deux appuis à moins de 0,7 s = un seul (raccourci du bureau + écouteur X11)
-SOCKET = os.path.join(tempfile.gettempdir(), 'claude-ecran-%d.sock' % os.getuid())
+SOCKET = os.path.join(tempfile.gettempdir(), 'claude-screen-%d.sock' % os.getuid())
 VERROU = SOCKET + '.lock'
 # Applis où le tri est inutile : on part directement sur Opus (réseau, maths).
 APPS_OPUS = re.compile(r'packet ?tracer|gns3|putty|mobaxterm|securecrt|wireshark|winbox|matlab|mathematica'
@@ -295,7 +295,7 @@ def preparer_outils():
 
     Claude peut seulement lire, écrire des fichiers dans Claude-Travail (acceptEdits) et lancer donnees/pc.
     """
-    ecrire_texte(PC_COMMANDE, '#!/bin/sh\n# Généré au démarrage de ClaudeEcran : outil de contrôle utilisé par Claude.\n'
+    ecrire_texte(PC_COMMANDE, '#!/bin/sh\n# Généré au démarrage de ClaudeScreen : outil de contrôle utilisé par Claude.\n'
                               'PYTHONPYCACHEPREFIX=%s exec %s %s "$@"\n' % (
                                   shlex.quote(os.environ['PYTHONPYCACHEPREFIX']), shlex.quote(sys.executable),
                                   shlex.quote(os.path.join(OUTILS, 'pc.py'))))
@@ -715,7 +715,7 @@ class Appli:
         ICONE_ERREUR = dessiner(0, 'rouge')
         ICONES_TRAVAIL = [dessiner(i * 5) for i in range(9)]
 
-        self.icone = pystray.Icon('ClaudeEcran', ICONE_REPOS, 'Claude', self.creer_menu())
+        self.icone = pystray.Icon('ClaudeScreen', ICONE_REPOS, 'Claude', self.creer_menu())
 
         # Raccourcis (sur macOS : thread principal, avant la boucle de l'appli).
         touches = raccourcis.Raccourcis(lambda ident: self.poster('raccourci', ident), noter)
@@ -748,7 +748,7 @@ class Appli:
                                       ('Accessibilité', droits.get('accessibilite'))) if ok is False]
             if manque:
                 self.dernier = ('Autorisations à donner dans Réglages Système > Confidentialité et sécurité : %s. '
-                                'Ensuite, quitte et relance ClaudeEcran.' % ', '.join(manque))
+                                'Ensuite, quitte et relance ClaudeScreen.' % ', '.join(manque))
                 self.icone.icon = ICONE_ERREUR
                 noter('Autorisations manquantes : %s' % ', '.join(manque))
         texte = 'prêt (%s)' % ', '.join(actifs) if actifs else 'prêt (raccourci du bureau ou menu)'
@@ -789,7 +789,7 @@ def envoyer(commande):
         print(s.recv(512).decode('utf-8', 'replace'))
         return 0
     except OSError:
-        print('ClaudeEcran ne tourne pas. Lance-le d\'abord (lancer.sh).', file=sys.stderr)
+        print('ClaudeScreen ne tourne pas. Lance-le d\'abord (lancer.sh).', file=sys.stderr)
         return 1
     finally:
         s.close()
@@ -833,7 +833,7 @@ def diagnostic():
         nom, titre, _ = natif.fenetre_active()
         ligne('Fenêtre active', '%s - « %s »' % (nom, titre) if nom else 'inconnue', bool(nom) or natif.SESSION == 'wayland')
         e = natif.ecran_sous_curseur()
-        png = os.path.join(tempfile.gettempdir(), 'claude-ecran-test.png')
+        png = os.path.join(tempfile.gettempdir(), 'claude-screen-test.png')
         taille = natif.capturer(png, e['gauche'], e['haut'], e['largeur'], e['hauteur'], 1.0)
         ligne('Capture', '%s (%dx%d)' % (png, taille[0], taille[1]))
     except Exception as ex:
@@ -843,7 +843,7 @@ def diagnostic():
 
 
 def main():
-    p = argparse.ArgumentParser(description='ClaudeEcran pour macOS et Linux')
+    p = argparse.ArgumentParser(description='ClaudeScreen pour macOS et Linux')
     p.add_argument('commande', nargs='?',
                    choices=['declencher', 'consigne', 'arreter', 'resultat', 'quitter', 'etat', 'diagnostic'])
     p.add_argument('--icone', metavar='FICHIER', help=argparse.SUPPRESS)  # utilisé par installer.sh

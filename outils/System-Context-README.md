@@ -1,11 +1,11 @@
 # System-Context : le contexte permanent de Claude
 
 Ce dossier sert à donner à Claude des informations en plus de ce qu'il voit à l'écran.
-Tout est facultatif : s'il est vide, ClaudeEcran fonctionne comme d'habitude.
+Tout est facultatif : s'il est vide, ClaudeScreen fonctionne comme d'habitude.
 
 ## instructions.txt : tes consignes permanentes
 
-Écris une consigne par ligne. Elles sont ajoutées à **chaque** tâche, tant que ClaudeEcran tourne.
+Écris une consigne par ligne. Elles sont ajoutées à **chaque** tâche, tant que ClaudeScreen tourne.
 Les lignes qui commencent par `#` sont ignorées. Le fichier est relu à chaque tâche : tu peux le modifier à tout moment.
 
 Exemples :
@@ -25,7 +25,7 @@ Tu peux faire des sous-dossiers.
 
 Formats lus le mieux : `.pdf`, `.txt`, `.md`, images (`.png`, `.jpg`), code, `.csv`, `.html`.
 
-- **PDF** : ClaudeEcran en extrait le texte à l'avance (avec les numéros de page), ce qui est rapide et
+- **PDF** : ClaudeScreen en extrait le texte à l'avance (avec les numéros de page), ce qui est rapide et
   économise ton quota. Pour un schéma ou un PDF scanné (sans texte), Claude regarde la page en image.
 - Un document Word ou PowerPoint ? Enregistre-le aussi en PDF.
 

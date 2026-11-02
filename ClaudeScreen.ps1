@@ -1,4 +1,4 @@
-﻿# ClaudeEcran : icône dans la zone de notifications. Ctrl+Alt+C (ou Ctrl+Alt+Copilot) -> capture -> Claude fait la tâche.
+﻿# ClaudeScreen : icône dans la zone de notifications. Ctrl+Alt+C (ou Ctrl+Alt+Copilot) -> capture -> Claude fait la tâche.
 # Réappuyer pendant une tâche l'arrête.
 $ErrorActionPreference = 'Stop'
 $Racine = $PSScriptRoot
@@ -45,7 +45,7 @@ $RegleContexte += '/**'
 
 function Noter([string]$texte) { Add-Content -Path $Journal -Value ("{0:yyyy-MM-dd HH:mm:ss}  {1}" -f (Get-Date), $texte) -Encoding UTF8 }
 
-$mutex = New-Object System.Threading.Mutex($false, 'Local\ClaudeEcran')
+$mutex = New-Object System.Threading.Mutex($false, 'Local\ClaudeScreen')
 if (-not $mutex.WaitOne(0)) { exit }
 
 try {
@@ -57,7 +57,7 @@ if (-not (Test-Poppler)) {
         '-File', "`"$(Join-Path $Outils 'poppler.ps1')`"", '-Journal', "`"$Journal`""
     Noter 'Installation de Poppler (lecture des PDF) en arrière-plan'
 }
-[ClaudeEcran.Natif]::DpiAware()
+[ClaudeScreen.Natif]::DpiAware()
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
 # Réglages passés à Claude : permissions limitées + hook qui bloque les suppressions.
@@ -191,16 +191,16 @@ function Echec([string]$message) {
 
 # Capture l'écran sous la souris dans un nouveau dossier de tâche.
 function Capturer {
-    $fenetre = [ClaudeEcran.Natif]::FenetreActive()
-    $hwnd = [ClaudeEcran.Natif]::PremierPlan()
-    $rect = [ClaudeEcran.Natif]::EcranSousCurseur()
+    $fenetre = [ClaudeScreen.Natif]::FenetreActive()
+    $hwnd = [ClaudeScreen.Natif]::PremierPlan()
+    $rect = [ClaudeScreen.Natif]::EcranSousCurseur()
     $run = Join-Path $Runs (Get-Date -Format 'yyyyMMdd-HHmmss')
     New-Item -ItemType Directory -Force $run | Out-Null
 
     # Réduit l'image (≤ 1456 px de côté, ≤ 1,1 Mpx) : Claude la voit sans redimensionnement, les clics restent précis.
     $echelle = [math]::Max(1.0, [math]::Max([math]::Max($rect.Width, $rect.Height) / 1456.0, [math]::Sqrt($rect.Width * $rect.Height / 1100000.0)))
     $png = Join-Path $run 'capture-01.png'
-    [ClaudeEcran.Natif]::Capture($png, $rect.Left, $rect.Top, $rect.Width, $rect.Height, $echelle)
+    [ClaudeScreen.Natif]::Capture($png, $rect.Left, $rect.Top, $rect.Width, $rect.Height, $echelle)
     $largeur = [int][math]::Round($rect.Width / $echelle); $hauteur = [int][math]::Round($rect.Height / $echelle)
     @{ gauche = $rect.Left; haut = $rect.Top; largeurEcran = $rect.Width; hauteurEcran = $rect.Height
        echelle = $echelle; largeur = $largeur; hauteur = $hauteur } | ConvertTo-Json | Set-Content (Join-Path $run 'ecran.json') -Encoding UTF8
@@ -376,7 +376,7 @@ function Demander-Consigne {
         $capture = $script:Attente
         $script:Boite = $null; $script:Attente = $null
         if ($script:BoiteValidee) {
-            [ClaudeEcran.Natif]::MettreAuPremierPlan($capture.Hwnd)
+            [ClaudeScreen.Natif]::MettreAuPremierPlan($capture.Hwnd)
             Lancer-Tache $capture $texte
         } else {
             Remove-Item $capture.Run -Recurse -Force -ErrorAction SilentlyContinue
@@ -386,7 +386,7 @@ function Demander-Consigne {
 
     $script:Boite = $f
     $f.Show()
-    [ClaudeEcran.Natif]::Indice($t.Handle, 'Consigne...')
+    [ClaudeScreen.Natif]::Indice($t.Handle, 'Consigne...')
     $f.Activate(); $t.Focus() | Out-Null
 }
 
@@ -487,7 +487,7 @@ $icone.ContextMenuStrip = $menu
 $icone.add_MouseClick({ if ($_.Button -eq 'Left') { Montrer-Resultat } })
 
 # --- Raccourcis : Ctrl+Alt+C, touche Copilot (Win+Shift+F23), Ctrl+Alt+Copilot ---
-$raccourcis = New-Object ClaudeEcran.Raccourcis
+$raccourcis = New-Object ClaudeScreen.Raccourcis
 $actifs = @()
 if ($raccourcis.Enregistrer(1, 0x3, 0x43)) { $actifs += 'Ctrl+Alt+C' }
 if ($raccourcis.Enregistrer(2, 0xC, 0x86)) { $actifs += 'Copilot' }

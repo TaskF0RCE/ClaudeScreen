@@ -28,7 +28,7 @@ def main(argv):
 
     run = os.environ.get('ECRAN_RUN')
     if not run:
-        raise SystemExit('ECRAN_RUN non défini : ce script doit être lancé par ClaudeEcran.')
+        raise SystemExit('ECRAN_RUN non défini : ce script doit être lancé par ClaudeScreen.')
     with open(os.path.join(run, 'ecran.json'), encoding='utf-8') as f:
         ecran = json.load(f)
     e = ecran['echelle']

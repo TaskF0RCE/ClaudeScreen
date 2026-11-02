@@ -1,6 +1,6 @@
-# ClaudeEcran pour macOS et Linux
+# ClaudeScreen pour macOS et Linux
 
-Adaptation de [ClaudeEcran](../README.md) (version Windows) : un raccourci clavier donne à Claude ce qui est à l'écran, pour qu'il fasse la tâche à ta place (cocher un QCM, remplir un formulaire, taper des commandes dans Packet Tracer ou GNS3, créer un fichier...).
+Adaptation de [ClaudeScreen](../README.md) (version Windows) : un raccourci clavier donne à Claude ce qui est à l'écran, pour qu'il fasse la tâche à ta place (cocher un QCM, remplir un formulaire, taper des commandes dans Packet Tracer ou GNS3, créer un fichier...).
 
 Il n'y a pas de fenêtre, seulement une icône dans la **barre des menus** (macOS) ou la **zone de notifications** (Linux).
 
@@ -26,7 +26,7 @@ Comme sous Windows, le dossier **`~/Documents/Claude-Travail/System-Context`** e
 
 - **`instructions.txt`** : tes consignes permanentes, une par ligne, ajoutées à chaque tâche tant que l'appli tourne (« je suis en BTS SIO », « ne clique jamais sur Terminer l'examen », « réponds en français »...). Les lignes qui commencent par `#` sont ignorées. Le fichier est relu à chaque tâche : une modification compte tout de suite.
 - **Les autres fichiers**, sous-dossiers compris (cours, prises de notes, documentation technique, énoncés, bibliographie, sources...) : Claude reçoit leur liste à chaque tâche, les considère comme plus fiables que ses connaissances générales, lit ceux qui concernent la tâche et s'appuie d'abord sur eux. Formats lus le mieux : `.pdf`, `.txt`, `.md`, images, code, `.csv`, `.html` (un Word ou un Keynote : exporte-le aussi en PDF). Les fichiers cachés ou temporaires (`.DS_Store`, `~$...`) sont ignorés, ainsi que le `README.md` du dossier.
-- **Les PDF** : l'appli en extrait le texte à l'avance, page par page, dans `donnees/contexte/` (au démarrage, puis seulement quand un PDF change), avec la bibliothèque Python `pypdfium2` : rien à installer en plus, pas besoin de `pdftoppm`. Claude lit ce texte, ce qui est rapide et économise le quota, et peut y chercher. Pour un schéma ou un PDF scanné (sans texte), il affiche la page en image avec l'action `page-pdf`. Si tu avais installé ClaudeEcran avant cette fonction, relance `./installer.sh` pour ajouter `pypdfium2`.
+- **Les PDF** : l'appli en extrait le texte à l'avance, page par page, dans `donnees/contexte/` (au démarrage, puis seulement quand un PDF change), avec la bibliothèque Python `pypdfium2` : rien à installer en plus, pas besoin de `pdftoppm`. Claude lit ce texte, ce qui est rapide et économise le quota, et peut y chercher. Pour un schéma ou un PDF scanné (sans texte), il affiche la page en image avec l'action `page-pdf`. Si tu avais installé ClaudeScreen avant cette fonction, relance `./installer.sh` pour ajouter `pypdfium2`.
 - **Lecture seule** : Claude peut lire ce dossier, mais ne peut rien y modifier, déplacer, mettre à la corbeille ni exécuter.
 
 Ordre de priorité : la consigne de la barre (pour une tâche), puis `instructions.txt` (pour toutes les tâches), puis ce que Claude devine à l'écran.
@@ -55,12 +55,12 @@ curl -fsSL https://claude.ai/install.sh | bash
 claude        # connecte-toi une fois avec ton compte Claude, puis tape /exit
 ```
 
-### 2. ClaudeEcran
+### 2. ClaudeScreen
 
-Copie le dossier `linux-macos` où tu veux (dans un chemin **sans espace**, par exemple `~/ClaudeEcran`), puis :
+Copie le dossier `linux-macos` où tu veux (dans un chemin **sans espace**, par exemple `~/ClaudeScreen`), puis :
 
 ```bash
-cd ~/ClaudeEcran/linux-macos      # adapte le chemin
+cd ~/ClaudeScreen/linux-macos      # adapte le chemin
 ./installer.sh
 ```
 
@@ -69,14 +69,14 @@ Le script crée un environnement Python dans `donnees/.venv`, installe les dépe
 ### macOS (10.15 ou plus récent)
 
 - Prérequis : Python 3.9+ ([python.org](https://www.python.org/downloads/macos/) conseillé : Tk est inclus, donc la barre de consigne et la fenêtre de résultat sont de vraies fenêtres. Avec Homebrew : `brew install python python-tk`).
-- L'installation crée **`~/Applications/ClaudeEcran.app`** : ouvre-la (Spotlight → « ClaudeEcran »).
+- L'installation crée **`~/Applications/ClaudeScreen.app`** : ouvre-la (Spotlight → « ClaudeScreen »).
 - **Autorisations** : au premier lancement, macOS demande
   - **Enregistrement de l'écran** (pour les captures) ;
   - **Accessibilité** (pour cliquer et taper).
 
-  Accepte les deux dans *Réglages Système → Confidentialité et sécurité*, puis **quitte et relance** ClaudeEcran. Selon la version de macOS, l'élément à cocher s'appelle « ClaudeEcran », « Python » ou « Terminal » (si tu l'as lancé depuis le Terminal). En cas de doute : `./lancer.sh diagnostic`.
-- Le raccourci ⌃⌥C est enregistré comme sous Windows (RegisterEventHotKey) : aucune autorisation supplémentaire, et il n'arrive plus aux autres applis tant que ClaudeEcran tourne.
-- Démarrage automatique : l'installateur ajoute `~/Library/LaunchAgents/local.claudeecran.plist`.
+  Accepte les deux dans *Réglages Système → Confidentialité et sécurité*, puis **quitte et relance** ClaudeScreen. Selon la version de macOS, l'élément à cocher s'appelle « ClaudeScreen », « Python » ou « Terminal » (si tu l'as lancé depuis le Terminal). En cas de doute : `./lancer.sh diagnostic`.
+- Le raccourci ⌃⌥C est enregistré comme sous Windows (RegisterEventHotKey) : aucune autorisation supplémentaire, et il n'arrive plus aux autres applis tant que ClaudeScreen tourne.
+- Démarrage automatique : l'installateur ajoute `~/Library/LaunchAgents/local.claudescreen.plist`.
 - Raccourcis clavier pour Claude : sur Mac il utilise `cmd+c`, `cmd+v`, `cmd+s`... (sa consigne le lui indique), et `ctrl` reste disponible pour les terminaux.
 
 ### Linux
@@ -95,12 +95,12 @@ sudo pacman -S tk python-gobject libayatana-appindicator
 ```
 
 - Sous GNOME, l'icône a besoin de l'extension **AppIndicator** (active par défaut sur Ubuntu ; ailleurs : « AppIndicator and KStatusNotifierItem Support »).
-- Lancement : menu des applications → **ClaudeEcran**, ou `./lancer.sh`.
-- Démarrage automatique : `~/.config/autostart/claude-ecran.desktop`.
+- Lancement : menu des applications → **ClaudeScreen**, ou `./lancer.sh`.
+- Démarrage automatique : `~/.config/autostart/claude-screen.desktop`.
 
 #### Wayland
 
-Wayland empêche volontairement les applis d'écouter le clavier, de lire l'écran et de piloter la souris des autres fenêtres. ClaudeEcran s'y adapte en partie :
+Wayland empêche volontairement les applis d'écouter le clavier, de lire l'écran et de piloter la souris des autres fenêtres. ClaudeScreen s'y adapte en partie :
 
 | Fonction | Sous Wayland |
 |---|---|
@@ -146,8 +146,8 @@ Identique à la version Windows : chaque tâche consomme ton quota Claude (un ap
 ## Structure
 
 ```
-claude_ecran.py     appli (barre des menus / zone de notifications) : raccourcis, capture, tri du modèle, lancement de Claude
-installer.sh        installation : environnement Python, dépendances, ClaudeEcran.app (macOS) ou entrée de menu (Linux), démarrage auto
+claude_screen.py     appli (barre des menus / zone de notifications) : raccourcis, capture, tri du modèle, lancement de Claude
+installer.sh        installation : environnement Python, dépendances, ClaudeScreen.app (macOS) ou entrée de menu (Linux), démarrage auto
 lancer.sh           lance l'appli en arrière-plan, ou lui envoie une commande (declencher, consigne...)
 requirements.txt    dépendances Python
 outils/natif.py     appels système : écrans, capture, souris, clavier (XTest sous X11), fenêtre active, corbeille
@@ -170,7 +170,7 @@ donnees/            TOUT ce qui est généré, à part du programme (privé, ign
   cache/              fichiers compilés de Python
 ```
 
-Correspondance avec la version Windows : `ClaudeEcran.ps1` → `claude_ecran.py`, `Lancer.vbs` → `lancer.sh` / `ClaudeEcran.app`, `natif.cs` + `natif.ps1` → `natif.py` + `raccourcis.py`, `pc.ps1` → `pc.py`, `garde.ps1` → `garde.py`, `pdf.ps1` + `poppler.ps1` → `pdf.py` (pypdfium2, sans programme externe).
+Correspondance avec la version Windows : `ClaudeScreen.ps1` → `claude_screen.py`, `Lancer.vbs` → `lancer.sh` / `ClaudeScreen.app`, `natif.cs` + `natif.ps1` → `natif.py` + `raccourcis.py`, `pc.ps1` → `pc.py`, `garde.ps1` → `garde.py`, `pdf.ps1` + `poppler.ps1` → `pdf.py` (pypdfium2, sans programme externe).
 
 ## Limites
 

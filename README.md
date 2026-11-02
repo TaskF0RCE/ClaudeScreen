@@ -97,7 +97,7 @@ Prérequis : Windows 10 ou 11, avec PowerShell 5.1 (déjà présent dans Windows
    ```
    L'icône apparaît dans la zone de notifications. Une tâche planifiée « ClaudeScreen » le relancera 20 s après chaque ouverture de session, sans fenêtre. Pour la retirer, ajoute `-Retirer` à la première commande.
 
-**Lecture des PDF** : `Installer-Demarrage.ps1` télécharge aussi [Poppler pour Windows](https://github.com/oschwartz10612/poppler-windows) (`pdftotext`, `pdftoppm`, environ 16 Mo) dans `outils\poppler`, une seule fois. Si ce n'est pas encore fait, ClaudeEcran le télécharge en arrière-plan à son démarrage. La version est figée et le fichier est refusé si son empreinte SHA-256 ne correspond pas. Sans Poppler, Claude Code ne peut pas lire les PDF (il lui faut `pdftoppm`). Pour le réinstaller à la main : `powershell -ExecutionPolicy Bypass -File outils\poppler.ps1`.
+**Lecture des PDF** : `Installer-Demarrage.ps1` télécharge aussi [Poppler pour Windows](https://github.com/oschwartz10612/poppler-windows) (`pdftotext`, `pdftoppm`, environ 16 Mo) dans `outils\poppler`, une seule fois. Si ce n'est pas encore fait, ClaudeScreen le télécharge en arrière-plan à son démarrage. La version est figée et le fichier est refusé si son empreinte SHA-256 ne correspond pas. Sans Poppler, Claude Code ne peut pas lire les PDF (il lui faut `pdftoppm`). Pour le réinstaller à la main : `powershell -ExecutionPolicy Bypass -File outils\poppler.ps1`.
 
 `Lancer.vbs` permet aussi de le lancer à la main (double-clic), mais Windows est en train d'abandonner VBScript : préfère la tâche planifiée.
 
@@ -112,7 +112,7 @@ Prérequis : Windows 10 ou 11, avec PowerShell 5.1 (déjà présent dans Windows
 | Ctrl+Alt+Shift+C | Actif, avec barre de consigne |
 | Touche Copilot seule (Win+Shift+F23) | Réservée par Windows, en général indisponible |
 
-Ctrl+Alt+C est global : tant que l'appli tourne, il n'arrive plus aux autres logiciels. Quelques-uns l'utilisent, par exemple Visual Studio (fenêtre « Pile des appels » en débogage) ou Photoshop (« Taille de la zone de travail »). Si ça te gêne, utilise Ctrl+Alt+Copilot ou change le raccourci dans `ClaudeEcran.ps1` (`$raccourcis.Enregistrer(...)`).
+Ctrl+Alt+C est global : tant que l'appli tourne, il n'arrive plus aux autres logiciels. Quelques-uns l'utilisent, par exemple Visual Studio (fenêtre « Pile des appels » en débogage) ou Photoshop (« Taille de la zone de travail »). Si ça te gêne, utilise Ctrl+Alt+Copilot ou change le raccourci dans `ClaudeScreen.ps1` (`$raccourcis.Enregistrer(...)`).
 
 ## Abonnement et consommation
 
@@ -123,7 +123,7 @@ Ctrl+Alt+C est global : tant que l'appli tourne, il n'arrive plus aux autres log
 ## Structure
 
 ```
-ClaudeEcran.ps1     appli de la zone de notifications : raccourcis, capture, tri du modèle, lancement de Claude
+ClaudeScreen.ps1     appli de la zone de notifications : raccourcis, capture, tri du modèle, lancement de Claude
 Lancer.vbs          lance l'appli sans fenêtre (à la main)
 Installer-Demarrage.ps1  installe ou retire la tâche planifiée de démarrage
 outils/natif.cs     appels Windows (DPI, capture, souris, clavier, raccourcis globaux, fenêtre active)
@@ -140,7 +140,7 @@ cache-contexte/     texte extrait des PDF de System-Context (privé, ignoré par
 
 Les fichiers créés par Claude vont dans `Documents\Claude-Travail`. Tes instructions et documents de contexte sont dans `Documents\Claude-Travail\System-Context`.
 
-Nettoyage automatique : au démarrage puis toutes les 6 heures, l'appli efface définitivement les dossiers de `runs/` de plus de 30 jours (variable `$JoursConserves` dans `ClaudeEcran.ps1`). Ils ne passent pas par la corbeille, ce qui libère vraiment la place. Le journal est aussi raccourci. Les fichiers de `Documents\Claude-Travail` ne sont jamais touchés.
+Nettoyage automatique : au démarrage puis toutes les 6 heures, l'appli efface définitivement les dossiers de `runs/` de plus de 30 jours (variable `$JoursConserves` dans `ClaudeScreen.ps1`). Ils ne passent pas par la corbeille, ce qui libère vraiment la place. Le journal est aussi raccourci. Les fichiers de `Documents\Claude-Travail` ne sont jamais touchés.
 
 ## Limites
 
