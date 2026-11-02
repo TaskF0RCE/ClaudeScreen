@@ -1,6 +1,25 @@
-﻿# PreToolUse hook: blocks any permanent deletion in Claude's commands.
+﻿# PreToolUse hook: blocks any permanent deletion in Claude's commands,
+# and any write to the context folder (System-Context, read-only).
 [Console]::InputEncoding = [Text.Encoding]::UTF8
 $entree = [Console]::In.ReadToEnd() | ConvertFrom-Json
+
+# Tools that write files (Edit, Write, MultiEdit, NotebookEdit): nothing inside System-Context.
+# Backs up the deny rule in reglages.json (its path matching is unreliable on Windows).
+$fichier = [string]$entree.tool_input.file_path
+if (-not $fichier) { $fichier = [string]$entree.tool_input.notebook_path }
+if ($fichier) {
+    $contexte = $env:ECRAN_CONTEXTE
+    if (-not $contexte) { $contexte = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Claude-Travail\System-Context' }
+    $base = if ($entree.cwd) { [string]$entree.cwd } else { (Get-Location).Path }
+    $cible = [IO.Path]::GetFullPath([IO.Path]::Combine($base, $fichier)).Replace('/', '\').TrimEnd('\') + '\'
+    $racine = [IO.Path]::GetFullPath($contexte).Replace('/', '\').TrimEnd('\') + '\'
+    if ($cible.StartsWith($racine, [StringComparison]::OrdinalIgnoreCase)) {
+        [Console]::Error.WriteLine("Blocked: $contexte is read-only (the user's documents and instructions). You can read these files, not modify them. Write your files elsewhere in the current folder.")
+        exit 2
+    }
+    exit 0
+}
+
 $commande = [string]$entree.tool_input.command
 if (-not $commande) { exit 0 }
 

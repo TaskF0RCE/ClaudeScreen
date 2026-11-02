@@ -1,4 +1,5 @@
-"""Claude Code PreToolUse hook: blocks any permanent deletion (and shutting down the computer).
+"""Claude Code PreToolUse hook: blocks any permanent deletion (and shutting down the computer),
+and any write to the System-Context folder (read-only).
 
 Equivalent of garde.ps1. Exit code 2 = command refused, the message goes to Claude.
 """
@@ -28,12 +29,44 @@ MOTIFS = [
 ]
 
 
+def contexte():
+    """Context folder (passed by ClaudeScreen; otherwise the default location)."""
+    if os.environ.get('ECRAN_CONTEXTE'):
+        return os.environ['ECRAN_CONTEXTE']
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import natif
+    return os.path.join(natif.dossier_documents(), 'Claude-Travail', 'System-Context')
+
+
+def dans(chemin, dossier):
+    """Is chemin the folder itself or inside it? (symlinks and ".." resolved)"""
+    c, d = os.path.realpath(chemin), os.path.realpath(dossier)
+    if sys.platform == 'darwin':  # case-insensitive disk by default on macOS
+        c, d = c.lower(), d.lower()
+    return c == d or c.startswith(d.rstrip(os.sep) + os.sep)
+
+
 def main():
     try:
         entree = json.loads(sys.stdin.buffer.read().decode('utf-8', 'replace') or '{}')
     except ValueError:
         return 0
-    commande = str((entree.get('tool_input') or {}).get('command') or '')
+    entrees = entree.get('tool_input') or {}
+
+    # Tools that write files (Edit, Write, MultiEdit, NotebookEdit): nothing inside System-Context.
+    # Backs up the deny rule in reglages.json.
+    fichier = entrees.get('file_path') or entrees.get('notebook_path')
+    if fichier:
+        ctx = contexte()
+        cible = os.path.join(entree.get('cwd') or os.getcwd(), os.path.expanduser(str(fichier)))
+        if dans(cible, ctx):
+            sys.stderr.write('Blocked: %s is read-only (the user\'s documents and instructions). '
+                             'You can read these files, not modify them. Write your files elsewhere in the '
+                             'current folder.\n' % ctx)
+            return 2
+        return 0
+
+    commande = str(entrees.get('command') or '')
     if not commande:
         return 0
     for motif in MOTIFS:

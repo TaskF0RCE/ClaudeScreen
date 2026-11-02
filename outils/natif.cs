@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
 
-namespace ClaudeEcran
+namespace ClaudeScreen
 {
     // Windows calls: DPI, screen capture, mouse, keyboard.
     public static class Natif

@@ -17,7 +17,7 @@ import natif  # noqa: E402
 USAGE = """Actions:
   capture | zoom X Y W H | clic X Y | doubleclic X Y | clicdroit X Y | survol X Y
   glisser X1 Y1 X2 Y2 | defiler X Y N | ecrire "text" | ecrire-fichier PATH
-  touche COMBO | attendre MS | corbeille PATH"""
+  touche COMBO | attendre MS | corbeille PATH | page-pdf PATH N"""
 
 
 def main(argv):
@@ -28,7 +28,7 @@ def main(argv):
 
     run = os.environ.get('ECRAN_RUN')
     if not run:
-        raise SystemExit('ECRAN_RUN is not set: this script must be started by ClaudeEcran.')
+        raise SystemExit('ECRAN_RUN is not set: this script must be started by ClaudeScreen.')
     with open(os.path.join(run, 'ecran.json'), encoding='utf-8') as f:
         ecran = json.load(f)
     e = ecran['echelle']
@@ -98,8 +98,37 @@ def main(argv):
         chemin = os.path.abspath(' '.join(valeurs))
         if not os.path.exists(chemin):
             raise SystemExit('Not found: %s' % chemin)
+        # The context folder (System-Context) is read-only: neither the folder, nor its contents,
+        # nor a folder that contains it.
+        ctx = os.environ.get('ECRAN_CONTEXTE')
+        if ctx:
+            a, b = os.path.realpath(chemin), os.path.realpath(ctx)
+            if sys.platform == 'darwin':  # case-insensitive disk by default on macOS
+                a, b = a.lower(), b.lower()
+            if a == b or a.startswith(b.rstrip(os.sep) + os.sep) or b.startswith(a.rstrip(os.sep) + os.sep):
+                raise SystemExit('Refused: %s is read-only (the user\'s documents).' % ctx)
         natif.corbeille(chemin)
         print('Sent to the trash: %s' % chemin)
+    elif action == 'page-pdf':
+        # page-pdf PATH N: one PDF page as an image (read-only; the path may contain spaces).
+        if len(valeurs) < 2:
+            raise SystemExit('Usage: page-pdf PATH N')
+        chemin = os.path.abspath(' '.join(valeurs[:-1]))
+        if not chemin.lower().endswith('.pdf') or not os.path.isfile(chemin):
+            raise SystemExit('PDF not found: %s' % chemin)
+        try:
+            numero = int(valeurs[-1])
+        except ValueError:
+            raise SystemExit('Invalid page number: %s' % valeurs[-1])
+        import pdf
+        if not pdf.disponible():
+            raise SystemExit('Missing pypdfium2 module: run ./installer.sh again.')
+        png = suivant('pdf')
+        try:
+            pages = pdf.rendre_page(chemin, numero, png)
+        except ValueError as ex:
+            raise SystemExit(str(ex))
+        print('Page %d/%d: %s (read it with Read)' % (numero, pages, png))
     else:
         raise SystemExit('Unknown action: %s\n%s' % (action, USAGE))
 

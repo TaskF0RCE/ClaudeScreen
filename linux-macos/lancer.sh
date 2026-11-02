@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Starts ClaudeEcran in the background (only the icon in the menu bar / notification area).
+# Starts ClaudeScreen in the background (only the icon in the menu bar / notification area).
 #   ./lancer.sh               starts the app
 #   ./lancer.sh declencher    same as Ctrl+Alt+C        (for a desktop keyboard shortcut)
 #   ./lancer.sh consigne      same as Ctrl+Alt+Shift+C
@@ -12,8 +12,8 @@ if [ ! -x "$PY" ]; then
     exit 1
 fi
 if [ $# -gt 0 ]; then
-    exec "$PY" "$DIR/claude_ecran.py" "$@"
+    exec "$PY" "$DIR/claude_screen.py" "$@"
 fi
 mkdir -p "$DIR/donnees"
-nohup "$PY" "$DIR/claude_ecran.py" >/dev/null 2>>"$DIR/donnees/journal.txt" &
+nohup "$PY" "$DIR/claude_screen.py" >/dev/null 2>>"$DIR/donnees/journal.txt" &
 disown 2>/dev/null || true

@@ -1,10 +1,12 @@
-﻿# Starts ClaudeEcran at logon: scheduled task, no window, no VBScript.
+﻿# Starts ClaudeScreen at logon: scheduled task, no window, no VBScript.
 # Install: powershell -ExecutionPolicy Bypass -File Installer-Demarrage.ps1
 # Remove : powershell -ExecutionPolicy Bypass -File Installer-Demarrage.ps1 -Retirer
 param([switch]$Retirer)
 $ErrorActionPreference = 'Stop'
-$nom = 'ClaudeEcran'
+$nom = 'ClaudeScreen'
 $utilisateur = "$env:USERDOMAIN\$env:USERNAME"
+# The project used to be called ClaudeEcran: remove the old scheduled task (it started ClaudeEcran.ps1).
+Unregister-ScheduledTask -TaskName 'ClaudeEcran' -Confirm:$false -ErrorAction SilentlyContinue
 
 if ($Retirer) {
     Unregister-ScheduledTask -TaskName $nom -Confirm:$false -ErrorAction SilentlyContinue
@@ -12,7 +14,10 @@ if ($Retirer) {
     return
 }
 
-$script = Join-Path $PSScriptRoot 'ClaudeEcran.ps1'
+# PDF reading: installs Poppler right away (otherwise ClaudeScreen does it on its first start).
+& (Join-Path $PSScriptRoot 'outils\poppler.ps1')
+
+$script = Join-Path $PSScriptRoot 'ClaudeScreen.ps1'
 # conhost --headless: starts PowerShell without any window, not even a flash.
 $action = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\conhost.exe" `
     -Argument "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File `"$script`"" `
@@ -24,5 +29,5 @@ $reglages = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoi
     -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
 $principal = New-ScheduledTaskPrincipal -UserId $utilisateur -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskName $nom -Action $action -Trigger $declencheur -Settings $reglages -Principal $principal `
-    -Description 'Starts ClaudeEcran (Claude icon in the notification area).' -Force | Out-Null
+    -Description 'Starts ClaudeScreen (Claude icon in the notification area).' -Force | Out-Null
 "Autostart installed (scheduled task '$nom')."

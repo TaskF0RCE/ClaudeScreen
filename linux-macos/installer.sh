@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Installs ClaudeEcran for macOS or Linux:
+# Installs ClaudeScreen for macOS or Linux:
 #   - Python environment (donnees/.venv) and dependencies;
 #     everything generated goes to donnees/, apart from the program;
-#   - macOS: the ~/Applications/ClaudeEcran.app app (+ open at login, optional);
+#   - macOS: the ~/Applications/ClaudeScreen.app app (+ open at login, optional);
 #   - Linux: an entry in the applications menu (+ autostart and
 #     GNOME keyboard shortcuts, optional).
 #
@@ -17,10 +17,10 @@ OS="$(uname -s)"
 DONNEES="$DIR/donnees"
 VENV="$DONNEES/.venv"
 PY="$VENV/bin/python3"
-APP="$HOME/Applications/ClaudeEcran.app"
-AGENT="$HOME/Library/LaunchAgents/local.claudeecran.plist"
-BUREAU="$HOME/.local/share/applications/claude-ecran.desktop"
-AUTO="$HOME/.config/autostart/claude-ecran.desktop"
+APP="$HOME/Applications/ClaudeScreen.app"
+AGENT="$HOME/Library/LaunchAgents/local.claudescreen.plist"
+BUREAU="$HOME/.local/share/applications/claude-screen.desktop"
+AUTO="$HOME/.config/autostart/claude-screen.desktop"
 SCHEMA="org.gnome.settings-daemon.plugins.media-keys"
 KPATH="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings"
 export PYTHONPYCACHEPREFIX="$DONNEES/cache"  # no __pycache__ next to the program
@@ -65,8 +65,9 @@ import ast, sys
 op, actuelle, base = sys.argv[1], sys.argv[2], sys.argv[3]
 actuelle = actuelle.replace('@as ', '')
 liste = list(ast.literal_eval(actuelle)) if actuelle.strip() else []
-nous = [base + '/claude-ecran-normal/', base + '/claude-ecran-consigne/']
-liste = [p for p in liste if p not in nous]
+nous = [base + '/claude-screen-normal/', base + '/claude-screen-consigne/']
+anciens = [base + '/claude-ecran-normal/', base + '/claude-ecran-consigne/']  # before the rename to ClaudeScreen
+liste = [p for p in liste if p not in nous + anciens]
 if op == '+':
     liste += nous
 print(str(liste))
@@ -76,6 +77,15 @@ EOF
 gnome_disponible() {
     command -v gsettings >/dev/null 2>&1 && gsettings list-schemas 2>/dev/null | grep -qx "$SCHEMA"
 }
+
+# ------------------------------------------------------------------ old name (ClaudeEcran)
+# The project used to be called ClaudeEcran: remove the old app, the autostart and the menu entries.
+if [ "$OS" = Darwin ]; then
+    rm -rf "$HOME/Applications/ClaudeEcran.app"
+    rm -f "$HOME/Library/LaunchAgents/local.claudeecran.plist"
+else
+    rm -f "$HOME/.local/share/applications/claude-ecran.desktop" "$HOME/.config/autostart/claude-ecran.desktop"
+fi
 
 # ------------------------------------------------------------------ uninstall
 if [ "$DESINSTALLER" = 1 ]; then
@@ -88,8 +98,8 @@ if [ "$DESINSTALLER" = 1 ]; then
             gsettings set "$SCHEMA" custom-keybindings "$(liste_gnome -)"
         fi
     fi
-    [ -x "$PY" ] && "$PY" "$DIR/claude_ecran.py" quitter >/dev/null 2>&1 || true
-    info "ClaudeEcran uninstalled. This folder ($DIR) was not touched; you can send it to the trash."
+    [ -x "$PY" ] && "$PY" "$DIR/claude_screen.py" quitter >/dev/null 2>&1 || true
+    info "ClaudeScreen uninstalled. This folder ($DIR) was not touched; you can send it to the trash."
     exit 0
 fi
 
@@ -159,7 +169,7 @@ fi
 # ------------------------------------------------------------------ old layout
 # Early versions put generated files next to the program: move them into donnees/.
 if [ -x "$DIR/.venv/bin/python3" ]; then
-    "$DIR/.venv/bin/python3" "$DIR/claude_ecran.py" quitter >/dev/null 2>&1 && sleep 2 || true
+    "$DIR/.venv/bin/python3" "$DIR/claude_screen.py" quitter >/dev/null 2>&1 && sleep 2 || true
 fi
 mkdir -p "$DONNEES"
 for f in runs journal.txt reglages.json modele.txt dernier-resultat.txt; do
@@ -201,28 +211,28 @@ if [ "$OS" = Darwin ]; then
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key><string>ClaudeEcran</string>
-    <key>CFBundleDisplayName</key><string>ClaudeEcran</string>
-    <key>CFBundleIdentifier</key><string>local.claudeecran</string>
+    <key>CFBundleName</key><string>ClaudeScreen</string>
+    <key>CFBundleDisplayName</key><string>ClaudeScreen</string>
+    <key>CFBundleIdentifier</key><string>local.claudescreen</string>
     <key>CFBundleVersion</key><string>1.0</string>
     <key>CFBundleShortVersionString</key><string>1.0</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleExecutable</key><string>ClaudeEcran</string>
-    <key>CFBundleIconFile</key><string>ClaudeEcran</string>
+    <key>CFBundleExecutable</key><string>ClaudeScreen</string>
+    <key>CFBundleIconFile</key><string>ClaudeScreen</string>
     <key>LSUIElement</key><true/>
     <key>LSMinimumSystemVersion</key><string>10.15</string>
 </dict>
 </plist>
 EOF
-    cat > "$APP/Contents/MacOS/ClaudeEcran" <<EOF
+    cat > "$APP/Contents/MacOS/ClaudeScreen" <<EOF
 #!/bin/sh
-exec "$PY" "$DIR/claude_ecran.py"
+exec "$PY" "$DIR/claude_screen.py"
 EOF
-    chmod +x "$APP/Contents/MacOS/ClaudeEcran"
-    "$PY" "$DIR/claude_ecran.py" --icone "$APP/Contents/Resources/ClaudeEcran.icns" || avert "App icon not created."
+    chmod +x "$APP/Contents/MacOS/ClaudeScreen"
+    "$PY" "$DIR/claude_screen.py" --icone "$APP/Contents/Resources/ClaudeScreen.icns" || avert "App icon not created."
     codesign --force --deep -s - "$APP" >/dev/null 2>&1 || true
 
-    [ -z "$DEMARRAGE" ] && DEMARRAGE="$(demander "Open ClaudeEcran automatically at login?" 1)"
+    [ -z "$DEMARRAGE" ] && DEMARRAGE="$(demander "Open ClaudeScreen automatically at login?" 1)"
     if [ "$DEMARRAGE" = 1 ]; then
         mkdir -p "$(dirname "$AGENT")"
         cat > "$AGENT" <<EOF
@@ -230,7 +240,7 @@ EOF
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>Label</key><string>local.claudeecran</string>
+    <key>Label</key><string>local.claudescreen</string>
     <key>ProgramArguments</key>
     <array><string>/usr/bin/open</string><string>-g</string><string>-a</string><string>$APP</string></array>
     <key>RunAtLoad</key><true/>
@@ -243,18 +253,18 @@ EOF
     fi
 else
     mkdir -p "$(dirname "$BUREAU")"
-    "$PY" "$DIR/claude_ecran.py" --icone "$DONNEES/icone.png" || true
+    "$PY" "$DIR/claude_screen.py" --icone "$DONNEES/icone.png" || true
     cat > "$BUREAU" <<EOF
 [Desktop Entry]
 Type=Application
-Name=ClaudeEcran
+Name=ClaudeScreen
 Comment=Claude does the task visible on screen (Ctrl+Alt+C)
 Exec="$DIR/lancer.sh"
 Icon=$DONNEES/icone.png
 Terminal=false
 Categories=Utility;
 EOF
-    [ -z "$DEMARRAGE" ] && DEMARRAGE="$(demander "Start ClaudeEcran automatically at login?" 1)"
+    [ -z "$DEMARRAGE" ] && DEMARRAGE="$(demander "Start ClaudeScreen automatically at login?" 1)"
     if [ "$DEMARRAGE" = 1 ]; then
         mkdir -p "$(dirname "$AUTO")"
         cp "$BUREAU" "$AUTO"
@@ -273,13 +283,13 @@ EOF
         if [ "$GNOME" = 1 ]; then
             gsettings set "$SCHEMA" custom-keybindings "$(liste_gnome +)"
             for nom in normal consigne; do
-                cle="$SCHEMA.custom-keybinding:$KPATH/claude-ecran-$nom/"
+                cle="$SCHEMA.custom-keybinding:$KPATH/claude-screen-$nom/"
                 if [ $nom = normal ]; then
-                    gsettings set "$cle" name "ClaudeEcran"
+                    gsettings set "$cle" name "ClaudeScreen"
                     gsettings set "$cle" binding "<Control><Alt>c"
                     gsettings set "$cle" command "\"$DIR/lancer.sh\" declencher"
                 else
-                    gsettings set "$cle" name "ClaudeEcran (avec consigne)"
+                    gsettings set "$cle" name "ClaudeScreen (with instruction)"
                     gsettings set "$cle" binding "<Control><Alt><Shift>c"
                     gsettings set "$cle" command "\"$DIR/lancer.sh\" consigne"
                 fi
@@ -294,20 +304,20 @@ EOF
 fi
 
 # ------------------------------------------------------------------ checks
-case "$DIR" in *" "*) avert "The path of this folder contains spaces: move it (e.g. ~/ClaudeEcran), otherwise Claude cannot run the control tool." ;; esac
+case "$DIR" in *" "*) avert "The path of this folder contains spaces: move it (e.g. ~/ClaudeScreen), otherwise Claude cannot run the control tool." ;; esac
 
 echo
 info "Diagnostic :"
-"$PY" "$DIR/claude_ecran.py" diagnostic || true
+"$PY" "$DIR/claude_screen.py" diagnostic || true
 echo
-if ! "$PY" -c 'import sys; sys.path.insert(0, "'"$DIR"'"); import claude_ecran; sys.exit(0 if claude_ecran.trouver_claude() else 1)' 2>/dev/null; then
+if ! "$PY" -c 'import sys; sys.path.insert(0, "'"$DIR"'"); import claude_screen; sys.exit(0 if claude_screen.trouver_claude() else 1)' 2>/dev/null; then
     avert "Claude Code is not installed:  curl -fsSL https://claude.ai/install.sh | bash"
     avert "then run \"claude\" once to log in with your account, and type /exit."
 fi
 if [ "$OS" = Darwin ]; then
-    info "Done. Open ClaudeEcran from ~/Applications (or: open \"$APP\")."
+    info "Done. Open ClaudeScreen from ~/Applications (or: open \"$APP\")."
     echo "On first launch, macOS asks for two permissions: \"Screen Recording\" and"
-    echo "\"Accessibility\". Allow them, then quit and relaunch ClaudeEcran (see README)."
+    echo "\"Accessibility\". Allow them, then quit and relaunch ClaudeScreen (see README)."
 else
-    info "Done. Start ClaudeEcran from the applications menu, or: \"$DIR/lancer.sh\""
+    info "Done. Start ClaudeScreen from the applications menu, or: \"$DIR/lancer.sh\""
 fi

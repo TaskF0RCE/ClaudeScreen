@@ -22,6 +22,19 @@ Same as the Windows version:
 
 Pressing the shortcut again during a task stops it (or use the **Stop the current task** menu). Automatic stop after 20 minutes. During a task, don't touch the mouse or keyboard.
 
+### Standing context (optional)
+
+Like on Windows, the **`~/Documents/Claude-Travail/System-Context`** folder is created on first launch, with a `README.md` that explains how to use it (use the **Open the Claude-Travail folder** menu to get there).
+
+- **`instructions.txt`**: your standing instructions, one per line, added to every task while the app is running ("I'm a BTS SIO student", "never click Finish exam", "always answer in French"...). Lines starting with `#` are ignored. The file is re-read for every task: a change applies right away.
+- **The other files**, subfolders included (courses, notes, technical documentation, assignments, bibliography, sources...): Claude gets their list with every task, treats them as more reliable than its general knowledge, reads the ones related to the task and relies on them first. Best-read formats: `.pdf`, `.txt`, `.md`, images, code, `.csv`, `.html` (for a Word or Keynote file, also export it as PDF). Hidden or temporary files (`.DS_Store`, `~$...`) are ignored, as is the folder's `README.md`.
+- **PDFs**: the app extracts their text in advance, page by page, into `donnees/contexte/` (at startup, then only when a PDF changes), with the `pypdfium2` Python library: nothing extra to install, no need for `pdftoppm`. Claude reads that text, which is fast and saves quota, and can search it. For a diagram or a scanned PDF (no text), it shows the page as an image with the `page-pdf` action. If you installed ClaudeScreen before this feature, run `./installer.sh` again to add `pypdfium2`.
+- **Read-only**: Claude can read this folder, but cannot change, move, send to the trash or run anything in it.
+
+Priority order: the instruction from the bar (for one task), then `instructions.txt` (for every task), then what Claude infers from the screen.
+
+The folder is in your Documents, outside the repository: its contents never end up on GitHub.
+
 ### The icon
 
 | Icon | Meaning |
@@ -46,10 +59,10 @@ claude        # log in once with your Claude account, then type /exit
 
 ### 2. ClaudeScreen
 
-Copy the `linux-macos` folder wherever you like (in a path **without spaces**, for example `~/ClaudeEcran`), then:
+Copy the `linux-macos` folder wherever you like (in a path **without spaces**, for example `~/ClaudeScreen`), then:
 
 ```bash
-cd ~/ClaudeEcran/linux-macos      # adjust the path
+cd ~/ClaudeScreen/linux-macos      # adjust the path
 ./installer.sh
 ```
 
@@ -58,14 +71,14 @@ The script creates a Python environment in `donnees/.venv`, installs the depende
 ### macOS (10.15 or later)
 
 - Requirement: Python 3.9+ ([python.org](https://www.python.org/downloads/macos/) recommended: Tk is included, so the instruction bar and the result window are real windows. With Homebrew: `brew install python python-tk`).
-- The installer creates **`~/Applications/ClaudeEcran.app`**: open it (Spotlight → "ClaudeEcran").
+- The installer creates **`~/Applications/ClaudeScreen.app`**: open it (Spotlight → "ClaudeScreen").
 - **Permissions**: on first launch, macOS asks for
   - **Screen Recording** (for screenshots);
   - **Accessibility** (to click and type).
 
-  Allow both in *System Settings → Privacy & Security*, then **quit and relaunch** ClaudeEcran. Depending on the macOS version, the item to tick is called "ClaudeEcran", "Python" or "Terminal" (if you started it from Terminal). If in doubt: `./lancer.sh diagnostic`.
-- The ⌃⌥C shortcut is registered like on Windows (RegisterEventHotKey): no extra permission needed, and other apps no longer receive it while ClaudeEcran is running.
-- Autostart: the installer adds `~/Library/LaunchAgents/local.claudeecran.plist`.
+  Allow both in *System Settings → Privacy & Security*, then **quit and relaunch** ClaudeScreen. Depending on the macOS version, the item to tick is called "ClaudeScreen", "Python" or "Terminal" (if you started it from Terminal). If in doubt: `./lancer.sh diagnostic`.
+- The ⌃⌥C shortcut is registered like on Windows (RegisterEventHotKey): no extra permission needed, and other apps no longer receive it while ClaudeScreen is running.
+- Autostart: the installer adds `~/Library/LaunchAgents/local.claudescreen.plist`.
 - Keyboard shortcuts for Claude: on a Mac it uses `cmd+c`, `cmd+v`, `cmd+s`... (its instructions tell it so), and `ctrl` remains available for terminals.
 
 ### Linux
@@ -84,8 +97,8 @@ sudo pacman -S tk python-gobject libayatana-appindicator
 ```
 
 - On GNOME, the icon needs the **AppIndicator** extension (enabled by default on Ubuntu; elsewhere: "AppIndicator and KStatusNotifierItem Support").
-- Launch: applications menu → **ClaudeEcran**, or `./lancer.sh`.
-- Autostart: `~/.config/autostart/claude-ecran.desktop`.
+- Launch: applications menu → **ClaudeScreen**, or `./lancer.sh`.
+- Autostart: `~/.config/autostart/claude-screen.desktop`.
 
 #### Wayland
 
@@ -119,10 +132,11 @@ As on Windows, Claude is started with limited permissions (`reglages.json`, gene
 
 - read the screenshots;
 - click, type and scroll, through `donnees/pc` (no other command is allowed);
-- create or edit files in `~/Documents/Claude-Travail`.
+- create or edit files in `~/Documents/Claude-Travail` (except in `System-Context`, which is read-only).
 
 On top of that:
 
+- **`System-Context` is read-only**, locked three times: a `deny` rule in `reglages.json` (`Edit(//...)`, which also covers Write), the hook `outils/garde.py` that refuses any file write in that folder (including through a symbolic link or `..`), and `pc corbeille` that refuses to touch it (or `Claude-Travail`, which contains it).
 - **Nothing is ever permanently deleted.** The hook `outils/garde.py` blocks `rm`, `rmdir`, `unlink`, `shred`, `find -delete`, `dd`, `mkfs`, `diskutil erase`, `git clean`, `shutdown`, etc. To remove a file, Claude sends it to the trash (`pc corbeille`).
 - Its instructions forbid buying, paying, sending messages, entering passwords or bank details, and changing system settings. Text displayed on screen cannot override these rules.
 - No web access (WebFetch and WebSearch are denied).
@@ -134,18 +148,21 @@ Same as the Windows version: each task uses your Claude quota (one very short Ha
 ## Structure
 
 ```
-claude_ecran.py     app (menu bar / notification area): shortcuts, screenshot, model triage, starting Claude
-installer.sh        installation: Python environment, dependencies, ClaudeEcran.app (macOS) or menu entry (Linux), autostart
+claude_screen.py    app (menu bar / notification area): shortcuts, screenshot, model triage, starting Claude
+installer.sh        installation: Python environment, dependencies, ClaudeScreen.app (macOS) or menu entry (Linux), autostart
 lancer.sh           starts the app in the background, or sends it a command (declencher, consigne...)
 requirements.txt    Python dependencies
 outils/natif.py     system calls: screens, screenshot, mouse, keyboard (XTest on X11), active window, trash
 outils/raccourcis.py global shortcuts (Carbon on macOS, X11 listener on Linux)
 outils/fenetres.py  "last result" window and instruction bar (Tk, separate process)
 outils/pc.py        computer control tool used by Claude
-outils/garde.py     hook that blocks permanent deletions
+outils/garde.py     hook that blocks permanent deletions and writes to System-Context
+outils/pdf.py       PDF reading: text extracted in advance, page as an image (pypdfium2)
+outils/System-Context-README.md  user guide copied into ~/Documents/Claude-Travail/System-Context on first launch
 donnees/            EVERYTHING generated, kept apart from the program (private, ignored by git):
   runs/               task screenshots and answers, deleted after 30 days
   journal.txt         app log
+  contexte/           text extracted from the System-Context PDFs (rebuilt when needed)
   reglages.json       permissions given to Claude (regenerated at each start)
   pc                  launcher of outils/pc.py used by Claude (regenerated at each start)
   modele.txt          model choice (Model menu)
@@ -155,7 +172,7 @@ donnees/            EVERYTHING generated, kept apart from the program (private, 
   cache/              compiled Python files
 ```
 
-Mapping to the Windows version: `ClaudeEcran.ps1` → `claude_ecran.py`, `Lancer.vbs` → `lancer.sh` / `ClaudeEcran.app`, `natif.cs` + `natif.ps1` → `natif.py` + `raccourcis.py`, `pc.ps1` → `pc.py`, `garde.ps1` → `garde.py`.
+Mapping to the Windows version: `ClaudeScreen.ps1` → `claude_screen.py`, `Lancer.vbs` → `lancer.sh` / `ClaudeScreen.app`, `natif.cs` + `natif.ps1` → `natif.py` + `raccourcis.py`, `pc.ps1` → `pc.py`, `garde.ps1` → `garde.py`, `pdf.ps1` + `poppler.ps1` → `pdf.py` (pypdfium2, no external program).
 
 ## Limitations
 
