@@ -1,6 +1,6 @@
-﻿# Fait démarrer ClaudeEcran à l'ouverture de session : tâche planifiée, sans fenêtre, sans VBScript.
-# Installer : powershell -ExecutionPolicy Bypass -File Installer-Demarrage.ps1
-# Retirer   : powershell -ExecutionPolicy Bypass -File Installer-Demarrage.ps1 -Retirer
+﻿# Starts ClaudeEcran at logon: scheduled task, no window, no VBScript.
+# Install: powershell -ExecutionPolicy Bypass -File Installer-Demarrage.ps1
+# Remove : powershell -ExecutionPolicy Bypass -File Installer-Demarrage.ps1 -Retirer
 param([switch]$Retirer)
 $ErrorActionPreference = 'Stop'
 $nom = 'ClaudeEcran'
@@ -8,21 +8,21 @@ $utilisateur = "$env:USERDOMAIN\$env:USERNAME"
 
 if ($Retirer) {
     Unregister-ScheduledTask -TaskName $nom -Confirm:$false -ErrorAction SilentlyContinue
-    'Démarrage automatique retiré.'
+    'Autostart removed.'
     return
 }
 
 $script = Join-Path $PSScriptRoot 'ClaudeEcran.ps1'
-# conhost --headless : lance PowerShell sans aucune fenêtre, même pas un éclair.
+# conhost --headless: starts PowerShell without any window, not even a flash.
 $action = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\conhost.exe" `
     -Argument "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File `"$script`"" `
     -WorkingDirectory $PSScriptRoot
-# 20 s après l'ouverture de session : la barre des tâches est prête pour l'icône.
+# 20 s after logon: the taskbar is ready for the icon.
 $declencheur = New-ScheduledTaskTrigger -AtLogOn -User $utilisateur
 $declencheur.Delay = 'PT20S'
 $reglages = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
     -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
 $principal = New-ScheduledTaskPrincipal -UserId $utilisateur -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskName $nom -Action $action -Trigger $declencheur -Settings $reglages -Principal $principal `
-    -Description 'Lance ClaudeEcran (icône Claude dans la zone de notifications).' -Force | Out-Null
-"Démarrage automatique installé (tâche planifiée « $nom »)."
+    -Description 'Starts ClaudeEcran (Claude icon in the notification area).' -Force | Out-Null
+"Autostart installed (scheduled task '$nom')."

@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Lance ClaudeEcran en arrière-plan (seulement l'icône dans la barre des menus / zone de notifications).
-#   ./lancer.sh               lance l'appli
-#   ./lancer.sh declencher    comme Ctrl+Alt+C        (pour un raccourci clavier du bureau)
-#   ./lancer.sh consigne      comme Ctrl+Alt+Shift+C
+# Starts ClaudeEcran in the background (only the icon in the menu bar / notification area).
+#   ./lancer.sh               starts the app
+#   ./lancer.sh declencher    same as Ctrl+Alt+C        (for a desktop keyboard shortcut)
+#   ./lancer.sh consigne      same as Ctrl+Alt+Shift+C
 #   ./lancer.sh arreter | resultat | quitter | etat | diagnostic
 DIR="$(cd "$(dirname "$0")" && pwd)"
 PY="$DIR/donnees/.venv/bin/python3"
 export PYTHONPYCACHEPREFIX="$DIR/donnees/cache"
 if [ ! -x "$PY" ]; then
-    echo "Environnement Python absent : lance d'abord ./installer.sh" >&2
+    echo "Python environment missing: run ./installer.sh first" >&2
     exit 1
 fi
 if [ $# -gt 0 ]; then

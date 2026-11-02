@@ -1,12 +1,12 @@
-"""Petites fenêtres de l'appli, lancées dans un processus à part (Tk et l'icône de la barre
-des menus ne peuvent pas partager le thread principal sur macOS).
+"""Small windows of the app, started in a separate process (Tk and the menu bar icon
+cannot share the main thread on macOS).
 
-  fenetres.py resultat FICHIER      fenêtre « dernier résultat » (se ferme quand on clique ailleurs)
-  fenetres.py consigne X Y          barre de consigne ; X Y = coin bas-gauche de l'écran capturé.
-                                    Entrée : affiche le texte sur stdout, code 0.
-                                    Échap / clic ailleurs : code 1.
+  fenetres.py resultat FILE         "last result" window (closes when you click elsewhere)
+  fenetres.py consigne X Y          instruction bar; X Y = bottom-left corner of the captured screen.
+                                    Enter: prints the text on stdout, exit code 0.
+                                    Esc / click elsewhere: exit code 1.
 
-Sans Tk : repli sur osascript (macOS), zenity ou kdialog (Linux).
+Without Tk: falls back to osascript (macOS), zenity or kdialog (Linux).
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ def _premier_plan(root):
         try:
             import AppKit
             app = AppKit.NSApplication.sharedApplication()
-            app.setActivationPolicy_(1)  # accessoire : pas d'icône dans le Dock
+            app.setActivationPolicy_(1)  # accessory: no icon in the Dock
             app.activateIgnoringOtherApps_(True)
         except Exception:
             pass
@@ -36,7 +36,7 @@ def _premier_plan(root):
 
 
 def _fermer_si_quitte(root, action):
-    """Appelle action() quand la fenêtre perd le focus (après l'avoir eu une fois)."""
+    """Calls action() when the window loses focus (after having had it once)."""
     etat = {'eu': False}
 
     def entree(_e):
@@ -53,7 +53,7 @@ def _fermer_si_quitte(root, action):
     root.bind('<FocusOut>', lambda _e: root.after(200, verifier), add='+')
 
 
-# ------------------------------------------------------------------ résultat
+# ------------------------------------------------------------------ result
 
 def resultat(fichier):
     with open(fichier, encoding='utf-8') as f:
@@ -78,7 +78,7 @@ def resultat(fichier):
     zone.pack(side='left', fill='both', expand=True)
     barre.config(command=zone.yview)
     zone.insert('1.0', texte)
-    zone.config(state='disabled')  # lecture seule (la sélection et la copie restent possibles)
+    zone.config(state='disabled')  # read-only (selecting and copying still work)
     root.bind('<Escape>', lambda _e: root.destroy())
     _fermer_si_quitte(root, root.destroy)
     root.after(50, lambda: _premier_plan(root))
@@ -99,7 +99,7 @@ def _resultat_sans_tk(fichier):
     return 0
 
 
-# ------------------------------------------------------------------ barre de consigne
+# ------------------------------------------------------------------ instruction bar
 
 def consigne(x, y):
     try:
@@ -111,10 +111,10 @@ def consigne(x, y):
     etat = {'fini': False, 'valide': False}
     sans_bord = not MAC and not WAYLAND
     if sans_bord:
-        root.overrideredirect(True)  # barre discrète, sans titre (X11)
+        root.overrideredirect(True)  # unobtrusive bar, no title (X11)
         l, h, marge = 220, 22, 48
     else:
-        root.title('Consigne pour Claude')
+        root.title('Instruction for Claude')
         l, h, marge = 340, 28, 100 if MAC else 60
     root.geometry('%dx%d+%d+%d' % (l, h, int(x) + 6, int(y) - h - marge))
     root.configure(bg=ORANGE)
@@ -159,7 +159,7 @@ def consigne(x, y):
         champ.focus_force()
 
     root.after(30, focus)
-    root.after(250, focus)  # deuxième essai : certains gestionnaires de fenêtres sont lents
+    root.after(250, focus)  # second try: some window managers are slow
     root.mainloop()
 
     if etat['valide']:
@@ -172,19 +172,19 @@ def consigne(x, y):
 def _consigne_sans_tk():
     if MAC:
         script = ('try\n'
-                  'set r to display dialog "Consigne pour Claude :" default answer "" with title "Claude" '
+                  'set r to display dialog "Instruction for Claude:" default answer "" with title "Claude" '
                   'buttons {"Annuler", "OK"} default button "OK" cancel button "Annuler"\n'
                   'return text returned of r\n'
                   'on error\nreturn "\u0001ANNULE"\nend try')
         r = subprocess.run(['osascript', '-e', script], capture_output=True, text=True)
     elif shutil.which('zenity'):
-        r = subprocess.run(['zenity', '--entry', '--title=Claude', '--text=Consigne pour Claude :'],
+        r = subprocess.run(['zenity', '--entry', '--title=Claude', '--text=Instruction for Claude:'],
                            capture_output=True, text=True)
     elif shutil.which('kdialog'):
-        r = subprocess.run(['kdialog', '--title', 'Claude', '--inputbox', 'Consigne pour Claude :'],
+        r = subprocess.run(['kdialog', '--title', 'Claude', '--inputbox', 'Instruction for Claude:'],
                            capture_output=True, text=True)
     else:
-        sys.stderr.write('Ni Tk, ni zenity, ni kdialog : barre de consigne impossible.\n')
+        sys.stderr.write('Neither Tk, zenity nor kdialog: instruction bar unavailable.\n')
         return 2
     texte = (r.stdout or '').strip()
     if r.returncode != 0 or texte == '\u0001ANNULE':

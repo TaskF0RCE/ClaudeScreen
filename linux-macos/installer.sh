@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Installe ClaudeEcran pour macOS ou Linux :
-#   - environnement Python (donnees/.venv) et dépendances ;
-#     tout ce qui est généré va dans donnees/, à part du programme ;
-#   - macOS : l'appli ~/Applications/ClaudeEcran.app (+ ouverture à la connexion, en option) ;
-#   - Linux : une entrée dans le menu des applications (+ démarrage automatique et
-#     raccourcis clavier GNOME, en option).
+# Installs ClaudeEcran for macOS or Linux:
+#   - Python environment (donnees/.venv) and dependencies;
+#     everything generated goes to donnees/, apart from the program;
+#   - macOS: the ~/Applications/ClaudeEcran.app app (+ open at login, optional);
+#   - Linux: an entry in the applications menu (+ autostart and
+#     GNOME keyboard shortcuts, optional).
 #
-# Options : --demarrage-auto | --sans-demarrage-auto
-#           --raccourcis-gnome | --sans-raccourcis-gnome   (Linux, GNOME)
-#           -y                (accepte les choix par défaut sans poser de question)
-#           --desinstaller    (enlève l'appli, le démarrage auto et les raccourcis ; garde ce dossier)
+# Options: --demarrage-auto | --sans-demarrage-auto            (autostart on / off)
+#          --raccourcis-gnome | --sans-raccourcis-gnome       (GNOME shortcuts on / off, Linux)
+#          -y                (accepts the default choices without asking)
+#          --desinstaller    (uninstall: removes the app, autostart and shortcuts; keeps this folder)
 set -euo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -23,7 +23,7 @@ BUREAU="$HOME/.local/share/applications/claude-ecran.desktop"
 AUTO="$HOME/.config/autostart/claude-ecran.desktop"
 SCHEMA="org.gnome.settings-daemon.plugins.media-keys"
 KPATH="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings"
-export PYTHONPYCACHEPREFIX="$DONNEES/cache"  # pas de __pycache__ à côté du programme
+export PYTHONPYCACHEPREFIX="$DONNEES/cache"  # no __pycache__ next to the program
 
 DEMARRAGE=""
 GNOME=""
@@ -38,18 +38,18 @@ for arg in "$@"; do
         -y|--oui) OUI=1 ;;
         --desinstaller) DESINSTALLER=1 ;;
         -h|--help) sed -n '2,12p' "$0"; exit 0 ;;
-        *) echo "Option inconnue : $arg" >&2; exit 2 ;;
+        *) echo "Unknown option: $arg" >&2; exit 2 ;;
     esac
 done
 
 info() { printf '\033[1m%s\033[0m\n' "$*"; }
 avert() { printf '\033[33m! %s\033[0m\n' "$*"; }
 
-# demander "question" défaut(1/0) -> 1 ou 0
+# demander "question" default(1/0) -> 1 or 0
 demander() {
     local question="$1" defaut="$2" rep
     if [ "$OUI" = 1 ] || [ ! -t 0 ]; then echo "$defaut"; return; fi
-    local choix="[O/n]"; [ "$defaut" = 0 ] && choix="[o/N]"
+    local choix="[Y/n]"; [ "$defaut" = 0 ] && choix="[y/N]"
     read -r -p "$question $choix " rep </dev/tty || rep=""
     case "$rep" in
         [oOyY]*) echo 1 ;;
@@ -58,7 +58,7 @@ demander() {
     esac
 }
 
-# Ajoute (+) ou retire (-) nos deux chemins de la liste GNOME des raccourcis personnalisés.
+# Adds (+) or removes (-) our two paths from the GNOME list of custom shortcuts.
 liste_gnome() {
     python3 - "$1" "$(gsettings get "$SCHEMA" custom-keybindings)" "$KPATH" <<'EOF'
 import ast, sys
@@ -77,7 +77,7 @@ gnome_disponible() {
     command -v gsettings >/dev/null 2>&1 && gsettings list-schemas 2>/dev/null | grep -qx "$SCHEMA"
 }
 
-# ------------------------------------------------------------------ désinstallation
+# ------------------------------------------------------------------ uninstall
 if [ "$DESINSTALLER" = 1 ]; then
     if [ "$OS" = Darwin ]; then
         rm -rf "$APP"
@@ -89,27 +89,27 @@ if [ "$DESINSTALLER" = 1 ]; then
         fi
     fi
     [ -x "$PY" ] && "$PY" "$DIR/claude_ecran.py" quitter >/dev/null 2>&1 || true
-    info "ClaudeEcran désinstallé. Ce dossier ($DIR) n'a pas été touché ; tu peux le mettre à la corbeille."
+    info "ClaudeEcran uninstalled. This folder ($DIR) was not touched; you can send it to the trash."
     exit 0
 fi
 
 # ------------------------------------------------------------------ Python
 if [ "$OS" != Darwin ] && [ "$OS" != Linux ]; then
-    echo "Système non pris en charge : $OS (pour Windows, utilise la version PowerShell à la racine du dépôt)." >&2
+    echo "Unsupported system: $OS (for Windows, use the PowerShell version at the root of the repository)." >&2
     exit 1
 fi
 
 PYSYS="${PYTHON:-python3}"
 if ! command -v "$PYSYS" >/dev/null 2>&1; then
     if [ "$OS" = Darwin ]; then
-        echo "python3 introuvable. Installe Python 3 depuis https://www.python.org/downloads/macos/ puis relance." >&2
+        echo "python3 not found. Install Python 3 from https://www.python.org/downloads/macos/ and run this again." >&2
     else
-        echo "python3 introuvable. Installe-le (ex. sudo apt install python3 python3-venv) puis relance." >&2
+        echo "python3 not found. Install it (e.g. sudo apt install python3 python3-venv) and run this again." >&2
     fi
     exit 1
 fi
 if ! "$PYSYS" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)'; then
-    echo "Python 3.9 ou plus récent est nécessaire ($("$PYSYS" --version))." >&2
+    echo "Python 3.9 or later is required ($("$PYSYS" --version))." >&2
     exit 1
 fi
 info "Python : $("$PYSYS" --version) ($(command -v "$PYSYS"))"
@@ -117,8 +117,8 @@ info "Python : $("$PYSYS" --version) ($(command -v "$PYSYS"))"
 MANQUE=()
 if ! "$PYSYS" -c 'import tkinter' 2>/dev/null; then
     if [ "$OS" = Darwin ]; then
-        avert "Tk absent : les fenêtres utiliseront les boîtes de dialogue macOS. Pour de vraies fenêtres :"
-        avert "  brew install python-tk   (Python de Homebrew)   ou   Python de python.org (Tk inclus)"
+        avert "Tk missing: windows will use macOS dialog boxes. For real windows:"
+        avert "  brew install python-tk   (Homebrew Python)   or   Python from python.org (Tk included)"
     else
         MANQUE+=("tk")
     fi
@@ -138,7 +138,7 @@ else:
 EOF
     then MANQUE+=("appindicator"); fi
     if [ ${#MANQUE[@]} -gt 0 ]; then
-        avert "Paquets système conseillés manquants : ${MANQUE[*]}"
+        avert "Missing recommended system packages: ${MANQUE[*]}"
         if command -v apt-get >/dev/null; then
             avert "  sudo apt install python3-venv python3-tk python3-gi gir1.2-ayatanaappindicator3-0.1"
         elif command -v dnf >/dev/null; then
@@ -148,16 +148,16 @@ EOF
         elif command -v zypper >/dev/null; then
             avert "  sudo zypper install python3-tk python3-gobject typelib-1_0-AyatanaAppIndicator3-0_1"
         fi
-        avert "Sous GNOME, l'icône a aussi besoin de l'extension « AppIndicator » (déjà active sur Ubuntu)."
+        avert "On GNOME, the icon also needs the \"AppIndicator\" extension (already enabled on Ubuntu)."
         if printf '%s\n' "${MANQUE[@]}" | grep -qx venv; then
-            echo "Le module venv est indispensable : installe-le puis relance ./installer.sh" >&2
+            echo "The venv module is required: install it and run ./installer.sh again" >&2
             exit 1
         fi
     fi
 fi
 
-# ------------------------------------------------------------------ ancienne organisation
-# Les premières versions mettaient les fichiers générés à côté du programme : on les range dans donnees/.
+# ------------------------------------------------------------------ old layout
+# Early versions put generated files next to the program: move them into donnees/.
 if [ -x "$DIR/.venv/bin/python3" ]; then
     "$DIR/.venv/bin/python3" "$DIR/claude_ecran.py" quitter >/dev/null 2>&1 && sleep 2 || true
 fi
@@ -173,28 +173,28 @@ for f in runs journal.txt reglages.json modele.txt dernier-resultat.txt; do
     fi
 done
 [ -e "$DIR/outils/icone.png" ] && mv "$DIR/outils/icone.png" "$DONNEES/icone.png"
-# Fichiers régénérés automatiquement (lanceur, caches, ancien environnement Python).
+# Automatically regenerated files (launcher, caches, old Python environment).
 rm -rf "$DIR/outils/pc" "$DIR/__pycache__" "$DIR/outils/__pycache__" "$DIR/.venv"
 
-# ------------------------------------------------------------------ environnement virtuel
+# ------------------------------------------------------------------ virtual environment
 if [ ! -x "$PY" ]; then
-    info "Création de l'environnement Python (donnees/.venv)..."
+    info "Creating the Python environment (donnees/.venv)..."
     if [ "$OS" = Linux ]; then
-        # --system-site-packages : accès à PyGObject (gi), installé par le système, pour l'icône AppIndicator.
+        # --system-site-packages: access to PyGObject (gi), installed by the system, for the AppIndicator icon.
         "$PYSYS" -m venv --system-site-packages "$VENV"
     else
         "$PYSYS" -m venv "$VENV"
     fi
 fi
-info "Installation des dépendances..."
+info "Installing dependencies..."
 "$PY" -m pip install --quiet --upgrade pip
 "$PY" -m pip install --quiet -r "$DIR/requirements.txt"
 "$PY" -m pip install --quiet --no-deps "pynput>=1.7.6"
 chmod +x "$DIR/lancer.sh"
 
-# ------------------------------------------------------------------ lanceurs
+# ------------------------------------------------------------------ launchers
 if [ "$OS" = Darwin ]; then
-    info "Création de $APP..."
+    info "Creating $APP..."
     mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
     cat > "$APP/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -219,10 +219,10 @@ EOF
 exec "$PY" "$DIR/claude_ecran.py"
 EOF
     chmod +x "$APP/Contents/MacOS/ClaudeEcran"
-    "$PY" "$DIR/claude_ecran.py" --icone "$APP/Contents/Resources/ClaudeEcran.icns" || avert "Icône de l'appli non créée."
+    "$PY" "$DIR/claude_ecran.py" --icone "$APP/Contents/Resources/ClaudeEcran.icns" || avert "App icon not created."
     codesign --force --deep -s - "$APP" >/dev/null 2>&1 || true
 
-    [ -z "$DEMARRAGE" ] && DEMARRAGE="$(demander "Ouvrir ClaudeEcran automatiquement à la connexion ?" 1)"
+    [ -z "$DEMARRAGE" ] && DEMARRAGE="$(demander "Open ClaudeEcran automatically at login?" 1)"
     if [ "$DEMARRAGE" = 1 ]; then
         mkdir -p "$(dirname "$AGENT")"
         cat > "$AGENT" <<EOF
@@ -237,7 +237,7 @@ EOF
 </dict>
 </plist>
 EOF
-        info "Démarrage automatique activé (prochaine connexion)."
+        info "Autostart enabled (next login)."
     elif [ -f "$AGENT" ]; then
         rm -f "$AGENT"
     fi
@@ -248,18 +248,18 @@ else
 [Desktop Entry]
 Type=Application
 Name=ClaudeEcran
-Comment=Claude fait la tâche visible à l'écran (Ctrl+Alt+C)
+Comment=Claude does the task visible on screen (Ctrl+Alt+C)
 Exec="$DIR/lancer.sh"
 Icon=$DONNEES/icone.png
 Terminal=false
 Categories=Utility;
 EOF
-    [ -z "$DEMARRAGE" ] && DEMARRAGE="$(demander "Lancer ClaudeEcran automatiquement à l'ouverture de session ?" 1)"
+    [ -z "$DEMARRAGE" ] && DEMARRAGE="$(demander "Start ClaudeEcran automatically at login?" 1)"
     if [ "$DEMARRAGE" = 1 ]; then
         mkdir -p "$(dirname "$AUTO")"
         cp "$BUREAU" "$AUTO"
         echo "X-GNOME-Autostart-enabled=true" >> "$AUTO"
-        info "Démarrage automatique activé."
+        info "Autostart enabled."
     else
         rm -f "$AUTO"
     fi
@@ -268,7 +268,7 @@ EOF
         if [ -z "$GNOME" ]; then
             defaut=0
             [ "${XDG_SESSION_TYPE:-}" = wayland ] && defaut=1
-            GNOME="$(demander "Déclarer Ctrl+Alt+C et Ctrl+Alt+Shift+C dans les raccourcis GNOME (indispensable sous Wayland) ?" "$defaut")"
+            GNOME="$(demander "Add Ctrl+Alt+C and Ctrl+Alt+Shift+C to the GNOME shortcuts (required on Wayland)?" "$defaut")"
         fi
         if [ "$GNOME" = 1 ]; then
             gsettings set "$SCHEMA" custom-keybindings "$(liste_gnome +)"
@@ -284,30 +284,30 @@ EOF
                     gsettings set "$cle" command "\"$DIR/lancer.sh\" consigne"
                 fi
             done
-            info "Raccourcis GNOME ajoutés (Paramètres > Clavier > Raccourcis personnalisés)."
+            info "GNOME shortcuts added (Settings > Keyboard > Custom Shortcuts)."
         fi
     elif [ "${XDG_SESSION_TYPE:-}" = wayland ]; then
-        avert "Session Wayland sans GNOME : ajoute toi-même deux raccourcis dans les réglages du bureau :"
+        avert "Wayland session without GNOME: add two shortcuts yourself in the desktop settings:"
         avert "  Ctrl+Alt+C        ->  \"$DIR/lancer.sh\" declencher"
         avert "  Ctrl+Alt+Shift+C  ->  \"$DIR/lancer.sh\" consigne"
     fi
 fi
 
-# ------------------------------------------------------------------ vérifications
-case "$DIR" in *" "*) avert "Le chemin de ce dossier contient des espaces : déplace-le (ex. ~/ClaudeEcran), sinon Claude ne pourra pas lancer l'outil de contrôle." ;; esac
+# ------------------------------------------------------------------ checks
+case "$DIR" in *" "*) avert "The path of this folder contains spaces: move it (e.g. ~/ClaudeEcran), otherwise Claude cannot run the control tool." ;; esac
 
 echo
 info "Diagnostic :"
 "$PY" "$DIR/claude_ecran.py" diagnostic || true
 echo
 if ! "$PY" -c 'import sys; sys.path.insert(0, "'"$DIR"'"); import claude_ecran; sys.exit(0 if claude_ecran.trouver_claude() else 1)' 2>/dev/null; then
-    avert "Claude Code n'est pas installé :  curl -fsSL https://claude.ai/install.sh | bash"
-    avert "puis lance « claude » une fois pour te connecter avec ton compte, et tape /exit."
+    avert "Claude Code is not installed:  curl -fsSL https://claude.ai/install.sh | bash"
+    avert "then run \"claude\" once to log in with your account, and type /exit."
 fi
 if [ "$OS" = Darwin ]; then
-    info "Terminé. Ouvre ClaudeEcran depuis ~/Applications (ou : open \"$APP\")."
-    echo "Au premier lancement, macOS demande deux autorisations : « Enregistrement de l'écran » et"
-    echo "« Accessibilité ». Accepte-les, puis quitte et relance ClaudeEcran (voir README)."
+    info "Done. Open ClaudeEcran from ~/Applications (or: open \"$APP\")."
+    echo "On first launch, macOS asks for two permissions: \"Screen Recording\" and"
+    echo "\"Accessibility\". Allow them, then quit and relaunch ClaudeEcran (see README)."
 else
-    info "Terminé. Lance ClaudeEcran depuis le menu des applications, ou : \"$DIR/lancer.sh\""
+    info "Done. Start ClaudeEcran from the applications menu, or: \"$DIR/lancer.sh\""
 fi
