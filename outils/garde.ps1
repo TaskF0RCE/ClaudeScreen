@@ -4,7 +4,7 @@
 $entree = [Console]::In.ReadToEnd() | ConvertFrom-Json
 
 # Tools that write files (Edit, Write, MultiEdit, NotebookEdit): nothing inside System-Context.
-# Backs up the deny rule in reglages.json (its path matching is unreliable on Windows).
+# Backs up the deny rule in data/settings.json (its path matching is unreliable on Windows).
 $fichier = [string]$entree.tool_input.file_path
 if (-not $fichier) { $fichier = [string]$entree.tool_input.notebook_path }
 if ($fichier) {

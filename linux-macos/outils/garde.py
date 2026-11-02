@@ -54,7 +54,7 @@ def main():
     entrees = entree.get('tool_input') or {}
 
     # Tools that write files (Edit, Write, MultiEdit, NotebookEdit): nothing inside System-Context.
-    # Backs up the deny rule in reglages.json.
+    # Backs up the deny rule in data/settings.json.
     fichier = entrees.get('file_path') or entrees.get('notebook_path')
     if fichier:
         ctx = contexte()
@@ -71,7 +71,7 @@ def main():
         return 0
     for motif in MOTIFS:
         if re.search(motif, commande, re.IGNORECASE):
-            pc = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'donnees', 'pc')
+            pc = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'pc')
             sys.stderr.write(
                 'Blocked: permanent deletions (and shutting down the computer) are forbidden. '
                 'To remove a file or folder, send it to the trash: %s corbeille PATH. '

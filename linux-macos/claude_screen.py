@@ -35,9 +35,11 @@ import time
 
 RACINE = os.path.dirname(os.path.abspath(__file__))
 OUTILS = os.path.join(RACINE, 'outils')
-# Everything generated (screenshots, log, settings, Python environment, caches...) goes to donnees/,
-# never next to the program.
-DONNEES = os.path.join(RACINE, 'donnees')
+# Everything generated goes to data/, never next to the program (same layout as the Windows version):
+#   data/runs/<date>/  one folder per task: images/, prompts/, responses/ + screen.json
+#   data/context-cache/, data/log.txt, data/settings.json, data/model.txt
+#   + here: data/last-result.txt, data/pc, data/icon.png, data/.venv/, data/cache/
+DONNEES = os.path.join(RACINE, 'data')
 os.makedirs(DONNEES, exist_ok=True)
 os.environ['PYTHONPYCACHEPREFIX'] = os.path.join(DONNEES, 'cache')  # for the processes we start (pc, windows...)
 sys.pycache_prefix = os.environ['PYTHONPYCACHEPREFIX']               # and for this one
@@ -49,10 +51,10 @@ import raccourcis  # noqa: E402
 
 MAC = natif.MAC
 RUNS = os.path.join(DONNEES, 'runs')
-JOURNAL = os.path.join(DONNEES, 'journal.txt')
-FICHIER_MODELE = os.path.join(DONNEES, 'modele.txt')
-REGLAGES = os.path.join(DONNEES, 'reglages.json')
-DERNIER = os.path.join(DONNEES, 'dernier-resultat.txt')
+JOURNAL = os.path.join(DONNEES, 'log.txt')
+FICHIER_MODELE = os.path.join(DONNEES, 'model.txt')
+REGLAGES = os.path.join(DONNEES, 'settings.json')
+DERNIER = os.path.join(DONNEES, 'last-result.txt')
 PC_COMMANDE = os.path.join(DONNEES, 'pc')
 GARDE = os.path.join(OUTILS, 'garde.py')
 FENETRES = os.path.join(OUTILS, 'fenetres.py')
@@ -62,7 +64,7 @@ TRAVAIL = os.path.join(natif.dossier_documents(), 'Claude-Travail')
 CONTEXTE = os.path.join(TRAVAIL, 'System-Context')
 FICHIER_INSTRUCTIONS = os.path.join(CONTEXTE, 'instructions.txt')
 FICHIER_LISEZMOI = os.path.join(CONTEXTE, 'README.md')
-CACHE_CONTEXTE = os.path.join(DONNEES, 'contexte')  # text extracted from the context PDFs
+CACHE_CONTEXTE = os.path.join(DONNEES, 'context-cache')  # text extracted from the context PDFs
 DUREE_MAX = 20 * 60
 JOURS_CONSERVES = 30
 ANTI_REBOND = 0.7  # two presses less than 0.7 s apart = one (desktop shortcut + X11 listener)
@@ -291,9 +293,9 @@ def _lister_documents():
 
 
 def preparer_outils():
-    """Writes the small donnees/pc launcher and donnees/reglages.json (limited permissions + anti-deletion hook).
+    """Writes the small data/pc launcher and data/settings.json (limited permissions + anti-deletion hook).
 
-    Claude can only read, write files in Claude-Travail (acceptEdits) and run donnees/pc.
+    Claude can only read, write files in Claude-Travail (acceptEdits) and run data/pc.
     """
     ecrire_texte(PC_COMMANDE, '#!/bin/sh\n# Generated when ClaudeScreen starts: control tool used by Claude.\n'
                               'PYTHONPYCACHEPREFIX=%s exec %s %s "$@"\n' % (
@@ -391,9 +393,9 @@ class Appli:
         chemins = [os.path.dirname(claude), os.path.expanduser('~/.local/bin'), '/opt/homebrew/bin', '/usr/local/bin']
         env['PATH'] = os.pathsep.join(chemins + [env.get('PATH', '/usr/bin:/bin')])
         commande = [claude, '-p', '--model', modele, '--settings', REGLAGES, '--add-dir', run, '--output-format', 'text']
-        with open(os.path.join(run, nom + '.txt'), 'rb') as entree, \
-                open(os.path.join(run, nom + '-reponse.txt'), 'wb') as sortie, \
-                open(os.path.join(run, nom + '-erreurs.txt'), 'wb') as erreurs:
+        with open(os.path.join(run, 'prompts', nom + '.txt'), 'rb') as entree, \
+                open(os.path.join(run, 'responses', nom + '.txt'), 'wb') as sortie, \
+                open(os.path.join(run, 'responses', nom + '-errors.txt'), 'wb') as erreurs:
             self.proc = subprocess.Popen(commande, stdin=entree, stdout=sortie, stderr=erreurs, cwd=TRAVAIL, env=env,
                                          start_new_session=True)  # separate group: stop the whole tree
         self.tuer_a = None
@@ -419,13 +421,15 @@ class Appli:
             run = '%s-%d' % (base, n)
             n += 1
         os.makedirs(run)
+        for sous_dossier in ('images', 'prompts', 'responses'):
+            os.makedirs(os.path.join(run, sous_dossier))
         g, h, l, ht = ecran['gauche'], ecran['haut'], ecran['largeur'], ecran['hauteur']
         # Scales the image down (≤ 1456 px per side, ≤ 1.1 Mpx): Claude sees it without resizing, so clicks stay accurate.
         echelle = max(1.0, max(l, ht) / 1456.0, math.sqrt(l * ht / 1100000.0))
-        png = os.path.join(run, 'capture-01.png')
+        png = os.path.join(run, 'images', 'screenshot-01.png')
         natif.capturer(png, g, h, l, ht, echelle)
         largeur, hauteur = int(round(l / echelle)), int(round(ht / echelle))
-        ecrire_texte(os.path.join(run, 'ecran.json'), json.dumps(dict(
+        ecrire_texte(os.path.join(run, 'screen.json'), json.dumps(dict(
             gauche=g, haut=h, largeurEcran=l, hauteurEcran=ht, echelle=echelle, largeur=largeur, hauteur=hauteur)))
         return dict(run=run, png=png, fenetre=(nom, titre), ident=ident, ecran=ecran, largeur=largeur, hauteur=hauteur)
 
@@ -440,7 +444,7 @@ class Appli:
             precision = ("\nUser instruction for this task (takes priority over everything else): %s\n" % instruction) if instruction else ''
             # Re-read for every task: a change to instructions.txt or to the documents applies right away.
             instructions = lire_instructions()
-            ecrire_texte(os.path.join(run, 'consigne.txt'),
+            ecrire_texte(os.path.join(run, 'prompts', 'task.txt'),
                          texte_consigne(png, capture['largeur'], capture['hauteur'], fenetre, precision,
                                         instructions, lister_documents()))
 
@@ -452,9 +456,9 @@ class Appli:
             if modele != 'auto':
                 self.lancer_travail(modele)
                 return
-            ecrire_texte(os.path.join(run, 'tri.txt'), texte_tri(png, fenetre, precision, instructions))
+            ecrire_texte(os.path.join(run, 'prompts', 'triage.txt'), texte_tri(png, fenetre, precision, instructions))
             self.etape = 'tri'
-            self.demarrer_claude('haiku', 'tri')
+            self.demarrer_claude('haiku', 'triage')
             self.infobulle("looking at the screen...")
         except Exception as ex:
             self.echec('Could not start the task: %s' % ex)
@@ -463,7 +467,7 @@ class Appli:
         try:
             self.modele = modele
             self.etape = 'tache'
-            self.demarrer_claude(modele, 'consigne')
+            self.demarrer_claude(modele, 'task')
             self.infobulle('je travaille (%s)...' % modele)
             noter('Model: %s' % modele)
         except Exception as ex:
@@ -543,7 +547,7 @@ class Appli:
         self.proc = None
 
         if self.arret:
-            self.dernier = 'Task stopped (%s).\n\n%s' % (self.arret, self.lire_run('consigne-reponse.txt'))
+            self.dernier = 'Task stopped (%s).\n\n%s' % (self.arret, self.lire_run(os.path.join('responses', 'task.txt')))
             self.mettre_icone(ICONE_REPOS)
             self.infobulle('stopped')
             noter('Task stopped: %s' % self.run)
@@ -551,17 +555,17 @@ class Appli:
             return
 
         if self.etape == 'tri':
-            self.lancer_travail('opus' if 'OPUS' in self.lire_run('tri-reponse.txt').upper() else 'sonnet')
+            self.lancer_travail('opus' if 'OPUS' in self.lire_run(os.path.join('responses', 'triage.txt')).upper() else 'sonnet')
             return
 
-        reponse = self.lire_run('consigne-reponse.txt')
+        reponse = self.lire_run(os.path.join('responses', 'task.txt'))
         if code == 0 and reponse:
             self.dernier = '[%s] %s' % (self.modele, reponse)
             self.mettre_icone(ICONE_FINI)
             self.infobulle('done: ' + reponse)
         else:
             self.dernier = ('The task failed (code %s, %s).\n%s\n%s' % (
-                code, self.modele, self.lire_run('consigne-erreurs.txt'), reponse)).strip()
+                code, self.modele, self.lire_run(os.path.join('responses', 'task-errors.txt')), reponse)).strip()
             self.mettre_icone(ICONE_ERREUR)
             self.infobulle('error (click to see)')
         noter('Task finished (code %s): %s' % (code, self.run))

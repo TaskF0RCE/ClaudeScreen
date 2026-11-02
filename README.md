@@ -34,7 +34,7 @@ The `Documents\Claude-Travail\System-Context` folder is created on first launch,
 
 - **`instructions.txt`**: your standing instructions, one per line, added to every task while the app is running. For example: "I'm a BTS SIO student", "never click Finish exam", "always answer in French". Lines starting with `#` are ignored: as long as you write nothing else, the file does nothing. It is re-read for every task: a change applies right away, without restarting the app.
 - **The other files in the folder**, subfolders included (courses, notes, technical documentation, assignments, bibliography, sources...): Claude gets their list with every task. It treats them as more reliable than its general knowledge: it reads the ones related to the task and relies on them first. Best-read formats: `.pdf`, `.txt`, `.md`, images, code, `.csv`, `.html` (for a Word or PowerPoint file, also save it as PDF). Hidden or temporary files (`desktop.ini`, `~$...`) are ignored, as is the folder's `README.md`.
-- **PDFs**: the app extracts their text in advance, page by page, into `cache-contexte\` (redone only when the PDF changes). Claude reads that text, which is fast and saves quota, and can search it. For a diagram or a scanned PDF (no text), it shows the page as an image with the `page-pdf` action. All of this uses [Poppler](https://poppler.freedesktop.org/) (see [Installation](#installation)).
+- **PDFs**: the app extracts their text in advance, page by page, into `data\context-cache\` (redone only when the PDF changes). Claude reads that text, which is fast and saves quota, and can search it. For a diagram or a scanned PDF (no text), it shows the page as an image with the `page-pdf` action. All of this uses [Poppler](https://poppler.freedesktop.org/) (see [Installation](#installation)).
 - **Read-only**: Claude can read this folder, but cannot change, move, send to the Recycle Bin or run anything in it (see [Security](#security)).
 
 Priority order: the instruction typed in the bar (for one task), then `instructions.txt` (for every task), then what Claude infers from the screen.
@@ -69,7 +69,7 @@ During a task, don't touch the mouse or keyboard: Claude uses the real ones. If 
 
 ## Security
 
-Claude is started with limited permissions (`reglages.json`, generated at startup). It can only:
+Claude is started with limited permissions (`data\settings.json`, generated at startup). It can only:
 
 - read the screenshots;
 - click, type and scroll, through `outils/pc.ps1` (no other command is allowed);
@@ -77,7 +77,7 @@ Claude is started with limited permissions (`reglages.json`, generated at startu
 
 On top of that:
 
-- **`System-Context` is read-only**, locked three times: a `deny` rule in `reglages.json` (`Edit(...)`, which also covers Write), the hook `outils/garde.ps1` that refuses any file write in that folder, and `pc.ps1 corbeille` that refuses to touch it (or `Claude-Travail`, which contains it).
+- **`System-Context` is read-only**, locked three times: a `deny` rule in `data\settings.json` (`Edit(...)`, which also covers Write), the hook `outils/garde.ps1` that refuses any file write in that folder, and `pc.ps1 corbeille` that refuses to touch it (or `Claude-Travail`, which contains it).
 - **Nothing is ever permanently deleted.** The hook `outils/garde.ps1` blocks `Remove-Item`, `del`, `rm`, `format`, etc. To remove a file, Claude sends it to the Recycle Bin (`pc.ps1 corbeille`).
 - Its instructions forbid buying, paying, sending messages, entering passwords or bank details, and changing Windows settings. Text displayed on screen cannot override these rules.
 - No web access (WebFetch and WebSearch are denied).
@@ -135,14 +135,23 @@ outils/garde.ps1    hook that blocks permanent deletions and writes to System-Co
 outils/pdf.ps1      PDF reading: text extracted in advance, page as an image (with Poppler)
 outils/poppler.ps1  downloads Poppler (pinned version, verified hash) into outils/poppler (ignored by git)
 outils/System-Context-README.md  user guide copied into Documents\Claude-Travail\System-Context on first launch
-runs/               task screenshots and answers, deleted after 30 days (private, ignored by git)
-journal.txt         app log (private, ignored by git)
-cache-contexte/     text extracted from the System-Context PDFs (private, ignored by git, rebuilt when needed)
+data/               EVERYTHING the app generates, kept apart from the program (private, ignored by git):
+  runs/<date>/        one folder per task, deleted after 30 days:
+    images/             screenshot-01.png, zoom-01.png, pdf-01.png...
+    prompts/            task.txt (instructions sent to Claude), triage.txt (model choice)
+    responses/          task.txt, task-errors.txt, triage.txt, triage-errors.txt
+    screen.json         position and scale of the captured screen
+  context-cache/      text extracted from the System-Context PDFs (rebuilt when needed)
+  log.txt             app log
+  settings.json       permissions given to Claude (regenerated at each start)
+  model.txt           model choice (Model menu)
 ```
+
+The macOS/Linux version uses exactly the same `data/` layout. Older versions kept these files at the root of the folder (`runs/`, `journal.txt`...): they are moved into `data/` automatically at startup.
 
 Files created by Claude go to `Documents\Claude-Travail`. Your instructions and context documents are in `Documents\Claude-Travail\System-Context`.
 
-Automatic cleanup: at startup and then every 6 hours, the app permanently deletes the `runs/` folders older than 30 days (`$JoursConserves` variable in `ClaudeScreen.ps1`). They don't go through the Recycle Bin, so the space is really freed. The log is trimmed too. Files in `Documents\Claude-Travail` are never touched.
+Automatic cleanup: at startup and then every 6 hours, the app permanently deletes the `data\runs\` folders older than 30 days (`$JoursConserves` variable in `ClaudeScreen.ps1`). They don't go through the Recycle Bin, so the space is really freed. The log is trimmed too. Files in `Documents\Claude-Travail` are never touched.
 
 ## Limitations
 

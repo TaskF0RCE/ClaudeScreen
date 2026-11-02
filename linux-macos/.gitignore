@@ -1,4 +1,6 @@
-# Everything generated (screenshots, log, settings, Python environment, caches) is in donnees/
+# Everything generated (screenshots, prompts, answers, log, settings, Python environment, caches) is in data/
+data/
+# Old layout, moved into data/ by installer.sh
 donnees/
 __pycache__/
 .DS_Store
