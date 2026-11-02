@@ -57,9 +57,19 @@ You place the devices and connect them. Claude touches neither devices nor cable
 Right-click the icon:
 - **Last result**
 - **Model**: Auto, Always Sonnet or Always Opus (the choice is remembered)
+- **Smooth mode**: the mouse glides and the text is typed at a human pace (see below; the choice is remembered)
 - **Open the Claude-Travail folder**
 - **Stop the current task**
 - **Quit**
+
+### Smooth mode
+
+By default, the mouse jumps straight to its target and text appears in a flash. Turn on **Smooth mode** in the icon menu to watch what Claude does:
+
+- **Mouse**: it glides like a hand would, along a slightly curved path, speeding up then slowing down as it reaches the target. The time grows with the distance (Fitts' law): about 0.2 s for a short hop, 0.75 s across the screen. Then a short pause before clicking. Drag and drop is slower and almost straight; the scroll wheel turns one notch at a time.
+- **Typing**: one key at a time, about 9 characters per second with irregular gaps, a longer pause after a space, punctuation and Enter (which also gives a console such as Packet Tracer time to answer). A long text (a whole configuration file, for example) is typed faster so that one action never takes more than about 45 seconds.
+
+The choice is remembered (`data/smooth.txt`) and applies at once, even in the middle of a task. Tasks take a bit longer in this mode.
 
 ### Stopping a task
 
@@ -128,7 +138,7 @@ Ctrl+Alt+C is global: while the app is running, other programs no longer receive
 ClaudeScreen.ps1    notification-area app: shortcuts, screenshot, model triage, starting Claude
 Lancer.vbs          starts the app without a window (by hand)
 Installer-Demarrage.ps1  installs or removes the startup scheduled task
-outils/natif.cs     Windows calls (DPI, screenshot, mouse, keyboard, global hotkeys, active window)
+outils/natif.cs     Windows calls (DPI, screenshot, mouse, keyboard, smooth mode, global hotkeys, active window)
 outils/natif.ps1    compiles natif.cs into a DLL only once (the name changes when the source changes)
 outils/pc.ps1       PC control tool used by Claude
 outils/garde.ps1    hook that blocks permanent deletions and writes to System-Context
@@ -145,6 +155,7 @@ data/               EVERYTHING the app generates, kept apart from the program (p
   log.txt             app log
   settings.json       permissions given to Claude (regenerated at each start)
   model.txt           model choice (Model menu)
+  smooth.txt          smooth mode: on or off (Smooth mode menu)
 ```
 
 The macOS/Linux version uses exactly the same `data/` layout. Older versions kept these files at the root of the folder (`runs/`, `journal.txt`...): they are moved into `data/` automatically at startup.

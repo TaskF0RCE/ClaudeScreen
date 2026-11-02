@@ -7,6 +7,9 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'natif.ps1')
 . (Join-Path $PSScriptRoot 'pdf.ps1')
 [ClaudeScreen.Natif]::DpiAware()
+# Smooth mode (icon menu): human-like mouse moves and typing. Read at every action, so it applies at once.
+$fichierSmooth = Join-Path $PSScriptRoot '..\data\smooth.txt'
+[ClaudeScreen.Natif]::Doux = (Test-Path $fichierSmooth) -and ("$(Get-Content $fichierSmooth -Raw)".Trim() -eq 'on')
 
 $run = $env:ECRAN_RUN
 if (-not $run) { throw 'ECRAN_RUN is not set: this script must be started by ClaudeScreen.' }

@@ -5,11 +5,12 @@ $Racine = $PSScriptRoot
 $Outils = Join-Path $Racine 'outils'
 # Everything the app generates goes to data/ (same layout as the macOS/Linux version):
 #   data/runs/<date>/  one folder per task: images/, prompts/, responses/ + screen.json
-#   data/context-cache/, data/log.txt, data/settings.json, data/model.txt
+#   data/context-cache/, data/log.txt, data/settings.json, data/model.txt, data/smooth.txt
 $Donnees = Join-Path $Racine 'data'
 $Runs = Join-Path $Donnees 'runs'
 $Journal = Join-Path $Donnees 'log.txt'
 $FichierModele = Join-Path $Donnees 'model.txt'
+$FichierSmooth = Join-Path $Donnees 'smooth.txt'   # smooth mode: 'on' or 'off', read by pc.ps1 at every action
 $Travail = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Claude-Travail'
 # Optional context: instructions.txt (standing instructions) + documents (courses, assignments...).
 $Contexte = Join-Path $Travail 'System-Context'
@@ -486,6 +487,16 @@ foreach ($choix in @(@('auto', 'Auto (Haiku picks Sonnet or Opus)'), @('sonnet',
     $menuModele.DropDownItems.Add($item) | Out-Null
 }
 $menu.Items.Add($menuModele) | Out-Null
+# Smooth mode: the mouse glides and the text is typed at a human pace (see Trajet and Taper in natif.cs).
+$menuSmooth = New-Object System.Windows.Forms.ToolStripMenuItem 'Smooth mode'
+$menuSmooth.CheckOnClick = $true
+$menuSmooth.Checked = (Test-Path $FichierSmooth) -and ("$(Get-Content $FichierSmooth -Raw)".Trim() -eq 'on')
+$menuSmooth.add_Click({
+    $etat = if ($menuSmooth.Checked) { 'on' } else { 'off' }
+    Set-Content -Path $FichierSmooth -Value $etat -Encoding ASCII
+    Noter "Smooth mode: $etat"
+})
+$menu.Items.Add($menuSmooth) | Out-Null
 $menu.Items.Add('Open the Claude-Travail folder', $null, { Start-Process explorer.exe $Travail }) | Out-Null
 $menu.Items.Add('Stop the current task', $null, { Arreter-Tache 'menu' }) | Out-Null
 $menu.Items.Add('-') | Out-Null

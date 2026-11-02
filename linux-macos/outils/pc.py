@@ -12,6 +12,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import humain  # noqa: E402
 import natif  # noqa: E402
 
 USAGE = """Actions:
@@ -32,6 +33,7 @@ def main(argv):
     with open(os.path.join(run, 'screen.json'), encoding='utf-8') as f:
         ecran = json.load(f)
     e = ecran['echelle']
+    doux = humain.actif()  # smooth mode (icon menu), read at every action
 
     def nombre(i):
         if len(valeurs) <= i:
@@ -63,29 +65,29 @@ def main(argv):
         natif.capturer(png, X(nombre(0)), Y(nombre(1)), nombre(2) * e, nombre(3) * e, None, cote_max=1600)
         print('Zoom: %s (read-only, do not use its coordinates to click)' % png)
     elif action == 'clic':
-        natif.clic(X(nombre(0)), Y(nombre(1)))
+        natif.clic(X(nombre(0)), Y(nombre(1)), doux=doux)
         print('OK')
     elif action == 'doubleclic':
-        natif.clic(X(nombre(0)), Y(nombre(1)), nombre=2)
+        natif.clic(X(nombre(0)), Y(nombre(1)), nombre=2, doux=doux)
         print('OK')
     elif action == 'clicdroit':
-        natif.clic(X(nombre(0)), Y(nombre(1)), droit=True)
+        natif.clic(X(nombre(0)), Y(nombre(1)), droit=True, doux=doux)
         print('OK')
     elif action == 'survol':
-        natif.deplacer(X(nombre(0)), Y(nombre(1)))
+        natif.deplacer(X(nombre(0)), Y(nombre(1)), doux)
         print('OK')
     elif action == 'glisser':
-        natif.glisser(X(nombre(0)), Y(nombre(1)), X(nombre(2)), Y(nombre(3)))
+        natif.glisser(X(nombre(0)), Y(nombre(1)), X(nombre(2)), Y(nombre(3)), doux)
         print('OK')
     elif action == 'defiler':
-        natif.molette(X(nombre(0)), Y(nombre(1)), int(nombre(2)))
+        natif.molette(X(nombre(0)), Y(nombre(1)), int(nombre(2)), doux)
         print('OK')
     elif action == 'ecrire':
-        natif.taper(' '.join(valeurs))
+        natif.taper(' '.join(valeurs), doux)
         print('OK')
     elif action == 'ecrire-fichier':
         with open(' '.join(valeurs), encoding='utf-8-sig') as f:
-            natif.taper(f.read())
+            natif.taper(f.read(), doux)
         print('OK')
     elif action == 'touche':
         try:

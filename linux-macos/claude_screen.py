@@ -37,7 +37,7 @@ RACINE = os.path.dirname(os.path.abspath(__file__))
 OUTILS = os.path.join(RACINE, 'outils')
 # Everything generated goes to data/, never next to the program (same layout as the Windows version):
 #   data/runs/<date>/  one folder per task: images/, prompts/, responses/ + screen.json
-#   data/context-cache/, data/log.txt, data/settings.json, data/model.txt
+#   data/context-cache/, data/log.txt, data/settings.json, data/model.txt, data/smooth.txt
 #   + here: data/last-result.txt, data/pc, data/icon.png, data/.venv/, data/cache/
 DONNEES = os.path.join(RACINE, 'data')
 os.makedirs(DONNEES, exist_ok=True)
@@ -53,6 +53,7 @@ MAC = natif.MAC
 RUNS = os.path.join(DONNEES, 'runs')
 JOURNAL = os.path.join(DONNEES, 'log.txt')
 FICHIER_MODELE = os.path.join(DONNEES, 'model.txt')
+FICHIER_SMOOTH = os.path.join(DONNEES, 'smooth.txt')  # smooth mode: "on" or "off", read by pc.py at every action
 REGLAGES = os.path.join(DONNEES, 'settings.json')
 DERNIER = os.path.join(DONNEES, 'last-result.txt')
 PC_COMMANDE = os.path.join(DONNEES, 'pc')
@@ -345,6 +346,7 @@ class Appli:
         self.choix_modele = lire_texte(FICHIER_MODELE) or 'auto'
         if self.choix_modele not in ('auto', 'sonnet', 'opus'):
             self.choix_modele = 'auto'
+        self.smooth = lire_texte(FICHIER_SMOOTH).lower() == 'on'
         self.dernier = 'No task yet. Press %s when the task is on screen.' % NOMS_RACCOURCIS[1]
 
     # -------------------------------------------------- interface (main thread on macOS)
@@ -689,12 +691,21 @@ class Appli:
         def coche(valeur):
             return lambda _item: self.choix_modele == valeur
 
+        def basculer_smooth(icone, _item):
+            # Human-like mouse moves and typing; pc.py reads the file at every action,
+            # so the change applies at once, even during a task.
+            self.smooth = not self.smooth
+            ecrire_texte(FICHIER_SMOOTH, 'on' if self.smooth else 'off')
+            noter('Smooth mode: %s' % ('on' if self.smooth else 'off'))
+            icone.update_menu()
+
         return pystray.Menu(
             M('Last result', lambda: self.poster('resultat'), default=True),
             M('Model', pystray.Menu(
                 M('Auto (Haiku picks Sonnet or Opus)', choisir('auto'), checked=coche('auto'), radio=True),
                 M('Always Sonnet', choisir('sonnet'), checked=coche('sonnet'), radio=True),
                 M('Always Opus', choisir('opus'), checked=coche('opus'), radio=True))),
+            M('Smooth mode', basculer_smooth, checked=lambda _item: self.smooth),
             M('Open the Claude-Travail folder', lambda: natif.ouvrir(TRAVAIL)),
             M('Stop the current task', lambda: self.poster('arreter', 'menu')),
             pystray.Menu.SEPARATOR,
