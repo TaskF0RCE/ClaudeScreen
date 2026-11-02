@@ -17,7 +17,7 @@ import natif  # noqa: E402
 USAGE = """Actions :
   capture | zoom X Y L H | clic X Y | doubleclic X Y | clicdroit X Y | survol X Y
   glisser X1 Y1 X2 Y2 | defiler X Y N | ecrire "texte" | ecrire-fichier CHEMIN
-  touche COMBO | attendre MS | corbeille CHEMIN"""
+  touche COMBO | attendre MS | corbeille CHEMIN | page-pdf CHEMIN N"""
 
 
 def main(argv):
@@ -109,6 +109,26 @@ def main(argv):
                 raise SystemExit('Refusé : %s est en lecture seule (documents de l\'utilisateur).' % ctx)
         natif.corbeille(chemin)
         print('Mis à la corbeille : %s' % chemin)
+    elif action == 'page-pdf':
+        # page-pdf CHEMIN N : une page de PDF en image (lecture seule ; le chemin peut contenir des espaces).
+        if len(valeurs) < 2:
+            raise SystemExit('Usage : page-pdf CHEMIN N')
+        chemin = os.path.abspath(' '.join(valeurs[:-1]))
+        if not chemin.lower().endswith('.pdf') or not os.path.isfile(chemin):
+            raise SystemExit('PDF introuvable : %s' % chemin)
+        try:
+            numero = int(valeurs[-1])
+        except ValueError:
+            raise SystemExit('Numéro de page invalide : %s' % valeurs[-1])
+        import pdf
+        if not pdf.disponible():
+            raise SystemExit('Module pypdfium2 manquant : relance ./installer.sh.')
+        png = suivant('pdf')
+        try:
+            pages = pdf.rendre_page(chemin, numero, png)
+        except ValueError as ex:
+            raise SystemExit(str(ex))
+        print('Page %d/%d : %s (lis-la avec Read)' % (numero, pages, png))
     else:
         raise SystemExit('Action inconnue : %s\n%s' % (action, USAGE))
 

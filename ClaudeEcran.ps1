@@ -11,6 +11,7 @@ $Travail = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Claude-Trava
 $Contexte = Join-Path $Travail 'System-Context'
 $FichierInstructions = Join-Path $Contexte 'instructions.txt'
 $FichierLisezMoi = Join-Path $Contexte 'README.md'
+$CacheContexte = Join-Path $Racine 'cache-contexte'   # texte extrait des PDF du contexte
 $Claude = Join-Path $env:USERPROFILE '.local\bin\claude.exe'
 $DureeMax = [TimeSpan]::FromMinutes(20)
 $JoursConserves = 30
@@ -49,6 +50,13 @@ if (-not $mutex.WaitOne(0)) { exit }
 
 try {
 . (Join-Path $Outils 'natif.ps1')
+. (Join-Path $Outils 'pdf.ps1')
+# Poppler (lecture des PDF) : téléchargé une seule fois, en arrière-plan pour ne pas retarder l'icône.
+if (-not (Test-Poppler)) {
+    Start-Process powershell.exe -WindowStyle Hidden -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass',
+        '-File', "`"$(Join-Path $Outils 'poppler.ps1')`"", '-Journal', "`"$Journal`""
+    Noter 'Installation de Poppler (lecture des PDF) en arrière-plan'
+}
 [ClaudeEcran.Natif]::DpiAware()
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
@@ -164,6 +172,8 @@ function Demarrer-Claude([string]$modele, [string]$nom) {
     }
     $psi.EnvironmentVariables['ECRAN_RUN'] = $run
     $psi.EnvironmentVariables['ECRAN_CONTEXTE'] = $Contexte   # pc.ps1 refuse d'y toucher
+    # pdftoppm dans le PATH : Claude Code peut alors lire un PDF lui-même (schémas, pages scannées).
+    if (Test-Poppler) { $psi.EnvironmentVariables['PATH'] = $PopplerBin + ';' + $psi.EnvironmentVariables['PATH'] }
     $script:Proc = [System.Diagnostics.Process]::Start($psi)
 }
 
@@ -222,11 +232,28 @@ function Lancer-Tache($capture, [string]$instruction) {
             $_.Name -notmatch '^(\.|~\$|desktop\.ini$|thumbs\.db$)'
         })
         if ($tous.Count) {
-            $liste = ($tous | Select-Object -First 50 | ForEach-Object { '  {0}  ({1:N0} Ko)' -f $_.FullName, [math]::Ceiling($_.Length / 1KB) }) -join "`n"
+            # PDF : texte extrait par l'appli (Claude Code a besoin de pdftoppm pour lire un PDF lui-même).
+            $extraits = @{}
+            if (Test-Poppler) {
+                foreach ($pdf in ($tous | Where-Object { $_.Extension -eq '.pdf' })) {
+                    try { $extraits[$pdf.FullName] = Export-PdfTexte $pdf.FullName $CacheContexte }
+                    catch { Noter "PDF illisible ($($pdf.FullName)) : $($_.Exception.Message)" }
+                }
+                Clear-PdfCache $CacheContexte @($extraits.Values | ForEach-Object { $_.Txt })
+            }
+            $liste = ($tous | Select-Object -First 50 | ForEach-Object {
+                $ligne = '  {0}  ({1:N0} Ko)' -f $_.FullName, [math]::Max(1, [math]::Ceiling($_.Length / 1KB))
+                $e = $extraits[$_.FullName]
+                if ($e -and $e.Scanne) { $ligne += " : PDF scanné de $($e.Pages) page(s), sans texte ; regarde ses pages avec « page-pdf »" }
+                elseif ($e) { $ligne += " : PDF de $($e.Pages) page(s), texte extrait dans $($e.Txt)" }
+                elseif ($_.Extension -eq '.pdf' -and -not (Test-Poppler)) { $ligne += ' : PDF pas encore lisible (Poppler en cours d''installation), à ignorer' }
+                $ligne
+            }) -join "`n"
             if ($tous.Count -gt 50) { $liste += "`n  ... et $($tous.Count - 50) autres fichiers dans $Contexte (cherche-les avec Glob ou Grep)" }
             $documents = @"
 
 Documents de contexte fournis par l'utilisateur (cours, notes, documentation, sources...). Ils sont plus fiables que tes connaissances générales : avant de répondre, lis avec Read ceux qui concernent la tâche (même matière, même cours, même matériel ou logiciel), et appuie-toi d'abord sur eux. Ignore ceux qui n'ont aucun rapport.
+Pour un PDF, lis son texte extrait (fichier .txt indiqué, avec les numéros de page) plutôt que le PDF lui-même ; pour un long document, cherche d'abord avec Grep dans ce .txt. Pour voir un schéma, une figure ou une page scannée, utilise l'action « page-pdf » de l'outil de contrôle, puis lis l'image.
 $liste
 
 "@
@@ -260,6 +287,7 @@ Actions :
   touche COMBO            ex. enter, tab, ctrl+a, ctrl+s, pagedown, f5
   attendre MS
   corbeille CHEMIN        met un fichier ou dossier à la corbeille
+  page-pdf CHEMIN N       image de la page N d'un PDF (schémas, pages scannées) ; affiche le chemin du PNG à lire avec Read
 Les coordonnées X Y sont en pixels des captures (pas de l'écran réel) ; la conversion est automatique. Ne touche pas à la barre des tâches.
 
 Règles strictes :

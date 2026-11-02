@@ -5,6 +5,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'natif.ps1')
+. (Join-Path $PSScriptRoot 'pdf.ps1')
 [ClaudeEcran.Natif]::DpiAware()
 
 $run = $env:ECRAN_RUN
@@ -77,6 +78,18 @@ switch ($Action.ToLower()) {
         $corbeille = [Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin
         if (Test-Path $chemin -PathType Container) { $fs::DeleteDirectory($chemin, $ui, $corbeille) } else { $fs::DeleteFile($chemin, $ui, $corbeille) }
         "Mis à la corbeille : $chemin"
+    }
+    'page-pdf' {
+        # page-pdf CHEMIN N : une page de PDF en image (lecture seule ; le chemin peut contenir des espaces).
+        if ($Valeurs.Count -lt 2) { throw 'Usage : page-pdf CHEMIN N' }
+        $pdf = ($Valeurs[0..($Valeurs.Count - 2)] -join ' ')
+        if ($pdf -notmatch '\.pdf$' -or -not (Test-Path -LiteralPath $pdf -PathType Leaf)) { throw "PDF introuvable : $pdf" }
+        if (-not (Test-Poppler)) { throw 'Poppler pas encore installé (lecture des PDF) : réessaie dans une minute.' }
+        $n = @(Get-ChildItem $run -Filter 'pdf-*.png').Count + 1
+        $png = Join-Path $run ('pdf-{0:D2}.png' -f $n)
+        $numero = [int]$Valeurs[-1]
+        $pages = Export-PdfPage (Resolve-Path -LiteralPath $pdf).Path $numero $png
+        "Page $numero/$pages : $png (lis-la avec Read)"
     }
     default { throw "Action inconnue : $Action" }
 }

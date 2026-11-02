@@ -31,7 +31,8 @@ Il n'y a pas de fenêtre, seulement une icône dans la zone de notifications de 
 Le dossier `Documents\Claude-Travail\System-Context` est créé au premier lancement, avec un `README.md` qui explique son usage.
 
 - **`instructions.txt`** : tes consignes permanentes, une par ligne, ajoutées à chaque tâche tant que l'appli tourne. Par exemple : « je suis en BTS SIO », « ne clique jamais sur Terminer l'examen », « réponds en français ». Les lignes qui commencent par `#` sont ignorées : tant que tu n'écris rien d'autre, le fichier ne fait rien. Il est relu à chaque tâche : une modification compte tout de suite, sans relancer l'appli.
-- **Les autres fichiers du dossier**, sous-dossiers compris (cours, prises de notes, documentation technique, énoncés, bibliographie, sources...) : Claude reçoit leur liste à chaque tâche. Il les considère comme plus fiables que ses connaissances générales : il lit ceux qui concernent la tâche et s'appuie d'abord sur eux. Formats lus le mieux : `.txt`, `.md`, `.pdf`, images, code, `.csv`, `.html` (un Word ou un PowerPoint : enregistre-le aussi en PDF). Les fichiers cachés ou temporaires (`desktop.ini`, `~$...`) sont ignorés, ainsi que le `README.md` du dossier.
+- **Les autres fichiers du dossier**, sous-dossiers compris (cours, prises de notes, documentation technique, énoncés, bibliographie, sources...) : Claude reçoit leur liste à chaque tâche. Il les considère comme plus fiables que ses connaissances générales : il lit ceux qui concernent la tâche et s'appuie d'abord sur eux. Formats lus le mieux : `.pdf`, `.txt`, `.md`, images, code, `.csv`, `.html` (un Word ou un PowerPoint : enregistre-le aussi en PDF). Les fichiers cachés ou temporaires (`desktop.ini`, `~$...`) sont ignorés, ainsi que le `README.md` du dossier.
+- **Les PDF** : l'appli en extrait le texte à l'avance, page par page, dans `cache-contexte\` (refait seulement quand le PDF change). Claude lit ce texte, ce qui est rapide et économise le quota, et peut y chercher. Pour un schéma ou un PDF scanné (sans texte), il affiche la page en image avec l'action `page-pdf`. Tout cela utilise [Poppler](https://poppler.freedesktop.org/) (voir [Installation](#installation)).
 - **Lecture seule** : Claude peut lire ce dossier, mais ne peut rien y modifier, déplacer, mettre à la corbeille ni exécuter (voir [Sécurité](#sécurité)).
 
 Ordre de priorité : la consigne tapée dans la barre (pour une tâche), puis `instructions.txt` (pour toutes les tâches), puis ce que Claude devine à l'écran.
@@ -96,6 +97,8 @@ Prérequis : Windows 10 ou 11, avec PowerShell 5.1 (déjà présent dans Windows
    ```
    L'icône apparaît dans la zone de notifications. Une tâche planifiée « ClaudeEcran » le relancera 20 s après chaque ouverture de session, sans fenêtre. Pour la retirer, ajoute `-Retirer` à la première commande.
 
+**Lecture des PDF** : `Installer-Demarrage.ps1` télécharge aussi [Poppler pour Windows](https://github.com/oschwartz10612/poppler-windows) (`pdftotext`, `pdftoppm`, environ 16 Mo) dans `outils\poppler`, une seule fois. Si ce n'est pas encore fait, ClaudeEcran le télécharge en arrière-plan à son démarrage. La version est figée et le fichier est refusé si son empreinte SHA-256 ne correspond pas. Sans Poppler, Claude Code ne peut pas lire les PDF (il lui faut `pdftoppm`). Pour le réinstaller à la main : `powershell -ExecutionPolicy Bypass -File outils\poppler.ps1`.
+
 `Lancer.vbs` permet aussi de le lancer à la main (double-clic), mais Windows est en train d'abandonner VBScript : préfère la tâche planifiée.
 
 > **Ne mets pas le dossier dans `AppData`** si tu l'installes depuis Claude Desktop (appli du Microsoft Store). Windows redirige alors les fichiers vers un dossier privé de Claude Desktop, invisible au démarrage du PC, et tu obtiens « fichier introuvable ».
@@ -127,9 +130,12 @@ outils/natif.cs     appels Windows (DPI, capture, souris, clavier, raccourcis gl
 outils/natif.ps1    compile natif.cs en DLL une seule fois (le nom change si le source change)
 outils/pc.ps1       outil de contrôle du PC utilisé par Claude
 outils/garde.ps1    hook qui bloque les suppressions définitives et les écritures dans System-Context
+outils/pdf.ps1      lecture des PDF : texte extrait à l'avance, page en image (avec Poppler)
+outils/poppler.ps1  télécharge Poppler (version figée, empreinte vérifiée) dans outils/poppler (ignoré par git)
 outils/System-Context-README.md  mode d'emploi copié dans Documents\Claude-Travail\System-Context au premier lancement
 runs/               captures et réponses des tâches, effacées après 30 jours (privé, ignoré par git)
 journal.txt         journal de l'appli (privé, ignoré par git)
+cache-contexte/     texte extrait des PDF de System-Context (privé, ignoré par git, refait si besoin)
 ```
 
 Les fichiers créés par Claude vont dans `Documents\Claude-Travail`. Tes instructions et documents de contexte sont dans `Documents\Claude-Travail\System-Context`.

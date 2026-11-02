@@ -4,6 +4,10 @@ journal.txt
 reglages.json
 modele.txt
 outils/*.dll
+# Poppler (lecture des PDF), téléchargé par outils/poppler.ps1, et texte extrait des PDF du contexte
+outils/poppler/
+outils/poppler-provisoire/
+cache-contexte/
 .DS_Store
 
 # Contexte personnel (instructions, cours...) : il vit dans Documents\Claude-Travail\System-Context.

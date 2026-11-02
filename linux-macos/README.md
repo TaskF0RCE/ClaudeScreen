@@ -25,7 +25,8 @@ Réappuyer sur le raccourci pendant une tâche l'arrête (ou menu **Arrêter la 
 Comme sous Windows, le dossier **`~/Documents/Claude-Travail/System-Context`** est créé au premier lancement, avec un `README.md` qui explique son usage (menu **Ouvrir le dossier Claude-Travail** pour y accéder).
 
 - **`instructions.txt`** : tes consignes permanentes, une par ligne, ajoutées à chaque tâche tant que l'appli tourne (« je suis en BTS SIO », « ne clique jamais sur Terminer l'examen », « réponds en français »...). Les lignes qui commencent par `#` sont ignorées. Le fichier est relu à chaque tâche : une modification compte tout de suite.
-- **Les autres fichiers**, sous-dossiers compris (cours, prises de notes, documentation technique, énoncés, bibliographie, sources...) : Claude reçoit leur liste à chaque tâche, les considère comme plus fiables que ses connaissances générales, lit ceux qui concernent la tâche et s'appuie d'abord sur eux. Formats lus le mieux : `.txt`, `.md`, `.pdf`, images, code, `.csv`, `.html` (un Word ou un Keynote : exporte-le aussi en PDF). Les fichiers cachés ou temporaires (`.DS_Store`, `~$...`) sont ignorés, ainsi que le `README.md` du dossier.
+- **Les autres fichiers**, sous-dossiers compris (cours, prises de notes, documentation technique, énoncés, bibliographie, sources...) : Claude reçoit leur liste à chaque tâche, les considère comme plus fiables que ses connaissances générales, lit ceux qui concernent la tâche et s'appuie d'abord sur eux. Formats lus le mieux : `.pdf`, `.txt`, `.md`, images, code, `.csv`, `.html` (un Word ou un Keynote : exporte-le aussi en PDF). Les fichiers cachés ou temporaires (`.DS_Store`, `~$...`) sont ignorés, ainsi que le `README.md` du dossier.
+- **Les PDF** : l'appli en extrait le texte à l'avance, page par page, dans `donnees/contexte/` (au démarrage, puis seulement quand un PDF change), avec la bibliothèque Python `pypdfium2` : rien à installer en plus, pas besoin de `pdftoppm`. Claude lit ce texte, ce qui est rapide et économise le quota, et peut y chercher. Pour un schéma ou un PDF scanné (sans texte), il affiche la page en image avec l'action `page-pdf`. Si tu avais installé ClaudeEcran avant cette fonction, relance `./installer.sh` pour ajouter `pypdfium2`.
 - **Lecture seule** : Claude peut lire ce dossier, mais ne peut rien y modifier, déplacer, mettre à la corbeille ni exécuter.
 
 Ordre de priorité : la consigne de la barre (pour une tâche), puis `instructions.txt` (pour toutes les tâches), puis ce que Claude devine à l'écran.
@@ -154,10 +155,12 @@ outils/raccourcis.py raccourcis globaux (Carbon sur macOS, écouteur X11 sous Li
 outils/fenetres.py  fenêtre « dernier résultat » et barre de consigne (Tk, processus séparé)
 outils/pc.py        outil de contrôle de l'ordinateur utilisé par Claude
 outils/garde.py     hook qui bloque les suppressions définitives et les écritures dans System-Context
+outils/pdf.py       lecture des PDF : texte extrait à l'avance, page en image (pypdfium2)
 outils/System-Context-README.md  mode d'emploi copié dans ~/Documents/Claude-Travail/System-Context au premier lancement
 donnees/            TOUT ce qui est généré, à part du programme (privé, ignoré par git) :
   runs/               captures et réponses des tâches, effacées après 30 jours
   journal.txt         journal de l'appli
+  contexte/           texte extrait des PDF de System-Context (refait si besoin)
   reglages.json       permissions données à Claude (régénéré à chaque démarrage)
   pc                  lanceur de outils/pc.py utilisé par Claude (régénéré à chaque démarrage)
   modele.txt          choix du modèle (menu Modèle)
@@ -167,7 +170,7 @@ donnees/            TOUT ce qui est généré, à part du programme (privé, ign
   cache/              fichiers compilés de Python
 ```
 
-Correspondance avec la version Windows : `ClaudeEcran.ps1` → `claude_ecran.py`, `Lancer.vbs` → `lancer.sh` / `ClaudeEcran.app`, `natif.cs` + `natif.ps1` → `natif.py` + `raccourcis.py`, `pc.ps1` → `pc.py`, `garde.ps1` → `garde.py`.
+Correspondance avec la version Windows : `ClaudeEcran.ps1` → `claude_ecran.py`, `Lancer.vbs` → `lancer.sh` / `ClaudeEcran.app`, `natif.cs` + `natif.ps1` → `natif.py` + `raccourcis.py`, `pc.ps1` → `pc.py`, `garde.ps1` → `garde.py`, `pdf.ps1` + `poppler.ps1` → `pdf.py` (pypdfium2, sans programme externe).
 
 ## Limites
 

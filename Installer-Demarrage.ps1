@@ -12,6 +12,9 @@ if ($Retirer) {
     return
 }
 
+# Lecture des PDF : installe Poppler tout de suite (sinon ClaudeEcran le fait à son premier démarrage).
+& (Join-Path $PSScriptRoot 'outils\poppler.ps1')
+
 $script = Join-Path $PSScriptRoot 'ClaudeEcran.ps1'
 # conhost --headless : lance PowerShell sans aucune fenêtre, même pas un éclair.
 $action = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\conhost.exe" `

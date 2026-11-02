@@ -23,8 +23,11 @@ Tu peux faire des sous-dossiers.
 
 À chaque tâche, Claude reçoit la liste de ces fichiers. Il les considère comme plus fiables que ses connaissances générales : il lit ceux qui concernent la tâche et s'appuie dessus pour répondre.
 
-Formats lus le mieux : `.txt`, `.md`, `.pdf`, images (`.png`, `.jpg`), code, `.csv`, `.html`.
-Un document Word ou PowerPoint ? Enregistre-le aussi en PDF.
+Formats lus le mieux : `.pdf`, `.txt`, `.md`, images (`.png`, `.jpg`), code, `.csv`, `.html`.
+
+- **PDF** : ClaudeEcran en extrait le texte à l'avance (avec les numéros de page), ce qui est rapide et
+  économise ton quota. Pour un schéma ou un PDF scanné (sans texte), Claude regarde la page en image.
+- Un document Word ou PowerPoint ? Enregistre-le aussi en PDF.
 
 ## Priorités
 

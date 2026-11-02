@@ -44,6 +44,7 @@ sys.pycache_prefix = os.environ['PYTHONPYCACHEPREFIX']               # et pour c
 sys.path.insert(0, OUTILS)
 
 import natif  # noqa: E402
+import pdf  # noqa: E402
 import raccourcis  # noqa: E402
 
 MAC = natif.MAC
@@ -61,6 +62,7 @@ TRAVAIL = os.path.join(natif.dossier_documents(), 'Claude-Travail')
 CONTEXTE = os.path.join(TRAVAIL, 'System-Context')
 FICHIER_INSTRUCTIONS = os.path.join(CONTEXTE, 'instructions.txt')
 FICHIER_LISEZMOI = os.path.join(CONTEXTE, 'README.md')
+CACHE_CONTEXTE = os.path.join(DONNEES, 'contexte')  # texte extrait des PDF du contexte
 DUREE_MAX = 20 * 60
 JOURS_CONSERVES = 30
 ANTI_REBOND = 0.7  # deux appuis à moins de 0,7 s = un seul (raccourci du bureau + écouteur X11)
@@ -170,6 +172,7 @@ Actions :
   touche COMBO            ex. enter, tab, ctrl+a, cmd+s, pagedown, f5
 {note_touches}  attendre MS
   corbeille CHEMIN        met un fichier ou dossier à la corbeille
+  page-pdf CHEMIN N       image de la page N d'un PDF (schémas, pages scannées) ; affiche le chemin du PNG à lire avec Read
 Les coordonnées X Y sont en pixels des captures (pas de l'écran réel) ; la conversion est automatique. {zone_interdite}
 
 Règles strictes :
@@ -231,8 +234,16 @@ def lire_instructions():
     return ("\nInstructions permanentes de l'utilisateur (à suivre) :\n%s\n" % texte) if texte else ''
 
 
+_verrou_documents = threading.Lock()
+
+
 def lister_documents():
     """Liste des documents de System-Context (hors instructions.txt, README.md et fichiers système)."""
+    with _verrou_documents:  # le préchauffage au démarrage et une tâche peuvent arriver en même temps
+        return _lister_documents()
+
+
+def _lister_documents():
     fichiers = []
     for dossier, sous, noms in os.walk(CONTEXTE):
         sous[:] = sorted(d for d in sous if not d.startswith('.'))
@@ -243,14 +254,40 @@ def lister_documents():
             fichiers.append(chemin)
     if not fichiers:
         return ''
-    lignes = ['  %s  (%d Ko)' % (c, max(1, -(-os.path.getsize(c) // 1024))) for c in fichiers[:MAX_DOCUMENTS]]
+    # PDF : texte extrait par l'appli (Claude Code a besoin de pdftoppm pour lire un PDF lui-même).
+    extraits, gardes = {}, []
+    if pdf.disponible():
+        for c in fichiers:
+            if c.lower().endswith('.pdf'):
+                try:
+                    extraits[c] = pdf.extraire(c, CACHE_CONTEXTE)
+                    gardes.append(extraits[c][0])
+                except Exception as ex:
+                    noter('PDF illisible (%s) : %s' % (c, ex))
+        pdf.nettoyer(CACHE_CONTEXTE, gardes)
+    lignes = []
+    for c in fichiers[:MAX_DOCUMENTS]:
+        ligne = '  %s  (%d Ko)' % (c, max(1, -(-os.path.getsize(c) // 1024)))
+        if c in extraits:
+            txt, pages, scanne = extraits[c]
+            if scanne:
+                ligne += ' : PDF scanné de %d page(s), sans texte ; regarde ses pages avec « page-pdf »' % pages
+            else:
+                ligne += ' : PDF de %d page(s), texte extrait dans %s' % (pages, txt)
+        elif c.lower().endswith('.pdf') and not pdf.disponible():
+            ligne += ' : PDF illisible ici (module pypdfium2 manquant), à ignorer'
+        lignes.append(ligne)
     if len(fichiers) > MAX_DOCUMENTS:
         lignes.append('  ... et %d autres fichiers dans %s (cherche-les avec Glob ou Grep)'
                       % (len(fichiers) - MAX_DOCUMENTS, CONTEXTE))
     return ("\nDocuments de contexte fournis par l'utilisateur (cours, notes, documentation, sources...). "
             "Ils sont plus fiables que tes connaissances générales : avant de répondre, lis avec Read ceux qui "
             "concernent la tâche (même matière, même cours, même matériel ou logiciel), et appuie-toi d'abord "
-            "sur eux. Ignore ceux qui n'ont aucun rapport.\n%s\n\n" % '\n'.join(lignes))
+            "sur eux. Ignore ceux qui n'ont aucun rapport.\n"
+            "Pour un PDF, lis son texte extrait (fichier .txt indiqué, avec les numéros de page) plutôt que le PDF "
+            "lui-même ; pour un long document, cherche d'abord avec Grep dans ce .txt. Pour voir un schéma, une "
+            "figure ou une page scannée, utilise l'action « page-pdf » de l'outil de contrôle, puis lis l'image.\n"
+            "%s\n\n" % '\n'.join(lignes))
 
 
 def preparer_outils():
@@ -667,6 +704,8 @@ class Appli:
         os.makedirs(RUNS, exist_ok=True)
         os.makedirs(TRAVAIL, exist_ok=True)
         preparer_contexte()
+        # Extrait déjà le texte des PDF du contexte, pour que la première tâche ne l'attende pas.
+        threading.Thread(target=lister_documents, daemon=True).start()
         if MAC:
             import AppKit
             AppKit.NSApplication.sharedApplication().setActivationPolicy_(1)  # pas d'icône dans le Dock
@@ -697,6 +736,8 @@ class Appli:
         controle.start()
 
         noter('Démarré (%s, session %s). Raccourcis actifs : %s' % (SYSTEME, natif.SESSION, ', '.join(actifs) or 'aucun'))
+        if not pdf.disponible():
+            noter('Module pypdfium2 manquant : les PDF du contexte ne seront pas lus. Relance ./installer.sh.')
         if not trouver_claude():
             self.dernier = ('Claude Code introuvable. Installe-le : curl -fsSL https://claude.ai/install.sh | bash, '
                             'puis lance « claude » une fois pour te connecter.')
@@ -765,7 +806,7 @@ def diagnostic():
     ligne('Système', '%s, session %s, Python %s' % (SYSTEME, natif.SESSION, sys.version.split()[0]))
     claude = trouver_claude()
     ligne('Claude Code', claude or 'introuvable (curl -fsSL https://claude.ai/install.sh | bash)', bool(claude))
-    for module in ('pystray', 'pynput', 'mss', 'PIL', 'send2trash'):
+    for module in ('pystray', 'pynput', 'mss', 'PIL', 'send2trash', 'pypdfium2'):
         try:
             __import__(module)
             ligne('Module ' + module, 'ok')

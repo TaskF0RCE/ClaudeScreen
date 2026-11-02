@@ -4,6 +4,7 @@ pystray>=0.19
 mss>=9.0
 Pillow>=9.0
 Send2Trash>=1.8
+pypdfium2>=4.0
 six>=1.16
 python-xlib>=0.33; sys_platform == "linux"
 pyobjc-framework-Cocoa>=9.0; sys_platform == "darwin"
