@@ -72,9 +72,9 @@ The script creates a Python environment in `data/.venv`, installs the dependenci
 
 - Requirement: Python 3.9+ ([python.org](https://www.python.org/downloads/macos/) recommended: Tk is included, so the instruction bar and the result window are real windows. With Homebrew: `brew install python python-tk`).
 - The installer creates **`~/Applications/ClaudeScreen.app`**: open it (Spotlight → "ClaudeScreen").
-- **Permissions**: on first launch, macOS asks for
-  - **Screen Recording** (for screenshots);
-  - **Accessibility** (to click and type).
+- **Permissions**: on first launch, macOS asks for <br>
+  1\. System Settings → Privacy & Security → Accessibility <br>
+  2\. System Settings → Privacy & Security → Screen & System Audio Recording
 
   Allow both in *System Settings → Privacy & Security*, then **quit and relaunch** ClaudeScreen. Depending on the macOS version, the item to tick is called "ClaudeScreen", "Python" or "Terminal" (if you started it from Terminal). If in doubt: `./lancer.sh diagnostic`.
 - The ⌃⌥C shortcut is registered like on Windows (RegisterEventHotKey): no extra permission needed, and other apps no longer receive it while ClaudeScreen is running.
