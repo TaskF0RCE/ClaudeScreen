@@ -1,8 +1,8 @@
-# Tout ce qui est généré (captures, journal, réglages, environnement Python, caches) est dans donnees/
+# Everything generated (screenshots, log, settings, Python environment, caches) is in donnees/
 donnees/
 __pycache__/
 .DS_Store
 
-# Contexte personnel (instructions, cours...) : il vit dans ~/Documents/Claude-Travail/System-Context.
-# Si quelqu'un en met une copie dans le dépôt, elle n'est jamais envoyée sur GitHub.
+# Personal context (instructions, course notes...) lives in ~/Documents/Claude-Travail/System-Context.
+# If someone puts a copy in the repo, it is never pushed to GitHub.
 System-Context/

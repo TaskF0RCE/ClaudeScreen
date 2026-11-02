@@ -1,14 +1,14 @@
-"""Raccourcis clavier globaux (équivalent de la classe Raccourcis de natif.cs).
+"""Global keyboard shortcuts (equivalent of the Raccourcis class in natif.cs).
 
-  - macOS : RegisterEventHotKey (Carbon), comme RegisterHotKey sous Windows : aucune
-    autorisation nécessaire et le raccourci n'arrive plus aux autres applis.
-    Repli sur un écouteur pynput (autorisation « Surveillance de l'entrée ») si Carbon échoue.
-  - Linux X11 : écouteur pynput (XRecord).
-  - Linux Wayland : les applis ne peuvent pas écouter le clavier global. Le raccourci est
-    déclaré dans les réglages du bureau (installer.sh le fait pour GNOME) et appelle
-    « lancer.sh declencher » / « lancer.sh consigne ».
+  - macOS: RegisterEventHotKey (Carbon), like RegisterHotKey on Windows: no
+    permission needed and other apps no longer receive the shortcut.
+    Falls back to a pynput listener ("Input Monitoring" permission) if Carbon fails.
+  - Linux X11: pynput listener (XRecord).
+  - Linux Wayland: apps cannot listen to the global keyboard. The shortcut is
+    declared in the desktop settings (installer.sh does it for GNOME) and calls
+    "lancer.sh declencher" / "lancer.sh consigne".
 
-Identifiants (mêmes que la version Windows) : 1 = tâche normale, 4 = avec barre de consigne.
+Ids (same as the Windows version): 1 = normal task, 4 = with the instruction bar.
 """
 from __future__ import annotations
 
@@ -40,17 +40,17 @@ class Raccourcis:
         self._refs = []
 
     def demarrer(self):
-        """Enregistre les raccourcis ; renvoie la liste des raccourcis actifs.
-        Sur macOS, à appeler depuis le thread principal (avant la boucle de l'appli)."""
+        """Registers the shortcuts; returns the list of active shortcuts.
+        On macOS, call it from the main thread (before the app loop)."""
         if MAC:
             try:
                 return self._demarrer_carbon()
             except Exception as ex:
-                self.journal('Raccourcis Carbon indisponibles (%s), repli sur pynput' % ex)
+                self.journal('Carbon shortcuts unavailable (%s), falling back to pynput' % ex)
         try:
             return self._demarrer_pynput()
         except Exception as ex:
-            self.journal('Écouteur clavier indisponible : %s' % ex)
+            self.journal('Keyboard listener unavailable: %s' % ex)
             return []
 
     # ------------------------------------------------------------ macOS (Carbon)
@@ -90,7 +90,7 @@ class Raccourcis:
                 pass
             return 0
 
-        self._gestionnaire = GESTIONNAIRE(gestionnaire)  # garder une référence (sinon libéré)
+        self._gestionnaire = GESTIONNAIRE(gestionnaire)  # keep a reference (otherwise it is freed)
         cible = carbon.GetApplicationEventTarget()
         spec = EventTypeSpec(_fourcc('keyb'), 5)  # kEventClassKeyboard, kEventHotKeyPressed
         ref = ctypes.c_void_p()
@@ -99,7 +99,7 @@ class Raccourcis:
             raise OSError('InstallEventHandler : %d' % statut)
 
         CONTROL, OPTION, SHIFT = 0x1000, 0x800, 0x200
-        TOUCHE_C = 0x08  # kVK_ANSI_C (même position en QWERTY, AZERTY et QWERTZ)
+        TOUCHE_C = 0x08  # kVK_ANSI_C (same position on QWERTY, AZERTY and QWERTZ)
         actifs = []
         for ident, mods in ((NORMAL, CONTROL | OPTION), (CONSIGNE, CONTROL | OPTION | SHIFT)):
             hk = ctypes.c_void_p()
@@ -109,13 +109,13 @@ class Raccourcis:
                 self._refs.append(hk)
                 actifs.append(noms()[ident])
             else:
-                self.journal('Raccourci %s refusé (%d), déjà pris par une autre appli ?' % (noms()[ident], statut))
+                self.journal('Shortcut %s refused (%d), already taken by another app?' % (noms()[ident], statut))
         if not actifs:
-            raise OSError('aucun raccourci enregistré')
+            raise OSError('no shortcut registered')
         self._carbon = carbon
         return actifs
 
-    # ------------------------------------------------------------ pynput (X11, ou repli macOS)
+    # ------------------------------------------------------------ pynput (X11, or macOS fallback)
 
     def _demarrer_pynput(self):
         from pynput import keyboard
@@ -135,7 +135,7 @@ class Raccourcis:
             vk = getattr(touche, 'vk', None)
             if car and car.lower() == 'c':
                 return True
-            return vk == 0x08 if MAC else vk in (0x63, 0x43)  # kVK_ANSI_C / keysyms c et C
+            return vk == 0x08 if MAC else vk in (0x63, 0x43)  # kVK_ANSI_C / keysyms c and C
 
         def appui(touche):
             if touche in modificateurs:

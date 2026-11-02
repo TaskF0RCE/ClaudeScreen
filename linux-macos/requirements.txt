@@ -1,5 +1,5 @@
-# Installé par installer.sh. pynput est installé à part avec --no-deps
-# (sous Linux, sa dépendance evdev doit être compilée et ne sert pas ici).
+# Installed by installer.sh. pynput is installed separately with --no-deps
+# (on Linux, its evdev dependency has to be compiled and is not used here).
 pystray>=0.19
 mss>=9.0
 Pillow>=9.0

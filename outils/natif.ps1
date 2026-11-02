@@ -1,4 +1,4 @@
-﻿# Charge natif.cs, compile une seule fois en DLL (le nom change si le source change).
+﻿# Loads natif.cs, compiled only once into a DLL (the name changes when the source changes).
 if (-not ('ClaudeScreen.Natif' -as [type])) {
     Add-Type -AssemblyName System.Windows.Forms, System.Drawing
     $source = Join-Path $PSScriptRoot 'natif.cs'

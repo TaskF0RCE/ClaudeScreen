@@ -1,13 +1,13 @@
-"""Appels système pour macOS et Linux : écrans, capture, souris, clavier, fenêtre active, corbeille.
+"""System calls for macOS and Linux: screens, screenshot, mouse, keyboard, active window, trash.
 
-Équivalent de natif.cs (version Windows). Trois cas :
-  - macOS : Quartz/AppKit (pyobjc) + pynput ; capture avec l'outil système screencapture ;
-  - Linux X11 : python-xlib + pynput (XTest) + mss ;
-  - Linux Wayland : en partie seulement (capture via grim / gnome-screenshot / spectacle,
-    contrôle via ydotool s'il est installé, sinon pynput à travers XWayland).
+Equivalent of natif.cs (Windows version). Three cases:
+  - macOS: Quartz/AppKit (pyobjc) + pynput; screenshots with the system screencapture tool;
+  - Linux X11: python-xlib + pynput (XTest) + mss;
+  - Linux Wayland: partial only (screenshots via grim / gnome-screenshot / spectacle,
+    control via ydotool if installed, otherwise pynput through XWayland).
 
-Les coordonnées sont celles de la souris : points sur macOS (pas les pixels Retina),
-pixels sur Linux.
+Coordinates are mouse coordinates: points on macOS (not Retina pixels),
+pixels on Linux.
 """
 from __future__ import annotations
 
@@ -33,10 +33,10 @@ def _session():
 SESSION = _session()
 
 
-# ---------------------------------------------------------------- écrans
+# ---------------------------------------------------------------- screens
 
 def moniteurs():
-    """Liste des écrans : [{gauche, haut, largeur, hauteur}] dans l'espace de la souris."""
+    """List of screens: [{gauche, haut, largeur, hauteur}] in mouse space."""
     if MAC:
         try:
             import Quartz
@@ -60,13 +60,13 @@ def moniteurs():
             return liste
     except Exception:
         pass
-    # Wayland sans XWayland : on prend la taille d'une capture complète.
+    # Wayland without XWayland: use the size of a full screenshot.
     img = _capture_complete_wayland()
     return [dict(gauche=0, haut=0, largeur=img.width, hauteur=img.height)]
 
 
 def position_souris():
-    """(x, y) de la souris, ou None si inconnue (Wayland)."""
+    """(x, y) of the mouse, or None if unknown (Wayland)."""
     if MAC:
         import Quartz
         p = Quartz.CGEventGetLocation(Quartz.CGEventCreate(None))
@@ -86,7 +86,7 @@ def position_souris():
 
 
 def ecran_sous_curseur():
-    """Écran où se trouve la souris (le premier écran si la position est inconnue)."""
+    """Screen the mouse is on (the first screen if the position is unknown)."""
     liste = moniteurs()
     pos = position_souris()
     if pos:
@@ -97,7 +97,7 @@ def ecran_sous_curseur():
     return liste[0]
 
 
-# ---------------------------------------------------------------- capture
+# ---------------------------------------------------------------- screenshot
 
 def _image_vers_rgb(chemin):
     from PIL import Image
@@ -106,7 +106,7 @@ def _image_vers_rgb(chemin):
 
 
 def _grab_mac(gauche, haut, largeur, hauteur):
-    """Capture d'une zone (en points) avec l'outil système ; l'image est en pixels réels (Retina)."""
+    """Screenshot of an area (in points) with the system tool; the image is in real pixels (Retina)."""
     fd, tmp = tempfile.mkstemp(suffix='.png')
     os.close(fd)
     try:
@@ -114,7 +114,7 @@ def _grab_mac(gauche, haut, largeur, hauteur):
                         '-R', '%d,%d,%d,%d' % (gauche, haut, largeur, hauteur), tmp],
                        check=True, capture_output=True, timeout=20)
         if os.path.getsize(tmp) == 0:
-            raise RuntimeError('capture vide (autorisation « Enregistrement de l\'écran » manquante ?)')
+            raise RuntimeError('empty screenshot (missing "Screen Recording" permission?)')
         return _image_vers_rgb(tmp)
     finally:
         try:
@@ -134,7 +134,7 @@ def _grab_mss(gauche, haut, largeur, hauteur):
 
 
 def _capture_complete_wayland():
-    """Capture de tout le bureau sous Wayland avec l'outil disponible."""
+    """Screenshot of the whole desktop on Wayland with the available tool."""
     fd, tmp = tempfile.mkstemp(suffix='.png')
     os.close(fd)
     essais = []
@@ -152,8 +152,8 @@ def _capture_complete_wayland():
                     return _image_vers_rgb(tmp)
             except Exception:
                 continue
-        raise RuntimeError('capture impossible sous Wayland : installe grim (Sway, Hyprland), '
-                           'gnome-screenshot (GNOME) ou spectacle (KDE), ou ouvre une session X11.')
+        raise RuntimeError('screenshot impossible on Wayland: install grim (Sway, Hyprland), '
+                           'gnome-screenshot (GNOME) or spectacle (KDE), or open an X11 session.')
     finally:
         try:
             os.unlink(tmp)
@@ -163,7 +163,7 @@ def _capture_complete_wayland():
 
 def _grab_wayland(gauche, haut, largeur, hauteur):
     img = _capture_complete_wayland()
-    # La capture couvre tout le bureau ; on découpe la zone (avec le facteur d'échelle éventuel).
+    # The screenshot covers the whole desktop; crop the area (with the scale factor, if any).
     try:
         liste = moniteurs()
         x0 = min(m['gauche'] for m in liste)
@@ -189,10 +189,10 @@ def _grab(gauche, haut, largeur, hauteur):
 
 
 def capturer(chemin, gauche, haut, largeur, hauteur, echelle=None, cote_max=None):
-    """Capture la zone et l'enregistre en PNG.
+    """Captures the area and saves it as PNG.
 
-    echelle : l'image fait (largeur/echelle) x (hauteur/echelle) pixels (comme la version Windows).
-    echelle=None : résolution native (Retina comprise), réduite seulement au-delà de cote_max.
+    echelle: the image is (largeur/echelle) x (hauteur/echelle) pixels (like the Windows version).
+    echelle=None: native resolution (Retina included), scaled down only beyond cote_max.
     """
     from PIL import Image
     img = _grab(gauche, haut, largeur, hauteur)
@@ -209,10 +209,10 @@ def capturer(chemin, gauche, haut, largeur, hauteur, echelle=None, cote_max=None
     return img.size
 
 
-# ---------------------------------------------------------------- fenêtre active
+# ---------------------------------------------------------------- active window
 
 def fenetre_active():
-    """(nom de l'appli, titre de la fenêtre, identifiant pour la remettre au premier plan)."""
+    """(app name, window title, id used to bring it back to the front)."""
     if MAC:
         return _fenetre_active_mac()
     if SESSION == 'x11':
@@ -274,7 +274,7 @@ def _fenetre_active_x11():
 
 
 def activer(ident):
-    """Remet au premier plan la fenêtre / l'appli mémorisée par fenetre_active()."""
+    """Brings back to the front the window / app remembered by fenetre_active()."""
     if not ident:
         return
     try:
@@ -299,10 +299,10 @@ def activer(ident):
         pass
 
 
-# ---------------------------------------------------------------- souris et clavier
+# ---------------------------------------------------------------- mouse and keyboard
 
 def _ydotool():
-    """Sous Wayland, ydotool (uinput) est le seul moyen fiable de piloter toutes les fenêtres."""
+    """On Wayland, ydotool (uinput) is the only reliable way to drive every window."""
     return SESSION == 'wayland' and shutil.which('ydotool') is not None
 
 
@@ -334,9 +334,9 @@ def deplacer(x, y):
     if _ydotool():
         _yd('mousemove', '--absolute', '-x', int(round(x)), '-y', int(round(y)))
     elif MAC:
-        _s().position = (x, y)  # points : les fractions sont permises
+        _s().position = (x, y)  # points: fractions are allowed
     else:
-        _s().position = (int(round(x)), int(round(y)))  # X11 tronquerait 299,99 en 299
+        _s().position = (int(round(x)), int(round(y)))  # X11 would truncate 299.99 to 299
     time.sleep(0.03)
 
 
@@ -346,7 +346,7 @@ def clic(x, y, droit=False, nombre=1):
         _yd('click', '--repeat', nombre, '--next-delay', 60, '0xC1' if droit else '0xC0')
         return
     from pynput.mouse import Button
-    # click(bouton, n) : sur macOS, c'est ce qui marque le 2e clic comme un double-clic.
+    # click(button, n): on macOS, this is what marks the 2nd click as a double-click.
     _s().click(Button.right if droit else Button.left, nombre)
     time.sleep(0.06)
 
@@ -370,7 +370,7 @@ def glisser(x1, y1, x2, y2):
 
 
 def molette(x, y, crans):
-    """crans > 0 : monte ; crans < 0 : descend (1 cran = 3 lignes, comme sous Windows)."""
+    """crans > 0: up; crans < 0: down (1 notch = 3 lines, like on Windows)."""
     deplacer(x, y)
     crans = int(crans)
     if MAC:
@@ -383,7 +383,7 @@ def molette(x, y, crans):
         _s().scroll(0, crans)
 
 
-# Noms de touches acceptés -> nom pynput.
+# Accepted key names -> pynput name.
 NOMS_TOUCHES = {
     'ctrl': 'ctrl', 'control': 'ctrl', 'controle': 'ctrl',
     'alt': 'alt', 'option': 'alt', 'opt': 'alt',
@@ -400,7 +400,7 @@ NOMS_TOUCHES = {
     'gauche': 'left', 'haut': 'up', 'droite': 'right', 'bas': 'down',
 }
 
-# Codes evdev (Linux) pour ydotool, disposition QWERTY.
+# evdev codes (Linux) for ydotool, QWERTY layout.
 _EVDEV = {
     'ctrl': 29, 'alt': 56, 'shift': 42, 'cmd': 125, 'enter': 28, 'tab': 15, 'esc': 1, 'backspace': 14,
     'delete': 111, 'insert': 110, 'space': 57, 'home': 102, 'end': 107, 'page_up': 104, 'page_down': 109,
@@ -415,7 +415,7 @@ _EVDEV.update(dict(zip('zxcvbnm', range(44, 51))))
 
 
 def _nom_touche(nom):
-    """Normalise un nom de touche ('Ctrl', 'F5', 'a'...) ; lève ValueError si inconnu."""
+    """Normalises a key name ('Ctrl', 'F5', 'a'...); raises ValueError if unknown."""
     n = nom.strip().lower()
     if n in NOMS_TOUCHES:
         return NOMS_TOUCHES[n]
@@ -432,17 +432,17 @@ def _touche_pynput(nom):
         return KeyCode.from_char(nom)
     t = getattr(Key, nom, None)
     if t is None:
-        raise ValueError('Touche indisponible sur ce système : %s' % nom)
+        raise ValueError('Key not available on this system: %s' % nom)
     return t
 
 
 class _ClavierX11:
-    """Clavier X11 entièrement via XTest (comme xdotool).
+    """X11 keyboard entirely through XTest (like xdotool).
 
-    pynput envoie les caractères avec XSendEvent : ces événements « synthétiques » sont ignorés
-    par une partie des applis (xterm, certaines applis Java/Qt) et cassent les raccourcis.
-    Ici tout passe par XTest ; un caractère absent de la disposition du clavier est tapé en
-    remappant un instant une touche libre.
+    pynput sends characters with XSendEvent: these "synthetic" events are ignored
+    by some apps (xterm, some Java/Qt apps) and break shortcuts.
+    Here everything goes through XTest; a character missing from the keyboard layout is typed
+    by briefly remapping a free key.
     """
     NOMS_X = {
         'ctrl': 'Control_L', 'alt': 'Alt_L', 'shift': 'Shift_L', 'cmd': 'Super_L',
@@ -458,7 +458,7 @@ class _ClavierX11:
         self.d = display.Display()
         self.shift = self.d.keysym_to_keycode(XK.string_to_keysym('Shift_L'))
         self.libres = None
-        self.empruntes = {}  # keysym -> keycode remappé
+        self.empruntes = {}  # keysym -> remapped keycode
 
     def _keysym(self, car):
         if car == '\n':
@@ -467,8 +467,8 @@ class _ClavierX11:
             return self.XK.string_to_keysym('Tab')
         o = ord(car)
         if 0x20 <= o <= 0x7e or 0xa0 <= o <= 0xff:
-            return o  # Latin-1 : le keysym est le code du caractère
-        return 0x01000000 | o  # keysym Unicode
+            return o  # Latin-1: the keysym is the character code
+        return 0x01000000 | o  # Unicode keysym
 
     def _evenement(self, keycode, appui):
         from Xlib import X
@@ -476,7 +476,7 @@ class _ClavierX11:
         self.d.sync()
 
     def _code(self, keysym):
-        """(keycode, avec_maj) pour ce keysym, en remappant une touche libre au besoin."""
+        """(keycode, avec_maj) for this keysym, remapping a free key if needed."""
         meilleur = None
         for code, index in self.d.keysym_to_keycodes(keysym):
             if index in (0, 1) and (meilleur is None or index < meilleur[1]):
@@ -492,11 +492,11 @@ class _ClavierX11:
             self.libres = [debut + i for i, syms in enumerate(table) if not any(syms)]
             self.restaurer = []
         if not self.libres:
-            raise ValueError('Aucune touche libre pour taper le caractère U+%04X' % (keysym & 0xFFFFFF))
+            raise ValueError('No free key to type character U+%04X' % (keysym & 0xFFFFFF))
         code = self.libres.pop()
         self.d.change_keyboard_mapping(code, [(keysym, keysym)])
         self.d.sync()
-        time.sleep(0.03)  # laisse aux applis le temps de relire la disposition
+        time.sleep(0.03)  # give apps time to reload the layout
         self.empruntes[keysym] = code
         self.restaurer.append(code)
         return code, False
@@ -539,7 +539,7 @@ class _ClavierX11:
             self._rendre()
 
     def _rendre(self):
-        """Rend les touches remappées."""
+        """Restores the remapped keys."""
         if self.empruntes:
             time.sleep(0.05)
             for code in self.restaurer:
@@ -560,7 +560,7 @@ def _clavier_x11():
 
 
 def combo(noms):
-    """Appuie sur les touches dans l'ordre puis les relâche dans l'ordre inverse (ex. ['ctrl', 'a'])."""
+    """Presses the keys in order, then releases them in reverse order (e.g. ['ctrl', 'a'])."""
     noms = [_nom_touche(n) for n in noms if n.strip()]
     if not noms:
         raise ValueError('Aucune touche.')
@@ -568,7 +568,7 @@ def combo(noms):
         codes = []
         for n in noms:
             if n not in _EVDEV:
-                raise ValueError('Touche non gérée avec ydotool : %s' % n)
+                raise ValueError('Key not supported with ydotool: %s' % n)
             codes.append(_EVDEV[n])
         _yd('key', *(['%d:1' % c for c in codes] + ['%d:0' % c for c in reversed(codes)]))
         return
@@ -586,7 +586,7 @@ def combo(noms):
 
 
 def taper(texte):
-    """Tape le texte (Unicode) là où se trouve le curseur ; \\n = Entrée, \\t = Tab."""
+    """Types the text (Unicode) where the cursor is; \\n = Enter, \\t = Tab."""
     texte = texte.replace('\r\n', '\n').replace('\r', '\n')
     if _ydotool():
         _yd('type', '--key-delay', 8, '--', texte)
@@ -608,16 +608,16 @@ def taper(texte):
         time.sleep(0.008)
 
 
-# ---------------------------------------------------------------- fichiers
+# ---------------------------------------------------------------- files
 
 def corbeille(chemin):
-    """Met un fichier ou un dossier à la corbeille (jamais de suppression définitive)."""
+    """Sends a file or folder to the trash (never a permanent deletion)."""
     from send2trash import send2trash
     send2trash(os.path.abspath(chemin))
 
 
 def ouvrir(chemin):
-    """Ouvre un dossier ou un fichier avec l'appli par défaut (Finder, gestionnaire de fichiers...)."""
+    """Opens a folder or file with the default app (Finder, file manager...)."""
     subprocess.Popen(['open' if MAC else 'xdg-open', chemin],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
 
@@ -633,10 +633,10 @@ def dossier_documents():
     return os.path.join(os.path.expanduser('~'), 'Documents')
 
 
-# ---------------------------------------------------------------- autorisations (macOS)
+# ---------------------------------------------------------------- permissions (macOS)
 
 def autorisations(demander=False):
-    """macOS : {'ecran': bool, 'accessibilite': bool}. Avec demander=True, affiche les demandes système."""
+    """macOS: {'ecran': bool, 'accessibilite': bool}. With demander=True, shows the system prompts."""
     if not MAC:
         return {}
     res = {}

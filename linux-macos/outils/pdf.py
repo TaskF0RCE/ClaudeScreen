@@ -1,8 +1,8 @@
-"""Lecture des PDF sans programme externe (pypdfium2), pour que Claude n'ait pas besoin de pdftoppm.
+"""PDF reading without an external program (pypdfium2), so Claude does not need pdftoppm.
 
-  - extraire(pdf, cache) : texte du PDF, page par page, dans un .txt mis en cache (réutilisé tant que
-    le PDF ne change pas). Claude lit ce .txt avec Read, et peut y chercher avec Grep.
-  - rendre_page(pdf, n, png) : une page en image, pour voir un schéma ou un PDF scanné.
+  - extraire(pdf, cache): text of the PDF, page by page, in a cached .txt (reused as long as
+    the PDF does not change). Claude reads this .txt with Read, and can search it with Grep.
+  - rendre_page(pdf, n, png): one page as an image, to see a diagram or a scanned PDF.
 """
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import os
 import re
 import tempfile
 
-# Moins de 40 caractères par page en moyenne : PDF scanné (images sans texte).
+# Under 40 characters per page on average: scanned PDF (images without text).
 SEUIL_SCANNE = 40
 
 
@@ -30,10 +30,10 @@ def _cle(pdf):
 
 
 def extraire(pdf, cache):
-    """Renvoie (chemin du .txt, nombre de pages, scanné?) ; le .txt est créé s'il n'est pas à jour."""
+    """Returns (path of the .txt, page count, scanned?); the .txt is created if it is not up to date."""
     import pypdfium2 as pdfium
     os.makedirs(cache, exist_ok=True)
-    base = re.sub(r'[^\w.-]+', '_', os.path.splitext(os.path.basename(pdf))[0])[:40]  # sans espaces
+    base = re.sub(r'[^\w.-]+', '_', os.path.splitext(os.path.basename(pdf))[0])[:40]  # no spaces
     nom = '%s-%s' % (base, _cle(pdf))
     txt = os.path.join(cache, nom + '.txt')
     if os.path.exists(txt):
@@ -43,7 +43,7 @@ def extraire(pdf, cache):
             pages, scanne = entete.rsplit('|', 2)[1:]
             return txt, int(pages), scanne.strip() == 'scanne'
         except ValueError:
-            pass  # cache d'un autre format : on le refait
+            pass  # cache in another format: rebuild it
 
     doc = pdfium.PdfDocument(pdf)
     try:
@@ -61,17 +61,17 @@ def extraire(pdf, cache):
     finally:
         doc.close()
     scanne = pages > 0 and total / pages < SEUIL_SCANNE
-    # 1re ligne : métadonnées lues ci-dessus (source|pages|texte/scanne).
-    entete = 'ClaudeScreen : texte extrait de %s|%d|%s\n' % (pdf, pages, 'scanne' if scanne else 'texte')
+    # 1st line: metadata read above (source|pages|texte/scanne).
+    entete = 'ClaudeScreen: text extracted from %s|%d|%s\n' % (pdf, pages, 'scanne' if scanne else 'texte')
     fd, tmp = tempfile.mkstemp(dir=cache, suffix='.tmp')
     with os.fdopen(fd, 'w', encoding='utf-8') as f:
         f.write(entete + ''.join(morceaux))
-    os.replace(tmp, txt)  # écriture atomique (deux tâches en même temps ne se gênent pas)
+    os.replace(tmp, txt)  # atomic write (two tasks at the same time do not interfere)
     return txt, pages, scanne
 
 
 def nettoyer(cache, gardes):
-    """Efface du cache les extraits de PDF supprimés ou modifiés (gardes = chemins encore utiles)."""
+    """Clears cached extracts of deleted or changed PDFs (gardes = paths still in use)."""
     try:
         noms = os.listdir(cache)
     except OSError:
@@ -86,16 +86,16 @@ def nettoyer(cache, gardes):
 
 
 def rendre_page(pdf, numero, png, cote_max=1600):
-    """Enregistre la page `numero` (à partir de 1) en PNG ; renvoie le nombre de pages du PDF."""
+    """Saves page `numero` (starting at 1) as PNG; returns the PDF's page count."""
     import pypdfium2 as pdfium
     doc = pdfium.PdfDocument(pdf)
     try:
         pages = len(doc)
         if not 1 <= numero <= pages:
-            raise ValueError('Page %d inexistante : ce PDF a %d page(s).' % (numero, pages))
+            raise ValueError('Page %d does not exist: this PDF has %d page(s).' % (numero, pages))
         page = doc[numero - 1]
         try:
-            largeur, hauteur = page.get_size()  # en points (1/72 de pouce)
+            largeur, hauteur = page.get_size()  # in points (1/72 inch)
             echelle = min(150 / 72.0, cote_max / float(max(largeur, hauteur, 1)))  # 150 dpi, ≤ cote_max px
             image = page.render(scale=echelle).to_pil()
         finally:

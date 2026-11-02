@@ -1,33 +1,33 @@
-﻿# Fait démarrer ClaudeScreen à l'ouverture de session : tâche planifiée, sans fenêtre, sans VBScript.
-# Installer : powershell -ExecutionPolicy Bypass -File Installer-Demarrage.ps1
-# Retirer   : powershell -ExecutionPolicy Bypass -File Installer-Demarrage.ps1 -Retirer
+﻿# Starts ClaudeScreen at logon: scheduled task, no window, no VBScript.
+# Install: powershell -ExecutionPolicy Bypass -File Installer-Demarrage.ps1
+# Remove : powershell -ExecutionPolicy Bypass -File Installer-Demarrage.ps1 -Retirer
 param([switch]$Retirer)
 $ErrorActionPreference = 'Stop'
 $nom = 'ClaudeScreen'
 $utilisateur = "$env:USERDOMAIN\$env:USERNAME"
-# Le projet s'appelait ClaudeEcran : on retire l'ancienne tâche planifiée (elle lançait ClaudeEcran.ps1).
+# The project used to be called ClaudeEcran: remove the old scheduled task (it started ClaudeEcran.ps1).
 Unregister-ScheduledTask -TaskName 'ClaudeEcran' -Confirm:$false -ErrorAction SilentlyContinue
 
 if ($Retirer) {
     Unregister-ScheduledTask -TaskName $nom -Confirm:$false -ErrorAction SilentlyContinue
-    'Démarrage automatique retiré.'
+    'Autostart removed.'
     return
 }
 
-# Lecture des PDF : installe Poppler tout de suite (sinon ClaudeScreen le fait à son premier démarrage).
+# PDF reading: installs Poppler right away (otherwise ClaudeScreen does it on its first start).
 & (Join-Path $PSScriptRoot 'outils\poppler.ps1')
 
 $script = Join-Path $PSScriptRoot 'ClaudeScreen.ps1'
-# conhost --headless : lance PowerShell sans aucune fenêtre, même pas un éclair.
+# conhost --headless: starts PowerShell without any window, not even a flash.
 $action = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\conhost.exe" `
     -Argument "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File `"$script`"" `
     -WorkingDirectory $PSScriptRoot
-# 20 s après l'ouverture de session : la barre des tâches est prête pour l'icône.
+# 20 s after logon: the taskbar is ready for the icon.
 $declencheur = New-ScheduledTaskTrigger -AtLogOn -User $utilisateur
 $declencheur.Delay = 'PT20S'
 $reglages = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
     -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
 $principal = New-ScheduledTaskPrincipal -UserId $utilisateur -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskName $nom -Action $action -Trigger $declencheur -Settings $reglages -Principal $principal `
-    -Description 'Lance ClaudeScreen (icône Claude dans la zone de notifications).' -Force | Out-Null
-"Démarrage automatique installé (tâche planifiée « $nom »)."
+    -Description 'Starts ClaudeScreen (Claude icon in the notification area).' -Force | Out-Null
+"Autostart installed (scheduled task '$nom')."

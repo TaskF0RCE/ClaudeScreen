@@ -8,7 +8,7 @@ using System.Windows.Forms;
 
 namespace ClaudeScreen
 {
-    // Appels Windows : DPI, capture, souris, clavier.
+    // Windows calls: DPI, screen capture, mouse, keyboard.
     public static class Natif
     {
         [DllImport("user32.dll")] static extern bool SetProcessDpiAwarenessContext(IntPtr valeur);
@@ -26,7 +26,7 @@ namespace ClaudeScreen
 
         public static void MettreAuPremierPlan(IntPtr h) { SetForegroundWindow(h); }
 
-        // Texte gris affiché dans un champ vide.
+        // Grey placeholder text shown in an empty field.
         public static void Indice(IntPtr champ, string texte) { SendMessage(champ, 0x1501, new IntPtr(1), texte); }
 
         [StructLayout(LayoutKind.Sequential)] struct POINT { public int X; public int Y; }
@@ -45,7 +45,7 @@ namespace ClaudeScreen
             try { SetProcessDPIAware(); } catch { }
         }
 
-        // Fenetre au premier plan : { nom du processus, titre }.
+        // Foreground window: { process name, title }.
         public static string[] FenetreActive()
         {
             IntPtr h = GetForegroundWindow();
@@ -62,7 +62,7 @@ namespace ClaudeScreen
             return new string[] { nom, titre.ToString() };
         }
 
-        // Ecran (coordonnees physiques) sous le curseur.
+        // Screen (physical coordinates) under the cursor.
         public static Rectangle EcranSousCurseur()
         {
             POINT p;
@@ -70,7 +70,7 @@ namespace ClaudeScreen
             return Screen.FromPoint(new Point(p.X, p.Y)).Bounds;
         }
 
-        // Capture le rectangle et l'enregistre reduit d'un facteur "echelle" (>= 1).
+        // Captures the rectangle and saves it scaled down by a factor "echelle" (>= 1).
         public static void Capture(string chemin, int gauche, int haut, int largeur, int hauteur, double echelle)
         {
             using (Bitmap brut = new Bitmap(largeur, hauteur, PixelFormat.Format32bppArgb))
@@ -151,7 +151,7 @@ namespace ClaudeScreen
             return (vk >= 0x21 && vk <= 0x28) || vk == 0x2D || vk == 0x2E || vk == 0x5B || vk == 0x5C;
         }
 
-        // Appuie sur les touches dans l'ordre puis les relache dans l'ordre inverse.
+        // Presses the keys in order, then releases them in reverse order.
         public static void Combo(ushort[] vks)
         {
             foreach (ushort vk in vks) { Envoyer(Touche(vk, 0, Etendue(vk) ? TOUCHE_ETENDUE : 0)); Thread.Sleep(20); }
@@ -171,7 +171,7 @@ namespace ClaudeScreen
         }
     }
 
-    // Fenetre invisible qui recoit les raccourcis globaux.
+    // Invisible window that receives the global hotkeys.
     public class Raccourcis : NativeWindow
     {
         [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr h, int id, uint mods, uint vk);

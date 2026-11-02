@@ -1,50 +1,52 @@
-# ClaudeScreen pour macOS et Linux
+# ClaudeScreen for macOS and Linux
 
-Adaptation de [ClaudeScreen](../README.md) (version Windows) : un raccourci clavier donne à Claude ce qui est à l'écran, pour qu'il fasse la tâche à ta place (cocher un QCM, remplir un formulaire, taper des commandes dans Packet Tracer ou GNS3, créer un fichier...).
+Port of [ClaudeScreen](../README.md) (Windows version): a keyboard shortcut gives Claude what is on your screen, so it does the task for you (answer a multiple-choice quiz, fill in a form, type commands in Packet Tracer or GNS3, create a file...).
 
-Il n'y a pas de fenêtre, seulement une icône dans la **barre des menus** (macOS) ou la **zone de notifications** (Linux).
+There is no window, only an icon in the **menu bar** (macOS) or the **notification area** (Linux).
 
-> Projet perso, non officiel, sans lien avec Anthropic. Il utilise [Claude Code](https://docs.claude.com/en/docs/claude-code) avec ton propre compte Claude.
+Like the Windows version, it runs on top of the **[Claude Code](https://docs.claude.com/en/docs/claude-code) CLI** (`claude -p`) with your own Claude account.
 
-## Fonctionnement
+> Personal project, unofficial, not affiliated with Anthropic.
 
-Identique à la version Windows :
+## How it works
 
-1. Tu appuies sur **⌃⌥C** (Ctrl+Option+C) sur Mac, ou **Ctrl+Alt+C** sous Linux.
-2. L'appli capture l'écran où se trouve ta souris.
-3. **Haiku** regarde la capture et choisit **Sonnet** (QCM, question de cours, formulaire simple) ou **Opus** (calculs, programmation, réseau, infra). Si la fenêtre active est Packet Tracer, GNS3, PuTTY, Wireshark, MATLAB, etc., Opus est choisi directement.
-4. Claude fait la tâche avec la souris et le clavier, refait une capture après chaque action pour vérifier, puis écrit un court résumé.
-5. Clique sur l'icône → **Dernier résultat** pour le lire.
+Same as the Windows version:
 
-**⌃⌥⇧C** / **Ctrl+Alt+Shift+C** capture l'écran puis ouvre une petite barre en bas à gauche : écris une consigne (« fais seulement la question 4 », « configure OSPF sur R1 et R2 »), puis **Entrée**. **Échap** ou un clic ailleurs annule.
+1. Press **⌃⌥C** (Ctrl+Option+C) on a Mac, or **Ctrl+Alt+C** on Linux.
+2. The app takes a screenshot of the screen your mouse is on.
+3. **Haiku** looks at the screenshot and picks **Sonnet** (quiz, course question, simple form) or **Opus** (calculations, programming, networking, infrastructure). If the active window is Packet Tracer, GNS3, PuTTY, Wireshark, MATLAB, etc., Opus is picked directly.
+4. Claude does the task with the mouse and keyboard, takes a new screenshot after each action to check, then writes a short summary.
+5. Click the icon → **Last result** to read it.
 
-Réappuyer sur le raccourci pendant une tâche l'arrête (ou menu **Arrêter la tâche en cours**). Arrêt automatique au bout de 20 minutes. Pendant une tâche, ne touche ni à la souris ni au clavier.
+**⌃⌥⇧C** / **Ctrl+Alt+Shift+C** takes the screenshot, then opens a small bar in the bottom-left corner: type an instruction ("only do question 4", "configure OSPF on R1 and R2"), then **Enter**. **Esc** or clicking elsewhere cancels.
 
-### Contexte permanent (facultatif)
+Pressing the shortcut again during a task stops it (or use the **Stop the current task** menu). Automatic stop after 20 minutes. During a task, don't touch the mouse or keyboard.
 
-Comme sous Windows, le dossier **`~/Documents/Claude-Travail/System-Context`** est créé au premier lancement, avec un `README.md` qui explique son usage (menu **Ouvrir le dossier Claude-Travail** pour y accéder).
+### Standing context (optional)
 
-- **`instructions.txt`** : tes consignes permanentes, une par ligne, ajoutées à chaque tâche tant que l'appli tourne (« je suis en BTS SIO », « ne clique jamais sur Terminer l'examen », « réponds en français »...). Les lignes qui commencent par `#` sont ignorées. Le fichier est relu à chaque tâche : une modification compte tout de suite.
-- **Les autres fichiers**, sous-dossiers compris (cours, prises de notes, documentation technique, énoncés, bibliographie, sources...) : Claude reçoit leur liste à chaque tâche, les considère comme plus fiables que ses connaissances générales, lit ceux qui concernent la tâche et s'appuie d'abord sur eux. Formats lus le mieux : `.pdf`, `.txt`, `.md`, images, code, `.csv`, `.html` (un Word ou un Keynote : exporte-le aussi en PDF). Les fichiers cachés ou temporaires (`.DS_Store`, `~$...`) sont ignorés, ainsi que le `README.md` du dossier.
-- **Les PDF** : l'appli en extrait le texte à l'avance, page par page, dans `donnees/contexte/` (au démarrage, puis seulement quand un PDF change), avec la bibliothèque Python `pypdfium2` : rien à installer en plus, pas besoin de `pdftoppm`. Claude lit ce texte, ce qui est rapide et économise le quota, et peut y chercher. Pour un schéma ou un PDF scanné (sans texte), il affiche la page en image avec l'action `page-pdf`. Si tu avais installé ClaudeScreen avant cette fonction, relance `./installer.sh` pour ajouter `pypdfium2`.
-- **Lecture seule** : Claude peut lire ce dossier, mais ne peut rien y modifier, déplacer, mettre à la corbeille ni exécuter.
+Like on Windows, the **`~/Documents/Claude-Travail/System-Context`** folder is created on first launch, with a `README.md` that explains how to use it (use the **Open the Claude-Travail folder** menu to get there).
 
-Ordre de priorité : la consigne de la barre (pour une tâche), puis `instructions.txt` (pour toutes les tâches), puis ce que Claude devine à l'écran.
+- **`instructions.txt`**: your standing instructions, one per line, added to every task while the app is running ("I'm a BTS SIO student", "never click Finish exam", "always answer in French"...). Lines starting with `#` are ignored. The file is re-read for every task: a change applies right away.
+- **The other files**, subfolders included (courses, notes, technical documentation, assignments, bibliography, sources...): Claude gets their list with every task, treats them as more reliable than its general knowledge, reads the ones related to the task and relies on them first. Best-read formats: `.pdf`, `.txt`, `.md`, images, code, `.csv`, `.html` (for a Word or Keynote file, also export it as PDF). Hidden or temporary files (`.DS_Store`, `~$...`) are ignored, as is the folder's `README.md`.
+- **PDFs**: the app extracts their text in advance, page by page, into `donnees/contexte/` (at startup, then only when a PDF changes), with the `pypdfium2` Python library: nothing extra to install, no need for `pdftoppm`. Claude reads that text, which is fast and saves quota, and can search it. For a diagram or a scanned PDF (no text), it shows the page as an image with the `page-pdf` action. If you installed ClaudeScreen before this feature, run `./installer.sh` again to add `pypdfium2`.
+- **Read-only**: Claude can read this folder, but cannot change, move, send to the trash or run anything in it.
 
-Le dossier est dans tes Documents, hors du dépôt : son contenu ne part jamais sur GitHub.
+Priority order: the instruction from the bar (for one task), then `instructions.txt` (for every task), then what Claude infers from the screen.
 
-### L'icône
+The folder is in your Documents, outside the repository: its contents never end up on GitHub.
 
-| Icône | Signification |
+### The icon
+
+| Icon | Meaning |
 |---|---|
-| Étoile fixe | Prêt |
-| Étoile qui tourne | En train de travailler |
-| Point vert | Fini : ouvre « Dernier résultat » |
-| Point rouge | Erreur : ouvre « Dernier résultat » pour le message |
+| Still star | Ready |
+| Spinning star | Working |
+| Green dot | Done: open "Last result" |
+| Red dot | Error: open "Last result" for the message |
 
-Menu : **Dernier résultat**, **Modèle** (Auto, Toujours Sonnet, Toujours Opus ; le choix est gardé), **Ouvrir le dossier Claude-Travail**, **Arrêter la tâche en cours**, **Quitter**.
+Menu: **Last result**, **Model** (Auto, Always Sonnet, Always Opus; the choice is remembered), **Open the Claude-Travail folder**, **Stop the current task**, **Quit**.
 
-Sur macOS et avec la plupart des bureaux Linux (AppIndicator), un clic sur l'icône ouvre le menu ; « Dernier résultat » est la première ligne.
+On macOS and with most Linux desktops (AppIndicator), clicking the icon opens the menu; "Last result" is the first entry.
 
 ## Installation
 
@@ -52,38 +54,38 @@ Sur macOS et avec la plupart des bureaux Linux (AppIndicator), un clic sur l'ic�
 
 ```bash
 curl -fsSL https://claude.ai/install.sh | bash
-claude        # connecte-toi une fois avec ton compte Claude, puis tape /exit
+claude        # log in once with your Claude account, then type /exit
 ```
 
 ### 2. ClaudeScreen
 
-Copie le dossier `linux-macos` où tu veux (dans un chemin **sans espace**, par exemple `~/ClaudeScreen`), puis :
+Copy the `linux-macos` folder wherever you like (in a path **without spaces**, for example `~/ClaudeScreen`), then:
 
 ```bash
-cd ~/ClaudeScreen/linux-macos      # adapte le chemin
+cd ~/ClaudeScreen/linux-macos      # adjust the path
 ./installer.sh
 ```
 
-Le script crée un environnement Python dans `donnees/.venv`, installe les dépendances, crée le lanceur, propose le démarrage automatique et affiche un diagnostic. Options : `--demarrage-auto`, `--sans-demarrage-auto`, `--raccourcis-gnome`, `-y` (sans questions), `--desinstaller`.
+The script creates a Python environment in `donnees/.venv`, installs the dependencies, creates the launcher, offers to start the app automatically and prints a diagnostic. Options: `--demarrage-auto` (autostart), `--sans-demarrage-auto` (no autostart), `--raccourcis-gnome` (GNOME shortcuts), `-y` (no questions), `--desinstaller` (uninstall).
 
-### macOS (10.15 ou plus récent)
+### macOS (10.15 or later)
 
-- Prérequis : Python 3.9+ ([python.org](https://www.python.org/downloads/macos/) conseillé : Tk est inclus, donc la barre de consigne et la fenêtre de résultat sont de vraies fenêtres. Avec Homebrew : `brew install python python-tk`).
-- L'installation crée **`~/Applications/ClaudeScreen.app`** : ouvre-la (Spotlight → « ClaudeScreen »).
-- **Autorisations** : au premier lancement, macOS demande
-  - **Enregistrement de l'écran** (pour les captures) ;
-  - **Accessibilité** (pour cliquer et taper).
+- Requirement: Python 3.9+ ([python.org](https://www.python.org/downloads/macos/) recommended: Tk is included, so the instruction bar and the result window are real windows. With Homebrew: `brew install python python-tk`).
+- The installer creates **`~/Applications/ClaudeScreen.app`**: open it (Spotlight → "ClaudeScreen").
+- **Permissions**: on first launch, macOS asks for
+  - **Screen Recording** (for screenshots);
+  - **Accessibility** (to click and type).
 
-  Accepte les deux dans *Réglages Système → Confidentialité et sécurité*, puis **quitte et relance** ClaudeScreen. Selon la version de macOS, l'élément à cocher s'appelle « ClaudeScreen », « Python » ou « Terminal » (si tu l'as lancé depuis le Terminal). En cas de doute : `./lancer.sh diagnostic`.
-- Le raccourci ⌃⌥C est enregistré comme sous Windows (RegisterEventHotKey) : aucune autorisation supplémentaire, et il n'arrive plus aux autres applis tant que ClaudeScreen tourne.
-- Démarrage automatique : l'installateur ajoute `~/Library/LaunchAgents/local.claudescreen.plist`.
-- Raccourcis clavier pour Claude : sur Mac il utilise `cmd+c`, `cmd+v`, `cmd+s`... (sa consigne le lui indique), et `ctrl` reste disponible pour les terminaux.
+  Allow both in *System Settings → Privacy & Security*, then **quit and relaunch** ClaudeScreen. Depending on the macOS version, the item to tick is called "ClaudeScreen", "Python" or "Terminal" (if you started it from Terminal). If in doubt: `./lancer.sh diagnostic`.
+- The ⌃⌥C shortcut is registered like on Windows (RegisterEventHotKey): no extra permission needed, and other apps no longer receive it while ClaudeScreen is running.
+- Autostart: the installer adds `~/Library/LaunchAgents/local.claudescreen.plist`.
+- Keyboard shortcuts for Claude: on a Mac it uses `cmd+c`, `cmd+v`, `cmd+s`... (its instructions tell it so), and `ctrl` remains available for terminals.
 
 ### Linux
 
-Une session **X11** (« Ubuntu sur Xorg », « GNOME sur Xorg », KDE X11, Xfce, MATE, Cinnamon...) fonctionne entièrement. Sous **Wayland**, voir plus bas.
+An **X11** session ("Ubuntu on Xorg", "GNOME on Xorg", KDE X11, Xfce, MATE, Cinnamon...) works fully. For **Wayland**, see below.
 
-Paquets système utiles (l'installateur indique ceux qui manquent) :
+Useful system packages (the installer tells you which ones are missing):
 
 ```bash
 # Debian / Ubuntu / Mint
@@ -94,86 +96,86 @@ sudo dnf install python3-tkinter python3-gobject libayatana-appindicator-gtk3
 sudo pacman -S tk python-gobject libayatana-appindicator
 ```
 
-- Sous GNOME, l'icône a besoin de l'extension **AppIndicator** (active par défaut sur Ubuntu ; ailleurs : « AppIndicator and KStatusNotifierItem Support »).
-- Lancement : menu des applications → **ClaudeScreen**, ou `./lancer.sh`.
-- Démarrage automatique : `~/.config/autostart/claude-screen.desktop`.
+- On GNOME, the icon needs the **AppIndicator** extension (enabled by default on Ubuntu; elsewhere: "AppIndicator and KStatusNotifierItem Support").
+- Launch: applications menu → **ClaudeScreen**, or `./lancer.sh`.
+- Autostart: `~/.config/autostart/claude-screen.desktop`.
 
 #### Wayland
 
-Wayland empêche volontairement les applis d'écouter le clavier, de lire l'écran et de piloter la souris des autres fenêtres. ClaudeScreen s'y adapte en partie :
+Wayland deliberately prevents apps from listening to the keyboard, reading the screen and driving the mouse of other windows. ClaudeScreen partly works around it:
 
-| Fonction | Sous Wayland |
+| Feature | On Wayland |
 |---|---|
-| Raccourci | Déclaré dans les réglages du bureau ; l'installateur le fait pour GNOME (`--raccourcis-gnome`). Ailleurs (KDE...), ajoute deux raccourcis personnalisés : Ctrl+Alt+C → `".../lancer.sh" declencher` et Ctrl+Alt+Shift+C → `".../lancer.sh" consigne`. |
-| Capture | Avec `grim` (Sway, Hyprland), `gnome-screenshot` (GNOME) ou `spectacle` (KDE). Toujours le premier écran. |
-| Souris et clavier | Avec [`ydotool`](https://github.com/ReimuNotMoe/ydotool) (version 1.x, service `ydotoold` lancé, accès à `/dev/uinput`). Désactive l'accélération de la souris pour des clics précis. Frappe limitée à la disposition QWERTY. Sans ydotool, seules les applis XWayland reçoivent les clics. |
-| Fenêtre active | Inconnue (le tri Packet Tracer → Opus direct ne marche pas, Haiku choisit). |
+| Shortcut | Declared in the desktop settings; the installer does it for GNOME (`--raccourcis-gnome`). Elsewhere (KDE...), add two custom shortcuts: Ctrl+Alt+C → `".../lancer.sh" declencher` and Ctrl+Alt+Shift+C → `".../lancer.sh" consigne`. |
+| Screenshot | With `grim` (Sway, Hyprland), `gnome-screenshot` (GNOME) or `spectacle` (KDE). Always the first screen. |
+| Mouse and keyboard | With [`ydotool`](https://github.com/ReimuNotMoe/ydotool) (version 1.x, `ydotoold` service running, access to `/dev/uinput`). Disable mouse acceleration for accurate clicks. Typing is limited to the QWERTY layout. Without ydotool, only XWayland apps receive the clicks. |
+| Active window | Unknown (the Packet Tracer → Opus shortcut doesn't work, Haiku picks). |
 
-**Conseil : pour une utilisation fiable, ouvre une session X11** (écran de connexion → roue dentée → « Ubuntu sur Xorg »).
+**Tip: for reliable use, open an X11 session** (login screen → gear icon → "Ubuntu on Xorg").
 
-## Commandes
+## Commands
 
 ```bash
-./lancer.sh               # lance l'appli
-./lancer.sh declencher    # comme Ctrl+Alt+C
-./lancer.sh consigne      # comme Ctrl+Alt+Shift+C
-./lancer.sh arreter       # arrête la tâche en cours
-./lancer.sh resultat      # affiche le dernier résultat
-./lancer.sh etat          # prêt / en cours
-./lancer.sh quitter
-./lancer.sh diagnostic    # vérifie capture, autorisations, Claude Code, modules...
+./lancer.sh               # starts the app
+./lancer.sh declencher    # same as Ctrl+Alt+C
+./lancer.sh consigne      # same as Ctrl+Alt+Shift+C
+./lancer.sh arreter       # stops the current task
+./lancer.sh resultat      # shows the last result
+./lancer.sh etat          # ready / working
+./lancer.sh quitter       # quits
+./lancer.sh diagnostic    # checks screenshot, permissions, Claude Code, modules...
 ```
 
-## Sécurité
+## Security
 
-Comme sous Windows, Claude est lancé avec des permissions limitées (`reglages.json`, généré au démarrage). Il peut seulement :
+As on Windows, Claude is started with limited permissions (`reglages.json`, generated at startup). It can only:
 
-- lire les captures d'écran ;
-- cliquer, taper au clavier et faire défiler, via `donnees/pc` (aucune autre commande n'est autorisée) ;
-- créer ou modifier des fichiers dans `~/Documents/Claude-Travail` (sauf dans `System-Context`, en lecture seule).
+- read the screenshots;
+- click, type and scroll, through `donnees/pc` (no other command is allowed);
+- create or edit files in `~/Documents/Claude-Travail` (except in `System-Context`, which is read-only).
 
-En plus :
+On top of that:
 
-- **`System-Context` est en lecture seule**, verrouillé trois fois : une règle `deny` dans `reglages.json` (`Edit(//...)`, qui couvre aussi Write), le hook `outils/garde.py` qui refuse toute écriture de fichier dans ce dossier (y compris via un lien symbolique ou `..`), et `pc corbeille` qui refuse d'y toucher (ainsi qu'à `Claude-Travail`, qui le contient).
-- **Rien n'est supprimé définitivement.** Le hook `outils/garde.py` bloque `rm`, `rmdir`, `unlink`, `shred`, `find -delete`, `dd`, `mkfs`, `diskutil erase`, `git clean`, `shutdown`, etc. Pour enlever un fichier, Claude le met à la corbeille (`pc corbeille`).
-- Sa consigne lui interdit d'acheter, de payer, d'envoyer des messages, de saisir des mots de passe ou des données bancaires, et de modifier les réglages du système. Le texte affiché à l'écran ne peut pas lever ces règles.
-- Pas d'accès au web (WebFetch et WebSearch sont refusés).
+- **`System-Context` is read-only**, locked three times: a `deny` rule in `reglages.json` (`Edit(//...)`, which also covers Write), the hook `outils/garde.py` that refuses any file write in that folder (including through a symbolic link or `..`), and `pc corbeille` that refuses to touch it (or `Claude-Travail`, which contains it).
+- **Nothing is ever permanently deleted.** The hook `outils/garde.py` blocks `rm`, `rmdir`, `unlink`, `shred`, `find -delete`, `dd`, `mkfs`, `diskutil erase`, `git clean`, `shutdown`, etc. To remove a file, Claude sends it to the trash (`pc corbeille`).
+- Its instructions forbid buying, paying, sending messages, entering passwords or bank details, and changing system settings. Text displayed on screen cannot override these rules.
+- No web access (WebFetch and WebSearch are denied).
 
-## Abonnement et consommation
+## Subscription and usage
 
-Identique à la version Windows : chaque tâche consomme ton quota Claude (un appel Haiku très court, puis Sonnet ou Opus ; les captures comptent beaucoup). Si la limite est atteinte, la tâche échoue avec un point rouge. Sans abonnement, Claude Code peut utiliser une clé API (`ANTHROPIC_API_KEY`, transmise à Claude).
+Same as the Windows version: each task uses your Claude quota (one very short Haiku call, then Sonnet or Opus; screenshots weigh a lot). If the limit is reached, the task fails with a red dot. Without a subscription, Claude Code can use an API key (`ANTHROPIC_API_KEY`, passed on to Claude).
 
 ## Structure
 
 ```
-claude_screen.py     appli (barre des menus / zone de notifications) : raccourcis, capture, tri du modèle, lancement de Claude
-installer.sh        installation : environnement Python, dépendances, ClaudeScreen.app (macOS) ou entrée de menu (Linux), démarrage auto
-lancer.sh           lance l'appli en arrière-plan, ou lui envoie une commande (declencher, consigne...)
-requirements.txt    dépendances Python
-outils/natif.py     appels système : écrans, capture, souris, clavier (XTest sous X11), fenêtre active, corbeille
-outils/raccourcis.py raccourcis globaux (Carbon sur macOS, écouteur X11 sous Linux)
-outils/fenetres.py  fenêtre « dernier résultat » et barre de consigne (Tk, processus séparé)
-outils/pc.py        outil de contrôle de l'ordinateur utilisé par Claude
-outils/garde.py     hook qui bloque les suppressions définitives et les écritures dans System-Context
-outils/pdf.py       lecture des PDF : texte extrait à l'avance, page en image (pypdfium2)
-outils/System-Context-README.md  mode d'emploi copié dans ~/Documents/Claude-Travail/System-Context au premier lancement
-donnees/            TOUT ce qui est généré, à part du programme (privé, ignoré par git) :
-  runs/               captures et réponses des tâches, effacées après 30 jours
-  journal.txt         journal de l'appli
-  contexte/           texte extrait des PDF de System-Context (refait si besoin)
-  reglages.json       permissions données à Claude (régénéré à chaque démarrage)
-  pc                  lanceur de outils/pc.py utilisé par Claude (régénéré à chaque démarrage)
-  modele.txt          choix du modèle (menu Modèle)
+claude_screen.py    app (menu bar / notification area): shortcuts, screenshot, model triage, starting Claude
+installer.sh        installation: Python environment, dependencies, ClaudeScreen.app (macOS) or menu entry (Linux), autostart
+lancer.sh           starts the app in the background, or sends it a command (declencher, consigne...)
+requirements.txt    Python dependencies
+outils/natif.py     system calls: screens, screenshot, mouse, keyboard (XTest on X11), active window, trash
+outils/raccourcis.py global shortcuts (Carbon on macOS, X11 listener on Linux)
+outils/fenetres.py  "last result" window and instruction bar (Tk, separate process)
+outils/pc.py        computer control tool used by Claude
+outils/garde.py     hook that blocks permanent deletions and writes to System-Context
+outils/pdf.py       PDF reading: text extracted in advance, page as an image (pypdfium2)
+outils/System-Context-README.md  user guide copied into ~/Documents/Claude-Travail/System-Context on first launch
+donnees/            EVERYTHING generated, kept apart from the program (private, ignored by git):
+  runs/               task screenshots and answers, deleted after 30 days
+  journal.txt         app log
+  contexte/           text extracted from the System-Context PDFs (rebuilt when needed)
+  reglages.json       permissions given to Claude (regenerated at each start)
+  pc                  launcher of outils/pc.py used by Claude (regenerated at each start)
+  modele.txt          model choice (Model menu)
   dernier-resultat.txt
-  icone.png           icône du menu des applications (Linux)
-  .venv/              environnement Python créé par installer.sh
-  cache/              fichiers compilés de Python
+  icone.png           applications menu icon (Linux)
+  .venv/              Python environment created by installer.sh
+  cache/              compiled Python files
 ```
 
-Correspondance avec la version Windows : `ClaudeScreen.ps1` → `claude_screen.py`, `Lancer.vbs` → `lancer.sh` / `ClaudeScreen.app`, `natif.cs` + `natif.ps1` → `natif.py` + `raccourcis.py`, `pc.ps1` → `pc.py`, `garde.ps1` → `garde.py`, `pdf.ps1` + `poppler.ps1` → `pdf.py` (pypdfium2, sans programme externe).
+Mapping to the Windows version: `ClaudeScreen.ps1` → `claude_screen.py`, `Lancer.vbs` → `lancer.sh` / `ClaudeScreen.app`, `natif.cs` + `natif.ps1` → `natif.py` + `raccourcis.py`, `pc.ps1` → `pc.py`, `garde.ps1` → `garde.py`, `pdf.ps1` + `poppler.ps1` → `pdf.py` (pypdfium2, no external program).
 
-## Limites
+## Limitations
 
-- Mêmes limites que la version Windows : Claude ne lance aucun programme à part l'outil de contrôle ; le glisser-déposer précis est lent ; pas de fichier `.pkt` ; un seul écran capturé (celui de la souris).
-- Wayland : voir le tableau ci-dessus.
-- macOS : si tu déplaces le dossier après l'installation, relance `./installer.sh` (l'appli et le démarrage auto contiennent le chemin). Sur macOS 15 et plus, le système peut redemander périodiquement l'autorisation d'enregistrement de l'écran.
+- Same limitations as the Windows version: Claude runs no program other than the control tool; precise drag and drop is slow; only one screen is captured (the one with the mouse).
+- Wayland: see the table above.
+- macOS: if you move the folder after installing, run `./installer.sh` again (the app and the autostart contain the path). On macOS 15 and later, the system may periodically ask again for the screen recording permission.

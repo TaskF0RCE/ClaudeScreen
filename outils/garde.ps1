@@ -1,10 +1,10 @@
-﻿# Hook PreToolUse : bloque toute suppression définitive dans les commandes de Claude,
-# et toute écriture dans le dossier de contexte (System-Context, en lecture seule).
+﻿# PreToolUse hook: blocks any permanent deletion in Claude's commands,
+# and any write to the context folder (System-Context, read-only).
 [Console]::InputEncoding = [Text.Encoding]::UTF8
 $entree = [Console]::In.ReadToEnd() | ConvertFrom-Json
 
-# Outils qui écrivent des fichiers (Edit, Write, MultiEdit, NotebookEdit) : rien dans System-Context.
-# Double sécurité avec la règle deny de reglages.json (dont la comparaison de chemins est peu fiable sous Windows).
+# Tools that write files (Edit, Write, MultiEdit, NotebookEdit): nothing inside System-Context.
+# Backs up the deny rule in reglages.json (its path matching is unreliable on Windows).
 $fichier = [string]$entree.tool_input.file_path
 if (-not $fichier) { $fichier = [string]$entree.tool_input.notebook_path }
 if ($fichier) {
@@ -14,7 +14,7 @@ if ($fichier) {
     $cible = [IO.Path]::GetFullPath([IO.Path]::Combine($base, $fichier)).Replace('/', '\').TrimEnd('\') + '\'
     $racine = [IO.Path]::GetFullPath($contexte).Replace('/', '\').TrimEnd('\') + '\'
     if ($cible.StartsWith($racine, [StringComparison]::OrdinalIgnoreCase)) {
-        [Console]::Error.WriteLine("Bloqué : $contexte est en lecture seule (documents et instructions de l'utilisateur). Tu peux lire ces fichiers, pas les modifier. Écris tes fichiers ailleurs dans le dossier courant.")
+        [Console]::Error.WriteLine("Blocked: $contexte is read-only (the user's documents and instructions). You can read these files, not modify them. Write your files elsewhere in the current folder.")
         exit 2
     }
     exit 0
@@ -34,7 +34,7 @@ $motifs = @(
 foreach ($motif in $motifs) {
     if ($commande -match $motif) {
         $pc = (Join-Path $PSScriptRoot 'pc.ps1').Replace('\', '/')
-        [Console]::Error.WriteLine("Bloqué : les suppressions définitives (et arrêts du PC) sont interdites. Pour enlever un fichier ou dossier, mets-le à la corbeille : $pc corbeille `"CHEMIN`". Si c'était du texte à taper qui a déclenché le blocage, écris-le dans un fichier et utilise ecrire-fichier.")
+        [Console]::Error.WriteLine("Blocked: permanent deletions (and shutting down the PC) are forbidden. To remove a file or folder, send it to the Recycle Bin: $pc corbeille `"PATH`". If text you meant to type triggered the block, write it to a file and use ecrire-fichier.")
         exit 2
     }
 }

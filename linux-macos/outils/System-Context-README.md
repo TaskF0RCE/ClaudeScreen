@@ -1,41 +1,41 @@
-# System-Context : le contexte permanent de Claude
+# System-Context: Claude's standing context
 
-Ce dossier sert à donner à Claude des informations en plus de ce qu'il voit à l'écran.
-Tout est facultatif : s'il est vide, ClaudeScreen fonctionne comme d'habitude.
+This folder gives Claude information on top of what it sees on screen.
+Everything is optional: if it is empty, ClaudeScreen works as usual.
 
-## instructions.txt : tes consignes permanentes
+## instructions.txt: your standing instructions
 
-Écris une consigne par ligne. Elles sont ajoutées à **chaque** tâche, tant que ClaudeScreen tourne.
-Les lignes qui commencent par `#` sont ignorées. Le fichier est relu à chaque tâche : tu peux le modifier à tout moment.
+Write one instruction per line. They are added to **every** task, as long as ClaudeScreen is running.
+Lines starting with `#` are ignored. The file is read again for each task: you can change it at any time.
 
-Exemples :
+Examples:
 
 ```
-Je suis en BTS SIO option SISR. Matériel Cisco, Packet Tracer 8.
-Pour les QCM : coche les réponses et clique sur Suivant, mais ne clique jamais sur « Terminer l'examen ».
-Réponds toujours en français.
+I'm a BTS SIO student, SISR track. Cisco hardware, Packet Tracer 8.
+For quizzes: tick the answers and click Next, but never click "Finish exam".
+Always answer in French.
 ```
 
-## Tes documents
+## Your documents
 
-Dépose ici tout ce qui peut aider : cours, prises de notes, documentation technique, énoncés, bibliographie, sources...
-Tu peux faire des sous-dossiers.
+Drop anything that can help here: courses, notes, technical documentation, assignments, bibliography, sources...
+You can create subfolders.
 
-À chaque tâche, Claude reçoit la liste de ces fichiers. Il les considère comme plus fiables que ses connaissances générales : il lit ceux qui concernent la tâche et s'appuie dessus pour répondre.
+For each task, Claude receives the list of these files. It treats them as more reliable than its general knowledge: it reads the ones related to the task and relies on them to answer.
 
-Formats lus le mieux : `.pdf`, `.txt`, `.md`, images (`.png`, `.jpg`), code, `.csv`, `.html`.
+Formats read best: `.pdf`, `.txt`, `.md`, images (`.png`, `.jpg`), code, `.csv`, `.html`.
 
-- **PDF** : ClaudeScreen en extrait le texte à l'avance (avec les numéros de page), ce qui est rapide et
-  économise ton quota. Pour un schéma ou un PDF scanné (sans texte), Claude regarde la page en image.
-- Un document Word ou PowerPoint ? Enregistre-le aussi en PDF.
+- **PDF**: ClaudeScreen extracts the text in advance (with page numbers), which is fast and
+  saves your quota. For a diagram or a scanned PDF (no text), Claude looks at the page as an image.
+- A Word or PowerPoint document? Save it as a PDF too.
 
-## Priorités
+## Priorities
 
-1. La consigne tapée dans la petite barre (Ctrl+Alt+Shift+C, ou ⌃⌥⇧C sur Mac), pour une seule tâche.
-2. `instructions.txt`, pour toutes les tâches.
-3. Ce que Claude devine à l'écran.
+1. The instruction typed in the small bar (Ctrl+Alt+Shift+C, or ⌃⌥⇧C on a Mac), for a single task.
+2. `instructions.txt`, for every task.
+3. What Claude guesses from the screen.
 
-## Sécurité
+## Security
 
-Claude peut **seulement lire** ce dossier : il ne peut rien y modifier, déplacer, mettre à la corbeille ni exécuter.
-Ce fichier README.md n'est pas envoyé à Claude ; il est recréé s'il est supprimé.
+Claude can **only read** this folder: it cannot modify, move, send to the Recycle Bin or run anything in it.
+This README.md file is not sent to Claude; it is recreated if deleted.

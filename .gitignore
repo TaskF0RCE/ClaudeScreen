@@ -1,15 +1,15 @@
-# Données privées et fichiers générés
+# Private data and generated files
 runs/
 journal.txt
 reglages.json
 modele.txt
 outils/*.dll
-# Poppler (lecture des PDF), téléchargé par outils/poppler.ps1, et texte extrait des PDF du contexte
+# Poppler (PDF reading), downloaded by outils/poppler.ps1, and text extracted from the context PDFs
 outils/poppler/
 outils/poppler-provisoire/
 cache-contexte/
 .DS_Store
 
-# Contexte personnel (instructions, cours...) : il vit dans Documents\Claude-Travail\System-Context.
-# Si quelqu'un en met une copie dans le dépôt, elle n'est jamais envoyée sur GitHub.
+# Personal context (instructions, course notes...) lives in Documents\Claude-Travail\System-Context.
+# If someone puts a copy in the repo, it is never pushed to GitHub.
 System-Context/
