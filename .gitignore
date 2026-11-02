@@ -4,3 +4,4 @@ journal.txt
 reglages.json
 modele.txt
 outils/*.dll
+.DS_Store

@@ -8,6 +8,8 @@ ClaudeScreen runs on top of the **[Claude Code](https://docs.claude.com/en/docs/
 
 > Personal project, unofficial, not affiliated with Anthropic.
 
+> **macOS and Linux:** a port lives in [`linux-macos/`](linux-macos/README.md).
+
 ## How it works
 
 1. Press **Ctrl+Alt+C** (or **Ctrl+Alt+Copilot key**).
@@ -25,6 +27,15 @@ ClaudeScreen runs on top of the **[Claude Code](https://docs.claude.com/en/docs/
 
 - **Esc** or clicking elsewhere cancels the task and deletes the screenshot.
 - **Enter** on an empty bar starts a normal task.
+
+### Standing context (optional)
+
+The `Documents\Claude-Travail\System-Context` folder is created on first launch.
+
+- **`instructions.txt`**: your standing instructions, one per line, added to every task. For example: "I'm a BTS SIO student", "always answer in French". Lines starting with `#` are ignored: as long as you write nothing else, the file does nothing.
+- **The other files in the folder** (courses, PDFs, assignments...): Claude gets their list with every task and reads the useful ones. It is not allowed to modify them.
+
+Priority order: the instruction typed in the bar, then `instructions.txt`, then what Claude infers from the screen.
 
 ### Packet Tracer
 
@@ -75,10 +86,17 @@ Requirements: Windows 10 or 11, with PowerShell 5.1 (built into Windows). Nothin
    irm https://claude.ai/install.ps1 | iex
    ```
 2. Log in once: run `%USERPROFILE%\.local\bin\claude.exe`, choose to log in with your Claude account, then type `/exit`.
-3. Copy this folder to `%LOCALAPPDATA%\ClaudeScreen` (or anywhere else: paths are relative to the script's folder).
-4. Double-click `Lancer.vbs`. The icon appears in the notification area.
+3. Copy this folder to `%USERPROFILE%\ClaudeEcran` (or anywhere else: paths are relative to the script's folder).
+4. Make it start with Windows and launch it right away:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\ClaudeEcran\Installer-Demarrage.ps1"
+   Start-ScheduledTask -TaskName ClaudeEcran
+   ```
+   The icon appears in the notification area. A scheduled task named "ClaudeEcran" restarts it 20 s after each logon, without any window. To remove it, add `-Retirer` to the first command.
 
-To start it with Windows: `Win+R` → `shell:startup`, then put a shortcut to `Lancer.vbs` in that folder.
+`Lancer.vbs` can also start it by hand (double-click), but Windows is phasing out VBScript: prefer the scheduled task.
+
+> **Don't put the folder in `AppData`** if you install it from Claude Desktop (Microsoft Store app). Windows then redirects the files to a private Claude Desktop folder that is invisible at startup, and you get "file not found".
 
 ## Shortcuts
 
@@ -101,7 +119,8 @@ Ctrl+Alt+C is global: while the app is running, other programs no longer receive
 
 ```
 ClaudeEcran.ps1     notification-area app: shortcuts, screenshot, model triage, starting Claude
-Lancer.vbs          starts the app without a window
+Lancer.vbs          starts the app without a window (by hand)
+Installer-Demarrage.ps1  installs or removes the startup scheduled task
 outils/natif.cs     Windows calls (DPI, screenshot, mouse, keyboard, global hotkeys, active window)
 outils/natif.ps1    compiles natif.cs into a DLL only once (the name changes when the source changes)
 outils/pc.ps1       PC control tool used by Claude
