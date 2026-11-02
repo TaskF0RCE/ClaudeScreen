@@ -1,4 +1,4 @@
-﻿# Hook PreToolUse : bloque toute suppression définitive dans les commandes de Claude.
+﻿# PreToolUse hook: blocks any permanent deletion in Claude's commands.
 [Console]::InputEncoding = [Text.Encoding]::UTF8
 $entree = [Console]::In.ReadToEnd() | ConvertFrom-Json
 $commande = [string]$entree.tool_input.command
@@ -15,7 +15,7 @@ $motifs = @(
 foreach ($motif in $motifs) {
     if ($commande -match $motif) {
         $pc = (Join-Path $PSScriptRoot 'pc.ps1').Replace('\', '/')
-        [Console]::Error.WriteLine("Bloqué : les suppressions définitives (et arrêts du PC) sont interdites. Pour enlever un fichier ou dossier, mets-le à la corbeille : $pc corbeille `"CHEMIN`". Si c'était du texte à taper qui a déclenché le blocage, écris-le dans un fichier et utilise ecrire-fichier.")
+        [Console]::Error.WriteLine("Blocked: permanent deletions (and shutting down the PC) are forbidden. To remove a file or folder, send it to the Recycle Bin: $pc corbeille `"PATH`". If text you meant to type triggered the block, write it to a file and use ecrire-fichier.")
         exit 2
     }
 }
