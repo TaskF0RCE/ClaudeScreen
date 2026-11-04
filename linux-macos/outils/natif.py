@@ -330,20 +330,70 @@ def _c():
     return _clavier
 
 
-def deplacer(x, y):
+def _poser(x, y):
+    """Puts the mouse at (x, y) at once, without waiting."""
     if _ydotool():
         _yd('mousemove', '--absolute', '-x', int(round(x)), '-y', int(round(y)))
     elif MAC:
         _s().position = (x, y)  # points: fractions are allowed
     else:
         _s().position = (int(round(x)), int(round(y)))  # X11 would truncate 299.99 to 299
+
+
+def _fichier_position():
+    """On Wayland the mouse position cannot be read: the last position we set is kept in the task folder."""
+    run = os.environ.get('ECRAN_RUN')
+    return os.path.join(run, 'mouse-position.txt') if run else None
+
+
+def _depart():
+    pos = position_souris()
+    if pos is None and _fichier_position():
+        try:
+            with open(_fichier_position()) as f:
+                x, y = f.read().split()
+                pos = (float(x), float(y))
+        except (OSError, ValueError):
+            pos = None
+    return pos
+
+
+def _retenir(x, y):
+    if SESSION == 'wayland' and _fichier_position():
+        try:
+            with open(_fichier_position(), 'w') as f:
+                f.write('%s %s' % (x, y))
+        except OSError:
+            pass
+
+
+def _glisser_vers(x, y, lenteur=1.0, courbe=1.0):
+    """Smooth mode: human-like movement from the current position (see humain.py)."""
+    import humain
+    depart = _depart()
+    if depart is None:
+        _poser(x, y)  # unknown position (first move on Wayland): jump, then glide the next times
+    else:
+        humain.glisser(depart, (x, y), _poser, lenteur, courbe)
+    _retenir(x, y)
+
+
+def deplacer(x, y, doux=False):
+    if doux:
+        import humain
+        _glisser_vers(x, y)
+        humain.pause_avant_clic()
+        return
+    _poser(x, y)
+    _retenir(x, y)
     time.sleep(0.03)
 
 
-def clic(x, y, droit=False, nombre=1):
-    deplacer(x, y)
+def clic(x, y, droit=False, nombre=1, doux=False):
+    deplacer(x, y, doux)
     if _ydotool():
-        _yd('click', '--repeat', nombre, '--next-delay', 60, '0xC1' if droit else '0xC0')
+        delai = int(_entre_doux(70, 110)) if doux else 60
+        _yd('click', '--repeat', nombre, '--next-delay', delai, '0xC1' if droit else '0xC0')
         return
     from pynput.mouse import Button
     # click(button, n): on macOS, this is what marks the 2nd click as a double-click.
@@ -351,13 +401,27 @@ def clic(x, y, droit=False, nombre=1):
     time.sleep(0.06)
 
 
-def glisser(x1, y1, x2, y2):
-    deplacer(x1, y1)
+def _entre_doux(a, b):
+    import humain
+    return humain.entre(a, b)
+
+
+def glisser(x1, y1, x2, y2, doux=False):
+    deplacer(x1, y1, doux)
+    if doux:
+        # Press, wait a little, drag slowly in an almost straight line, wait, release.
+        _bouton_gauche(True)
+        time.sleep(_entre_doux(0.08, 0.14))
+        _glisser_vers(x2, y2, lenteur=1.4, courbe=0.4)
+        time.sleep(_entre_doux(0.08, 0.14))
+        _bouton_gauche(False)
+        return
     if _ydotool():
         _yd('click', '0x40')
         for i in range(1, 21):
             _yd('mousemove', '--absolute', '-x', int(x1 + (x2 - x1) * i / 20), '-y', int(y1 + (y2 - y1) * i / 20))
         _yd('click', '0x80')
+        _retenir(x2, y2)
         return
     from pynput.mouse import Button
     s = _s()
@@ -369,10 +433,15 @@ def glisser(x1, y1, x2, y2):
     s.release(Button.left)
 
 
-def molette(x, y, crans):
-    """crans > 0: up; crans < 0: down (1 notch = 3 lines, like on Windows)."""
-    deplacer(x, y)
-    crans = int(crans)
+def _bouton_gauche(appui):
+    if _ydotool():
+        _yd('click', '0x40' if appui else '0x80')
+        return
+    from pynput.mouse import Button
+    (_s().press if appui else _s().release)(Button.left)
+
+
+def _cran(crans):
     if MAC:
         import Quartz
         ev = Quartz.CGEventCreateScrollWheelEvent(None, Quartz.kCGScrollEventUnitLine, 1, crans * 3)
@@ -381,6 +450,21 @@ def molette(x, y, crans):
         _yd('mousemove', '--wheel', '-x', 0, '-y', crans)
     else:
         _s().scroll(0, crans)
+
+
+def molette(x, y, crans, doux=False):
+    """crans > 0: up; crans < 0: down (1 notch = 3 lines, like on Windows)."""
+    deplacer(x, y, doux)
+    crans = int(crans)
+    if doux:
+        # One notch at a time, like a finger on the wheel.
+        sens = 1 if crans > 0 else -1
+        for i in range(abs(crans)):
+            if i:
+                time.sleep(_entre_doux(0.07, 0.13))
+            _cran(sens)
+        return
+    _cran(crans)
 
 
 # Accepted key names -> pynput name.
@@ -501,9 +585,9 @@ class _ClavierX11:
         self.restaurer.append(code)
         return code, False
 
-    def taper(self, texte):
+    def taper(self, texte, delais=None):
         try:
-            for car in texte:
+            for i, car in enumerate(texte):
                 code, maj = self._code(self._keysym(car))
                 if maj:
                     self._evenement(self.shift, True)
@@ -511,7 +595,7 @@ class _ClavierX11:
                 self._evenement(code, False)
                 if maj:
                     self._evenement(self.shift, False)
-                time.sleep(0.008)
+                time.sleep(delais[i] if delais else 0.008)
         finally:
             self._rendre()
 
@@ -585,18 +669,30 @@ def combo(noms):
         time.sleep(0.02)
 
 
-def taper(texte):
-    """Types the text (Unicode) where the cursor is; \\n = Enter, \\t = Tab."""
+def taper(texte, doux=False):
+    """Types the text (Unicode) where the cursor is; \\n = Enter, \\t = Tab.
+
+    doux (smooth mode): one key at a time at a human pace (see humain.py).
+    """
     texte = texte.replace('\r\n', '\n').replace('\r', '\n')
+    delais = None
+    if doux:
+        import humain
+        delais = humain.delais_frappe(texte)
     if _ydotool():
-        _yd('type', '--key-delay', 8, '--', texte)
+        if not delais:
+            _yd('type', '--key-delay', 8, '--', texte)
+            return
+        for car, delai in zip(texte, delais):
+            _yd('type', '--key-delay', 0, '--', car)
+            time.sleep(delai)
         return
     if not MAC:
-        _clavier_x11().taper(texte)
+        _clavier_x11().taper(texte, delais)
         return
     from pynput.keyboard import Key, KeyCode
     c = _c()
-    for ch in texte:
+    for i, ch in enumerate(texte):
         if ch == '\n':
             t = Key.enter
         elif ch == '\t':
@@ -605,7 +701,7 @@ def taper(texte):
             t = KeyCode.from_char(ch)
         c.press(t)
         c.release(t)
-        time.sleep(0.008)
+        time.sleep(delais[i] if delais else 0.008)
 
 
 # ---------------------------------------------------------------- files

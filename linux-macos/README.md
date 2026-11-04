@@ -44,9 +44,15 @@ The folder is in your Documents, outside the repository: its contents never end 
 | Green dot | Done: open "Last result" |
 | Red dot | Error: open "Last result" for the message |
 
-Menu: **Last result**, **Model** (Auto, Always Sonnet, Always Opus; the choice is remembered), **Open the Claude-Travail folder**, **Stop the current task**, **Quit**.
+Menu: **Last result**, **Model** (Auto, Always Sonnet, Always Opus; the choice is remembered), **Smooth mode** (see below), **Open the Claude-Travail folder**, **Stop the current task**, **Quit**.
 
 On macOS and with most Linux desktops (AppIndicator), clicking the icon opens the menu; "Last result" is the first entry.
+
+### Smooth mode
+
+Same as on Windows: with **Smooth mode** checked in the menu, the mouse glides to its target like a hand (slightly curved path, speeds up then slows down, about 0.2 s for a short hop and 0.75 s across the screen, short pause before clicking) and the text is typed one key at a time at a human pace (about 9 characters per second, longer pauses after a space, punctuation and Enter). A long text is typed faster so that one action never takes more than about 45 seconds. The choice is remembered (`data/smooth.txt`) and applies at once, even during a task. The settings are in `outils/humain.py`.
+
+On Wayland, the mouse position cannot be read: the first move of a task jumps to its target, the next ones glide from the last known position.
 
 ## Installation
 
@@ -156,6 +162,7 @@ outils/natif.py     system calls: screens, screenshot, mouse, keyboard (XTest on
 outils/raccourcis.py global shortcuts (Carbon on macOS, X11 listener on Linux)
 outils/fenetres.py  "last result" window and instruction bar (Tk, separate process)
 outils/pc.py        computer control tool used by Claude
+outils/humain.py    smooth mode: mouse path and typing pace that look human
 outils/garde.py     hook that blocks permanent deletions and writes to System-Context
 outils/pdf.py       PDF reading: text extracted in advance, page as an image (pypdfium2)
 outils/System-Context-README.md  user guide copied into ~/Documents/Claude-Travail/System-Context on first launch
@@ -169,6 +176,7 @@ data/               EVERYTHING the app generates, kept apart from the program (p
   log.txt             app log
   settings.json       permissions given to Claude (regenerated at each start)
   model.txt           model choice (Model menu)
+  smooth.txt          smooth mode: on or off (Smooth mode menu)
   last-result.txt     text shown by "Last result"
   pc                  launcher of outils/pc.py used by Claude (regenerated at each start)
   icon.png            applications menu icon (Linux)
@@ -178,7 +186,7 @@ data/               EVERYTHING the app generates, kept apart from the program (p
 
 Same `data/` layout as the Windows version. Coming from an older version (`donnees/` folder): run `./installer.sh` again, it moves your history into `data/` and rebuilds the Python environment.
 
-Mapping to the Windows version: `ClaudeScreen.ps1` → `claude_screen.py`, `Lancer.vbs` → `lancer.sh` / `ClaudeScreen.app`, `natif.cs` + `natif.ps1` → `natif.py` + `raccourcis.py`, `pc.ps1` → `pc.py`, `garde.ps1` → `garde.py`, `pdf.ps1` + `poppler.ps1` → `pdf.py` (pypdfium2, no external program).
+Mapping to the Windows version: `ClaudeScreen.ps1` → `claude_screen.py`, `Lancer.vbs` → `lancer.sh` / `ClaudeScreen.app`, `natif.cs` + `natif.ps1` → `natif.py` + `raccourcis.py`, `pc.ps1` → `pc.py`, smooth mode of `natif.cs` → `humain.py`, `garde.ps1` → `garde.py`, `pdf.ps1` + `poppler.ps1` → `pdf.py` (pypdfium2, no external program).
 
 ## Limitations
 
