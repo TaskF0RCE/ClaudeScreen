@@ -131,6 +131,9 @@ def migrer(ancien, nouveau):
     for ligne in lire(ancien).splitlines():
         if ligne.lstrip().startswith('#'):
             reste = ligne.lstrip()[1:].strip().replace('--', '- -')
+            # The old templates said that # lines are ignored: no longer true in instructions.md.
+            reste = re.sub(r'^(Lines starting with # are ignored|Les lignes qui commencent par # sont ignor.es)\b.*$',
+                           'Comments like this one are ignored. Write your instructions below, one per line.', reste)
             ligne = '<!-- %s -->' % reste if reste else ''
         lignes.append(ligne.rstrip())
     ecrire(nouveau, _avec_section_vide('\n'.join(lignes)))
