@@ -32,12 +32,12 @@ ClaudeScreen runs on top of the **[Claude Code](https://docs.claude.com/en/docs/
 
 The `Documents\Claude-Travail\System-Context` folder is created on first launch, with a `README.md` that explains how to use it.
 
-- **`instructions.txt`**: your standing instructions, one per line, added to every task while the app is running. For example: "I'm a BTS SIO student", "never click Finish exam", "always answer in French". Lines starting with `#` are ignored: as long as you write nothing else, the file does nothing. It is re-read for every task: a change applies right away, without restarting the app.
+- **`instructions.md`**: your standing instructions, one per line, added to every task while the app is running. For example: "I'm a BTS SIO student", "never click Finish exam", "always answer in French". Write them **above the dashed line** (`---------------------`): that part is yours and is never changed. Comments (`<!-- ... -->`) are ignored: as long as you write nothing else, the file does nothing. It is re-read for every task: a change applies right away, without restarting the app. Below the line, Claude writes its notes when [Persistent memory](#persistent-memory) is on. An `instructions.txt` from an older version is converted automatically (its `#` lines become comments).
 - **The other files in the folder**, subfolders included (courses, notes, technical documentation, assignments, bibliography, sources...): Claude gets their list with every task. It treats them as more reliable than its general knowledge: it reads the ones related to the task and relies on them first. Best-read formats: `.pdf`, `.txt`, `.md`, images, code, `.csv`, `.html` (for a Word or PowerPoint file, also save it as PDF). Hidden or temporary files (`desktop.ini`, `~$...`) are ignored, as is the folder's `README.md`.
 - **PDFs**: the app extracts their text in advance, page by page, into `data\context-cache\` (redone only when the PDF changes). Claude reads that text, which is fast and saves quota, and can search it. For a diagram or a scanned PDF (no text), it shows the page as an image with the `page-pdf` action. All of this uses [Poppler](https://poppler.freedesktop.org/) (see [Installation](#installation)).
 - **Read-only**: Claude can read this folder, but cannot change, move, send to the Recycle Bin or run anything in it (see [Security](#security)).
 
-Priority order: the instruction typed in the bar (for one task), then `instructions.txt` (for every task), then what Claude infers from the screen.
+Priority order: the instruction typed in the bar (for one task), then `instructions.md` (for every task), then what Claude infers from the screen.
 
 The folder is in your Documents, outside the repository: your courses and instructions never end up on GitHub.
 
@@ -58,6 +58,7 @@ Right-click the icon:
 - **Last result**
 - **Model**: Auto, Always Sonnet or Always Opus (the choice is remembered)
 - **Smooth mode**: the mouse glides and the text is typed at a human pace (see below; the choice is remembered)
+- **Persistent memory**: Claude keeps notes from one task to the next (see below; the choice is remembered)
 - **Open the Claude-Travail folder**
 - **Stop the current task**
 - **Quit**
@@ -70,6 +71,25 @@ By default, the mouse jumps straight to its target and text appears in a flash. 
 - **Typing**: one key at a time, about 9 characters per second with irregular gaps, a longer pause after a space, punctuation and Enter (which also gives a console such as Packet Tracer time to answer). A long text (a whole configuration file, for example) is typed faster so that one action never takes more than about 45 seconds.
 
 The choice is remembered (`data/smooth.txt`) and applies at once, even in the middle of a task. Tasks take a bit longer in this mode.
+
+### Persistent memory
+
+By default, each task starts from scratch. Check **Persistent memory** in the icon menu to open a kind of mini session: Claude saves short notes during a task (what it learned about you, the course or the exercise, how far it got) and gets them back at the next tasks. For example, "questions 1 to 10 done" or "the course is OSPF, chapter 3".
+
+```
+I'm a BTS SIO student.              <- your instructions: never changed
+Always answer in French.
+
+---------------------
+<!-- Claude's notes (persistent memory): erased when the mode is turned off. -->
+- The quiz is about OSPF, chapter 3  <- Claude's notes
+- Questions 1 to 10 done
+```
+
+- The notes go into `System-Context\instructions.md`, **below the dashed line**. You can read them, or delete one by hand.
+- **Unchecking the mode erases the notes.** Everything above the line (your instructions) stays exactly as it is. If you removed the line yourself, nothing is erased; it is added back the next time you check the mode.
+- Claude still cannot edit the folder: it adds a note only through the `memoire` action of `outils/pc.ps1`, which writes below the line and nowhere else, and refuses when the mode is off. One note is at most 300 characters, and all notes together at most 4000.
+- The choice is remembered (`data/memory.txt`): the notes stay after a restart of the app as long as the mode is checked.
 
 ### Stopping a task
 
@@ -87,7 +107,7 @@ Claude is started with limited permissions (`data\settings.json`, generated at s
 
 On top of that:
 
-- **`System-Context` is read-only**, locked three times: a `deny` rule in `data\settings.json` (`Edit(...)`, which also covers Write), the hook `outils/garde.ps1` that refuses any file write in that folder, and `pc.ps1 corbeille` that refuses to touch it (or `Claude-Travail`, which contains it).
+- **`System-Context` is read-only**, locked three times: a `deny` rule in `data\settings.json` (`Edit(...)`, which also covers Write), the hook `outils/garde.ps1` that refuses any file write in that folder, and `pc.ps1 corbeille` that refuses to touch it (or `Claude-Travail`, which contains it). The only write allowed is `pc.ps1 memoire`, when [Persistent memory](#persistent-memory) is on: it adds a note below the dashed line of `instructions.md`, and nothing else.
 - **Nothing is ever permanently deleted.** The hook `outils/garde.ps1` blocks `Remove-Item`, `del`, `rm`, `format`, etc. To remove a file, Claude sends it to the Recycle Bin (`pc.ps1 corbeille`).
 - Its instructions forbid buying, paying, sending messages, entering passwords or bank details, and changing Windows settings. Text displayed on screen cannot override these rules.
 - No web access (WebFetch and WebSearch are denied).
@@ -143,6 +163,7 @@ outils/natif.ps1    compiles natif.cs into a DLL only once (the name changes whe
 outils/pc.ps1       PC control tool used by Claude
 outils/garde.ps1    hook that blocks permanent deletions and writes to System-Context
 outils/pdf.ps1      PDF reading: text extracted in advance, page as an image (with Poppler)
+outils/memoire.ps1  instructions.md and persistent memory (your part above the dashed line, Claude's notes below)
 outils/poppler.ps1  downloads Poppler (pinned version, verified hash) into outils/poppler (ignored by git)
 outils/System-Context-README.md  user guide copied into Documents\Claude-Travail\System-Context on first launch
 data/               EVERYTHING the app generates, kept apart from the program (private, ignored by git):
@@ -156,6 +177,7 @@ data/               EVERYTHING the app generates, kept apart from the program (p
   settings.json       permissions given to Claude (regenerated at each start)
   model.txt           model choice (Model menu)
   smooth.txt          smooth mode: on or off (Smooth mode menu)
+  memory.txt          persistent memory: on or off (Persistent memory menu)
 ```
 
 The macOS/Linux version uses exactly the same `data/` layout. Older versions kept these files at the root of the folder (`runs/`, `journal.txt`...): they are moved into `data/` automatically at startup.
