@@ -121,6 +121,8 @@ function Convert-AncienneInstruction([string]$ancien, [string]$nouveau) {
     $lignes = foreach ($ligne in ((Read-FichierMemoire $ancien) -split '\r?\n')) {
         if ($ligne.TrimStart().StartsWith('#')) {
             $reste = $ligne.TrimStart().Substring(1).Trim().Replace('--', '- -')
+            # The old templates said that # lines are ignored: no longer true in instructions.md.
+            $reste = $reste -creplace '^(Lines starting with # are ignored|Les lignes qui commencent par # sont ignor.es)\b.*$', 'Comments like this one are ignored. Write your instructions below, one per line.'
             if ($reste) { "<!-- $reste -->" } else { '' }
         } else { $ligne.TrimEnd() }
     }
