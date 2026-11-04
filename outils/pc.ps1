@@ -6,6 +6,7 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'natif.ps1')
 . (Join-Path $PSScriptRoot 'pdf.ps1')
+. (Join-Path $PSScriptRoot 'memoire.ps1')
 [ClaudeScreen.Natif]::DpiAware()
 # Smooth mode (icon menu): human-like mouse moves and typing. Read at every action, so it applies at once.
 $fichierSmooth = Join-Path $PSScriptRoot '..\data\smooth.txt'
@@ -95,6 +96,16 @@ switch ($Action.ToLower()) {
         $numero = [int]$Valeurs[-1]
         $pages = Export-PdfPage (Resolve-Path -LiteralPath $pdf).Path $numero $png
         "Page $numero/$($pages): $png (read it with Read)"
+    }
+    'memoire' {
+        # memoire "note": persistent memory (icon menu). Only appends below the separator of
+        # System-Context\instructions.md: the user's part above it is never touched.
+        if (-not (Test-MemoireActive (Join-Path $PSScriptRoot '..\data\memory.txt'))) {
+            throw 'Refused: persistent memory is off (the user turns it on in the icon menu).'
+        }
+        if (-not $env:ECRAN_CONTEXTE) { throw 'ECRAN_CONTEXTE is not set: this script must be started by ClaudeScreen.' }
+        Add-NoteMemoire (Join-Path $env:ECRAN_CONTEXTE 'instructions.md') ($Valeurs -join ' ')
+        'Note saved.'
     }
     default { throw "Unknown action: $Action" }
 }
