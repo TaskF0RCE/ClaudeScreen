@@ -621,6 +621,7 @@ class Appli:
     def processus_fini(self):
         code = self.proc.returncode
         self.proc = None
+        duree = int(round(time.monotonic() - self.debut))  # triage included
 
         if self.arret:
             self.dernier = 'Task stopped (%s).\n\n%s' % (self.arret, self.lire_run(os.path.join('responses', 'task.txt')))
@@ -649,15 +650,15 @@ class Appli:
                 except OSError as ex:
                     noter('Persistent memory: %s' % ex)
         if code == 0 and reponse:
-            self.dernier = '[%s] %s' % (self.modele, reponse)
+            self.dernier = '[%s, %d s] %s' % (self.modele, duree, reponse)
             self.mettre_icone(ICONE_FINI)
             self.infobulle('done: ' + reponse)
         else:
-            self.dernier = ('The task failed (code %s, %s).\n%s\n%s' % (
-                code, self.modele, self.lire_run(os.path.join('responses', 'task-errors.txt')), reponse)).strip()
+            self.dernier = ('The task failed (code %s, %s, %d s).\n%s\n%s' % (
+                code, self.modele, duree, self.lire_run(os.path.join('responses', 'task-errors.txt')), reponse)).strip()
             self.mettre_icone(ICONE_ERREUR)
             self.infobulle('error (click to see)')
-        noter('Task finished (code %s): %s' % (code, self.run))
+        noter('Task finished (code %s, %d s): %s' % (code, duree, self.run))
         self.nettoyer_runs()
 
     # -------------------------------------------------- control loop (separate thread)

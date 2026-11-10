@@ -200,4 +200,5 @@ Mapping to the Windows version: `ClaudeScreen.ps1` → `claude_screen.py`, `Lanc
 
 - Same limitations as the Windows version: Claude runs no program other than the control tool; precise mouse work (cabling in Packet Tracer, drag and drop) is slow, and Claude only cables when you ask; only one screen is captured (the one with the mouse).
 - Wayland: see the table above.
+- The Windows **Fast control (MCP)** mode is not ported yet: here Claude runs one action per call through `data/pc`. The result and the log show how long each task took.
 - macOS: if you move the folder after installing, run `./installer.sh` again (the app and the autostart contain the path). On macOS 15 and later, the system may periodically ask again for the screen recording permission.

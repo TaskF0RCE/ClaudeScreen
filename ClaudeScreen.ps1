@@ -10,13 +10,14 @@ $Outils = Join-Path $Racine 'outils'
 . (Join-Path $Outils 'memoire.ps1')
 # Everything the app generates goes to data/ (same layout as the macOS/Linux version):
 #   data/runs/<date>/  one folder per task: images/, prompts/, responses/ + screen.json
-#   data/context-cache/, data/log.txt, data/settings.json, data/model.txt, data/smooth.txt, data/memory.txt
+#   data/context-cache/, data/log.txt, data/settings.json, data/model.txt, data/smooth.txt, data/memory.txt, data/mcp.txt
 $Donnees = Join-Path $Racine 'data'
 $Runs = Join-Path $Donnees 'runs'
 $Journal = Join-Path $Donnees 'log.txt'
 $FichierModele = Join-Path $Donnees 'model.txt'
 $FichierSmooth = Join-Path $Donnees 'smooth.txt'   # smooth mode: 'on' or 'off', read by pc.ps1 at every action
 $FichierMemoire = Join-Path $Donnees 'memory.txt'  # persistent memory: 'on' or 'off'
+$FichierMcp = Join-Path $Donnees 'mcp.txt'         # fast control (MCP server instead of pc.ps1): 'on' or 'off'
 $CacheContexte = Join-Path $Donnees 'context-cache'   # text extracted from the context PDFs
 # Name shown in the notification area (tooltip, menu, result window) and name of the work folder in Documents.
 $Nom = 'Claude-Work'
@@ -104,7 +105,7 @@ $garde = (Join-Path $Outils 'garde.ps1').Replace('\', '/')
 @{
     permissions = @{
         defaultMode = 'acceptEdits'
-        allow       = @('Read', 'Glob', 'Grep', "PowerShell($PcCommande *)")
+        allow       = @('Read', 'Glob', 'Grep', "PowerShell($PcCommande *)", 'mcp__pc')
         deny        = @('WebFetch', 'WebSearch', "Edit($RegleContexte)")
     }
     hooks = @{
@@ -191,6 +192,7 @@ $script:Debut = $null
 $script:Modele = $null
 $script:Arret = $null       # reason for the requested stop, otherwise $null
 $script:MemoireTache = $false   # persistent memory was on when the current task started
+$script:McpTache = $false       # fast control was on when the current task started
 $script:Image = 0
 $script:ChoixModele = 'auto'
 if (Test-Path $FichierModele) { $script:ChoixModele = (Get-Content $FichierModele -Raw).Trim() }
@@ -199,8 +201,11 @@ if (Test-Path $FichierModele) { $script:ChoixModele = (Get-Content $FichierModel
 # and loading them made each call slower and heavier (about 4 times more tokens for the triage).
 $OptionsClaude = '--strict-mcp-config --disable-slash-commands'
 # Triage only reads the screenshot. The task gets the file tools and PowerShell (for pc.ps1), not Bash.
+# With fast control, no terminal at all: the actions go through the "pc" tool of outils/mcp.ps1.
 $OptionsTri = '--tools Read --effort low'
 $OptionsTache = '--tools Read,Write,Edit,Glob,Grep,PowerShell'
+$OptionsTacheMcp = '--tools Read,Write,Edit,Glob,Grep'
+$McpScript = Join-Path $Outils 'mcp.ps1'
 
 function Demarrer-Claude([string]$modele, [string]$nom, [string]$options) {
     $run = $script:Run
@@ -257,6 +262,7 @@ function Lancer-Tache($capture, [string]$instruction) {
         $script:Run = $run
         $script:Debut = Get-Date
         $script:Arret = $null
+        $script:McpTache = $script:Mcp
         $precision = if ($instruction) { "`nUser instruction for this task (takes priority over everything else): $instruction`n" } else { '' }
 
         # Optional context from System-Context: instructions.md (user's part, without comments) + list of documents.
@@ -315,6 +321,19 @@ $liste
 "@
         }
 
+        if ($script:McpTache) {
+            $outil = @"
+PC control tool: the "pc" tool (mcp__pc__pc). Give it "actions": the list of actions to run in order (it stops at the first error), for example ["clic 412 300", "ecrire Paris", "touche enter"]. Each call takes time: put in one call all the actions that need no look at the screen in between (several answers to tick, a field to click then fill, a text then enter). The result ends with a new screenshot taken after the last action: look at it instead of asking for another one, and pass "capture": false only when you do not need it. There is no terminal.
+"@
+            $image = 'the image comes back in the result'
+        } else {
+            $outil = @"
+PC control tool: run EXACTLY this command with the PowerShell tool (no quotes around the path, nothing before or after, one action per command):
+  $PcCommande <action> [arguments]
+Any other command is refused.
+"@
+            $image = 'prints the path of the PNG to read with Read'
+        }
         $consigne = @"
 You were started by a keyboard shortcut: the user just pressed Ctrl+Alt+C so that you do the task visible on their screen. Nobody can answer you while you work: do not ask any questions.
 
@@ -330,11 +349,9 @@ $instructions$memoire$documents$precision
    - If another window comes to the front or the user takes back control, stop so you don't type into their window, and say how far you got.
 3. Your final answer: plain text, in French, short. What you did and/or the answer, and the path of any files created. It is shown when the user clicks the icon.
 
-PC control tool: run EXACTLY this command with the PowerShell tool (no quotes around the path, nothing before or after, one action per command):
-  $PcCommande <action> [arguments]
-Any other command is refused.
+$outil
 Actions:
-  capture                 new screenshot of the same screen; prints the path of the PNG to read with Read
+  capture                 new screenshot of the same screen; $image
   zoom X Y W H            enlarged image of an area (to read small text; do not click using its coordinates)
   clic X Y | doubleclic X Y | clicdroit X Y | survol X Y      (click | double-click | right-click | hover)
   glisser X1 Y1 X2 Y2     drag: press on point 1, move, release on point 2 (to move an item, or to link two items where links are drawn by dragging)
@@ -345,7 +362,7 @@ Actions:
   touche COMBO            key combo, e.g. enter, tab, ctrl+a, ctrl+s, pagedown, f5
   attendre MS             wait
   corbeille PATH          sends a file or folder to the Recycle Bin
-  page-pdf PATH N         image of page N of a PDF (diagrams, scanned pages); prints the path of the PNG to read with Read
+  page-pdf PATH N         image of page N of a PDF (diagrams, scanned pages); $image
 X Y coordinates are in screenshot pixels (not real screen pixels); the conversion is automatic. Do not touch the taskbar.
 
 Strict rules:
@@ -384,9 +401,21 @@ function Lancer-Travail([string]$modele) {
     try {
         $script:Modele = $modele
         $script:Etape = 'tache'
-        Demarrer-Claude $modele 'task' $OptionsTache
+        $options = $OptionsTache
+        if ($script:McpTache) {
+            # One MCP server for this task: Claude Code starts outils/mcp.ps1 and stops it at the end.
+            $config = Join-Path $script:Run 'mcp.json'
+            $json = @{ mcpServers = @{ pc = @{
+                command = 'powershell.exe'
+                args    = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $McpScript)
+                env     = @{ ECRAN_RUN = $script:Run; ECRAN_CONTEXTE = $Contexte }
+            } } } | ConvertTo-Json -Depth 5
+            [IO.File]::WriteAllText($config, $json, (New-Object System.Text.UTF8Encoding $false))
+            $options = "$OptionsTacheMcp --mcp-config `"$config`""
+        }
+        Demarrer-Claude $modele 'task' $options
         Infobulle "working ($modele)..."
-        Noter "Model: $modele"
+        Noter ("Model: $modele" + $(if ($script:McpTache) { ', fast control' } else { '' }))
     } catch {
         Echec "Could not start the task: $($_.Exception.Message)"
     }
@@ -471,6 +500,7 @@ function Processus-Fini {
     $code = $script:Proc.ExitCode
     $script:Proc.Dispose()
     $script:Proc = $null
+    $duree = [int][math]::Round(((Get-Date) - $script:Debut).TotalSeconds)   # triage included
 
     if ($script:Arret) {
         $script:Dernier = "Task stopped ($script:Arret).`n`n" + (Lire-Run 'responses\task.txt')
@@ -503,13 +533,13 @@ function Processus-Fini {
         }
     }
     if ($code -eq 0 -and $reponse) {
-        $script:Dernier = "[$script:Modele] $reponse"
+        $script:Dernier = "[$script:Modele, $duree s] $reponse"
         $icone.Icon = $IconeFini; Infobulle ('done: ' + $reponse)
     } else {
-        $script:Dernier = "The task failed (code $code, $script:Modele).`n$(Lire-Run 'responses\task-errors.txt')`n$reponse".Trim()
+        $script:Dernier = "The task failed (code $code, $script:Modele, $duree s).`n$(Lire-Run 'responses\task-errors.txt')`n$reponse".Trim()
         $icone.Icon = $IconeErreur; Infobulle 'error (click to see)'
     }
-    Noter "Task finished (code $code): $script:Run"
+    Noter "Task finished (code $code, $duree s): $script:Run"
     Nettoyer-Runs
 }
 
@@ -575,6 +605,19 @@ $menuMemoire.add_Click({
     } catch { Noter "Persistent memory: $($_.Exception.Message)" }
 })
 $menu.Items.Add($menuMemoire) | Out-Null
+# Fast control: Claude drives the PC through an MCP server (outils/mcp.ps1) kept open during the task,
+# instead of starting pc.ps1 for every action. Applies to the next task.
+$script:Mcp = (Test-Path $FichierMcp) -and ("$(Get-Content $FichierMcp -Raw)".Trim() -eq 'on')
+$menuMcp = New-Object System.Windows.Forms.ToolStripMenuItem 'Fast control (MCP)'
+$menuMcp.CheckOnClick = $true
+$menuMcp.Checked = $script:Mcp
+$menuMcp.add_Click({
+    $script:Mcp = $menuMcp.Checked
+    $etat = if ($script:Mcp) { 'on' } else { 'off' }
+    Set-Content -Path $FichierMcp -Value $etat -Encoding ASCII
+    Noter "Fast control: $etat"
+})
+$menu.Items.Add($menuMcp) | Out-Null
 $menu.Items.Add("Open the $Nom folder", $null, { Start-Process explorer.exe $Travail }) | Out-Null
 $menu.Items.Add('Stop the current task', $null, { Arreter-Tache 'menu' }) | Out-Null
 $menu.Items.Add('-') | Out-Null
