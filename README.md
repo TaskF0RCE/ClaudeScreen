@@ -44,11 +44,13 @@ Priority order: the instruction typed in the bar (for one task), then `instructi
 
 The folder is in your Documents, outside the repository: your courses and instructions never end up on GitHub.
 
-### Packet Tracer
+### Ready-made context for some software
 
-You place the devices. Claude never adds, moves or deletes one: it configures each device through its **CLI** tab (one command file per device, typed into the console) and checks with `show` commands. For PCs, it uses Desktop > IP Configuration.
+The instructions built into the app stay general: they work for any task. Know-how for one piece of software goes into a context file, which you add only if you use that software. The `examples` folder of the repository has some; copy the ones you need into `System-Context`. Claude reads them when the task is in that software.
 
-**Cabling**: by default Claude leaves the cables alone. Ask for it with the instruction bar, for example "connect R1 to R2 with a crossover cable" or "cable the topology like the diagram". Claude then picks the cable in the Connections bar, clicks the first device and its port, then the second device and its port, and takes a screenshot to check the link. With "Automatically Choose Connection Type", both clicks are done in one go by the `relier` action. It works the same way in normal and smooth mode. This is new and slower than cabling by hand: check the ports it picked.
+- **`examples/packet-tracer.md`**: you place the devices and Claude never adds, moves or deletes one. It configures each device through its **CLI** tab (one command file per device, typed into the console) and checks with `show` commands; for PCs, it uses Desktop > IP Configuration. **Cabling**: only when you ask for it, for example "connect R1 to R2 with a crossover cable". Claude picks the cable in the Connections bar, clicks the first device and its port, then the second device and its port, and takes a screenshot to check the link. With "Automatically Choose Connection Type", the `relier` action does both clicks in one go. This is slower than cabling by hand: check the ports it picked.
+
+You can write your own for other software in the same way (a `.md` file with what Claude should do and avoid in it), and edit the copies freely: the app never changes them.
 
 ### The icon
 
@@ -188,6 +190,7 @@ outils/pdf.ps1      PDF reading: text extracted in advance, page as an image (wi
 outils/memoire.ps1  instructions.md (yours, never changed) and memory.md (Claude's notes, persistent memory)
 outils/poppler.ps1  downloads Poppler (pinned version, verified hash) into outils/poppler (ignored by git)
 outils/System-Context-README.md  user guide copied into Documents\Claude-Work\System-Context (kept up to date at each start)
+examples/           ready-made context files for some software (Packet Tracer...), to copy into System-Context if you use it
 data/               EVERYTHING the app generates, kept apart from the program (private, ignored by git):
   runs/<date>/        one folder per task, deleted after 30 days:
     images/             screenshot-01.png, zoom-01.png, pdf-01.png...
@@ -213,7 +216,7 @@ Automatic cleanup: at startup and then every 6 hours, the app permanently delete
 ## Limitations
 
 - Claude cannot run any program or command other than the control tool. For example, it cannot generate an image with Python, but it can write a diagram in SVG or HTML.
-- Precise mouse work (cables in Packet Tracer, drag and drop) is slow and not always reliable: cabling a large topology by hand is faster, and Claude only cables when you ask.
+- Precise mouse work (cables in Packet Tracer, drag and drop) is slow and not always reliable: cabling a large topology by hand is faster.
 - The Claude Code CLI must be up to date (`claude update`): the app uses recent options (`--tools`, `--effort`, `--strict-mcp-config`). With an old version, tasks fail with "unknown option".
 - For websites, the Claude in Chrome extension is often more reliable: it reads the page content directly instead of going through screenshots.
 - Only one screen is captured: the one the mouse is on when you press the shortcut.

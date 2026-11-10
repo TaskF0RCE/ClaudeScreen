@@ -31,6 +31,7 @@ Like on Windows, the **`~/Documents/Claude-Work/System-Context`** folder is crea
 - **The other files**, subfolders included (courses, notes, technical documentation, assignments, bibliography, sources...): Claude gets their list with every task, treats them as more reliable than its general knowledge, reads the ones related to the task and relies on them first. Best-read formats: `.pdf`, `.txt`, `.md`, images, code, `.csv`, `.html` (for a Word or Keynote file, also export it as PDF). Hidden or temporary files (`.DS_Store`, `~$...`) are ignored, as is the folder's `README.md`.
 - **PDFs**: the app extracts their text in advance, page by page, into `data/context-cache/` (at startup, then only when a PDF changes), with the `pypdfium2` Python library: nothing extra to install, no need for `pdftoppm`. Claude reads that text, which is fast and saves quota, and can search it. For a diagram or a scanned PDF (no text), it shows the page as an image with the `page-pdf` action. If you installed ClaudeScreen before this feature, run `./installer.sh` again to add `pypdfium2`.
 - **Read-only**: Claude can read this folder, but cannot change, move, send to the trash or run anything in it.
+- **Ready-made context**: the `examples` folder at the root of the repository has context files for some software (`packet-tracer.md`...). Copy the ones you need into `System-Context`, as explained in the [Windows README](../README.md#ready-made-context-for-some-software).
 
 Priority order: the instruction from the bar (for one task), then `instructions.md` (for every task), then what Claude infers from the screen.
 
@@ -198,7 +199,7 @@ Mapping to the Windows version: `ClaudeScreen.ps1` → `claude_screen.py`, `Lanc
 
 ## Limitations
 
-- Same limitations as the Windows version: Claude runs no program other than the control tool; precise mouse work (cabling in Packet Tracer, drag and drop) is slow, and Claude only cables when you ask; only one screen is captured (the one with the mouse).
+- Same limitations as the Windows version: Claude runs no program other than the control tool; precise mouse work (cabling in Packet Tracer, drag and drop) is slow; only one screen is captured (the one with the mouse).
 - Wayland: see the table above.
 - The Windows **Fast control (MCP)** mode is not ported yet: here Claude runs one action per call through `data/pc`. The result and the log show how long each task took.
 - macOS: if you move the folder after installing, run `./installer.sh` again (the app and the autostart contain the path). On macOS 15 and later, the system may periodically ask again for the screen recording permission.

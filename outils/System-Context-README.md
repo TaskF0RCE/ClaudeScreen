@@ -39,6 +39,8 @@ Formats read best: `.pdf`, `.txt`, `.md`, images (`.png`, `.jpg`), code, `.csv`,
 - **PDF**: ClaudeScreen extracts the text in advance (with page numbers), which is fast and
   saves your quota. For a diagram or a scanned PDF (no text), Claude looks at the page as an image.
 - A Word or PowerPoint document? Save it as a PDF too.
+- Know-how for a piece of software (what Claude should do and avoid in it) also goes here, as a `.md` file.
+  The `examples` folder of ClaudeScreen has ready-made ones (`packet-tracer.md`...): copy the ones you use here.
 
 ## Priorities
 

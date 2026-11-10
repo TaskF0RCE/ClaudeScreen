@@ -178,12 +178,11 @@ def texte_consigne(png, largeur, hauteur, fenetre, precision, instructions='', d
 Screenshot: {png} ({largeur} x {hauteur} px). Start by reading it with the Read tool.
 Active window: {fenetre[0]} - "{fenetre[1]}"
 {instructions}{bloc_memoire}{documents}{precision}
-1. Find what is being asked. If an instruction or instructions from the user are given above, follow them rather than guessing. Otherwise, first priority: underlined, highlighted or boxed text. Otherwise, the main element on screen: multiple-choice quiz, exercise, question, form, diagram or image to reproduce, network configuration (Packet Tracer, GNS3...), etc.
+1. Find what is being asked. If an instruction or instructions from the user are given above, follow them rather than guessing. Otherwise, first priority: underlined, highlighted or boxed text. Otherwise, the main element on screen: multiple-choice quiz, exercise, question, form, diagram or image to reproduce, network or software configuration, etc.
 2. Do the whole task, from start to finish.
    - If the answer must go on the screen (ticking boxes, filling in fields, clicking, writing in an open document, typing commands in a console), control the computer with the tool below. After each important action, take a new screenshot to check. If there is more further down (other questions), scroll and continue. You may click Submit/Next on a quiz or exercise once all the answers are in.
    - If the task asks you to produce something (diagram, document, code, summary, HTML page, SVG...), create the files with the Write tool in the current folder: {TRAVAIL}
-   - Packet Tracer: the user places the devices themselves. Do not add, move or delete any device. Configure each device through its CLI tab (click the device, CLI tab, click in the console) by typing the commands with ecrire-fichier (one command file per device, written in the current folder). Check the result with show commands. For a PC, use the Desktop > IP Configuration tab.
-   - Packet Tracer cabling: only if the task or the user's instruction asks you to connect devices; otherwise leave the cables as they are. Click the Connections icon (lightning bolt) in the bottom-left device bar, then the cable type. With a precise cable (straight-through, crossover, serial, console...): click the first device, pick the port in the list that opens, click the second device, pick its port. With "Automatically Choose Connection Type": relier X1 Y1 X2 Y2 does both clicks. Take a screenshot to check that the link is there, and press esc to put the cable tool away.
+   - Do not add, move or delete what the user has set up on screen (items of a diagram or a topology...) unless the task asks for it. To type a sequence of commands into a console, write them to a file in the current folder and type it with ecrire-fichier, then check the result.
    - If another window comes to the front or the user takes back control, stop so you don't type into their window, and say how far you got.
 3. Your final answer: plain text, in French, short. What you did and/or the answer, and the path of any files created. It is shown when the user clicks the icon.
 
@@ -195,7 +194,7 @@ Actions:
   zoom X Y W H            enlarged image of an area (to read small text; do not click using its coordinates)
   clic X Y | doubleclic X Y | clicdroit X Y | survol X Y      (click | double-click | right-click | hover)
   glisser X1 Y1 X2 Y2     drag: press on point 1, move, release on point 2 (to move an item, or to link two items where links are drawn by dragging)
-  relier X1 Y1 X2 Y2      click on point 1, then on point 2 (to link two items where links are made with two clicks, the link or cable tool being selected: Packet Tracer, GNS3...)
+  relier X1 Y1 X2 Y2      click on point 1, then on point 2 (to link two items where links are made with two clicks, the link or cable tool being selected)
   defiler X Y N           N mouse-wheel notches; N>0 scrolls up, N<0 scrolls down
   ecrire "text"           types the text where the cursor is (click in the field first)
   ecrire-fichier PATH     types the content of a UTF-8 text file (long texts, quotes, line breaks, command sequences)
@@ -217,7 +216,7 @@ Strict rules:
 def texte_tri(png, fenetre, precision, instructions=''):
     return f"""Read the image {png} with the Read tool. Active window: {fenetre[0]} - "{fenetre[1]}".
 {instructions}{precision}
-What is the task visible on screen? Answer OPUS if it requires calculations (maths, physics, subnetting, conversions), programming, network or infrastructure configuration (GNS3, Packet Tracer, routers, switches, VLANs, servers), a diagram to design or long reasoning.
+What is the task visible on screen? Answer OPUS if it requires calculations (maths, physics, subnetting, conversions), programming, network or infrastructure configuration (routers, switches, VLANs, servers), a diagram to design or long reasoning.
 Answer SONNET for a course multiple-choice quiz, a knowledge question, a simple form, a short text to write, or if it is unclear.
 Answer with a single word: OPUS or SONNET.
 """
