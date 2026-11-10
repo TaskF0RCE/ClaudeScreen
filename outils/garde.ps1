@@ -9,7 +9,7 @@ $fichier = [string]$entree.tool_input.file_path
 if (-not $fichier) { $fichier = [string]$entree.tool_input.notebook_path }
 if ($fichier) {
     $contexte = $env:ECRAN_CONTEXTE
-    if (-not $contexte) { $contexte = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Claude-Travail\System-Context' }
+    if (-not $contexte) { $contexte = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Claude-Work\System-Context' }
     $base = if ($entree.cwd) { [string]$entree.cwd } else { (Get-Location).Path }
     $cible = [IO.Path]::GetFullPath([IO.Path]::Combine($base, $fichier)).Replace('/', '\').TrimEnd('\') + '\'
     $racine = [IO.Path]::GetFullPath($contexte).Replace('/', '\').TrimEnd('\') + '\'

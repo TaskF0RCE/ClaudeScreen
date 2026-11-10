@@ -35,7 +35,7 @@ def contexte():
         return os.environ['ECRAN_CONTEXTE']
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import natif
-    return os.path.join(natif.dossier_documents(), 'Claude-Travail', 'System-Context')
+    return os.path.join(natif.dossier_documents(), 'Claude-Work', 'System-Context')
 
 
 def dans(chemin, dossier):

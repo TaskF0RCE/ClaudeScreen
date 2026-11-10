@@ -1,5 +1,5 @@
-# Bouton « Nouvelle release » du dashboard → PR de release (version + CHANGELOG).
-# Merge de cette PR dans main → tag + release GitHub.
+# "Nouvelle release" button of the dashboard -> release PR (version + CHANGELOG).
+# Merging that PR into main -> tag + GitHub release.
 name: Release
 
 on:

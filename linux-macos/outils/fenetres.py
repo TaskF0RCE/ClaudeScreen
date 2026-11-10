@@ -64,7 +64,7 @@ def resultat(fichier):
         return _resultat_sans_tk(fichier)
 
     root = tk.Tk()
-    root.title('Claude')
+    root.title('Claude-Work')
     l, h = 520, 360
     marge_bas = 90 if MAC else 60
     root.geometry('%dx%d+%d+%d' % (l, h, root.winfo_screenwidth() - l - 12, root.winfo_screenheight() - h - marge_bas))
@@ -90,10 +90,10 @@ def _resultat_sans_tk(fichier):
     if MAC:
         subprocess.run(['open', '-e', fichier])
     elif shutil.which('zenity'):
-        subprocess.run(['zenity', '--text-info', '--title=Claude', '--width=520', '--height=360',
+        subprocess.run(['zenity', '--text-info', '--title=Claude-Work', '--width=520', '--height=360',
                         '--filename=' + fichier])
     elif shutil.which('kdialog'):
-        subprocess.run(['kdialog', '--title', 'Claude', '--textbox', fichier, '520', '360'])
+        subprocess.run(['kdialog', '--title', 'Claude-Work', '--textbox', fichier, '520', '360'])
     else:
         subprocess.run(['xdg-open', fichier])
     return 0
@@ -178,10 +178,10 @@ def _consigne_sans_tk():
                   'on error\nreturn "\u0001ANNULE"\nend try')
         r = subprocess.run(['osascript', '-e', script], capture_output=True, text=True)
     elif shutil.which('zenity'):
-        r = subprocess.run(['zenity', '--entry', '--title=Claude', '--text=Instruction for Claude:'],
+        r = subprocess.run(['zenity', '--entry', '--title=Claude-Work', '--text=Instruction for Claude:'],
                            capture_output=True, text=True)
     elif shutil.which('kdialog'):
-        r = subprocess.run(['kdialog', '--title', 'Claude', '--inputbox', 'Instruction for Claude:'],
+        r = subprocess.run(['kdialog', '--title', 'Claude-Work', '--inputbox', 'Instruction for Claude:'],
                            capture_output=True, text=True)
     else:
         sys.stderr.write('Neither Tk, zenity nor kdialog: instruction bar unavailable.\n')

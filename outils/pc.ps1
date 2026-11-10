@@ -6,7 +6,6 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'natif.ps1')
 . (Join-Path $PSScriptRoot 'pdf.ps1')
-. (Join-Path $PSScriptRoot 'memoire.ps1')
 [ClaudeScreen.Natif]::DpiAware()
 # Smooth mode (icon menu): human-like mouse moves and typing. Read at every action, so it applies at once.
 $fichierSmooth = Join-Path $PSScriptRoot '..\data\smooth.txt'
@@ -53,6 +52,16 @@ switch ($Action.ToLower()) {
     'clicdroit' { [ClaudeScreen.Natif]::Clic((X (Nombre 0)), (Y (Nombre 1)), $true, 1); 'OK' }
     'survol'    { [ClaudeScreen.Natif]::Deplacer((X (Nombre 0)), (Y (Nombre 1))); 'OK' }
     'glisser'   { [ClaudeScreen.Natif]::Glisser((X (Nombre 0)), (Y (Nombre 1)), (X (Nombre 2)), (Y (Nombre 3))); 'OK' }
+    'relier' {
+        # relier X1 Y1 X2 Y2: click on point 1, then on point 2. Links two items in tools where a link is made
+        # with two clicks (Packet Tracer or GNS3 cable, the cable tool being selected). The 4 numbers are checked
+        # first, so a bad argument never leaves a link half done. Smooth mode applies, like for any click.
+        $x1 = X (Nombre 0); $y1 = Y (Nombre 1); $x2 = X (Nombre 2); $y2 = Y (Nombre 3)
+        [ClaudeScreen.Natif]::Clic($x1, $y1, $false, 1)
+        Start-Sleep -Milliseconds 400   # the first click must be taken in before the second one
+        [ClaudeScreen.Natif]::Clic($x2, $y2, $false, 1)
+        'OK'
+    }
     'defiler'   { [ClaudeScreen.Natif]::Molette((X (Nombre 0)), (Y (Nombre 1)), [int](Nombre 2)); 'OK' }
     'ecrire'    { [ClaudeScreen.Natif]::Taper(($Valeurs -join ' ')); 'OK' }
     'ecrire-fichier' {
@@ -96,16 +105,6 @@ switch ($Action.ToLower()) {
         $numero = [int]$Valeurs[-1]
         $pages = Export-PdfPage (Resolve-Path -LiteralPath $pdf).Path $numero $png
         "Page $numero/$($pages): $png (read it with Read)"
-    }
-    'memoire' {
-        # memoire "note": persistent memory (icon menu). Only appends below the separator of
-        # System-Context\instructions.md: the user's part above it is never touched.
-        if (-not (Test-MemoireActive (Join-Path $PSScriptRoot '..\data\memory.txt'))) {
-            throw 'Refused: persistent memory is off (the user turns it on in the icon menu).'
-        }
-        if (-not $env:ECRAN_CONTEXTE) { throw 'ECRAN_CONTEXTE is not set: this script must be started by ClaudeScreen.' }
-        Add-NoteMemoire (Join-Path $env:ECRAN_CONTEXTE 'instructions.md') ($Valeurs -join ' ')
-        'Note saved.'
     }
     default { throw "Unknown action: $Action" }
 }
