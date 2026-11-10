@@ -1,17 +1,21 @@
-# instructions.md (System-Context) and persistent memory. Dot-sourced by ClaudeScreen.ps1 and pc.ps1.
-# instructions.md has two parts, split by a line of dashes ($MemoireSeparateur):
-#   - above: the user's standing instructions. Neither the app nor Claude ever changes them;
-#   - below: Claude's notes, added with "pc.ps1 memoire" while "Persistent memory" is checked
-#     in the icon menu, and erased when it is unchecked.
-# Comments (<!-- ... -->) are ignored everywhere. Same logic as linux-macos/outils/memoire.py.
+# instructions.md and memory.md (System-Context). Dot-sourced by ClaudeScreen.ps1.
+#   instructions.md: the user's standing instructions. It is the user's file: once it exists,
+#     neither the app nor Claude ever changes it.
+#   memory.md: Claude's notes (persistent memory). While "Persistent memory" is checked in the icon
+#     menu, the app saves there the "MEMORY: ..." lines found at the end of Claude's final answer.
+#     Unchecking the mode sends the file to the Recycle Bin.
+# Comments (<!-- ... -->) are ignored in both files. Same logic as linux-macos/outils/memoire.py.
 
-$MemoireSeparateur = '---------------------'
-# Any line made only of dashes (10 or more) counts, so the user can retype it by hand.
-$MemoireLigne = '(?m)^[ \t]*-{10,}[ \t]*\r?$'
-$MemoireEntete = "<!-- Claude's notes (persistent memory): erased when the mode is turned off. -->"
 $MemoireMaxInstructions = 4000
 $MemoireMaxNote = 300
 $MemoireMax = 4000
+$MemoireEntete = @"
+<!--
+Claude's notes (persistent memory), one per line. The app adds them after each task
+while "Persistent memory" is checked in the icon menu. You can edit or remove lines.
+Unchecking the mode sends this file to the Recycle Bin.
+-->
+"@
 
 $MemoireGabarit = @"
 <!--
@@ -22,19 +26,13 @@ Comments like this one are ignored. You can also drop courses, PDFs or assignmen
 in this folder: Claude will read them if needed.
 
 Examples:
-I'm a BTS SIO student, SISR track. Cisco hardware, Packet Tracer 8.
+I'm a second-year computer science student.
 For quizzes: tick the answers and click Next, but never click "Finish exam".
-Always answer in French.
+Always answer in English.
 
-Keep the dashed line below. What you write above it is yours: it is never changed.
-Below it, Claude writes its notes while "Persistent memory" is checked in the icon menu;
-they are erased when you uncheck it.
+This file is yours: neither the app nor Claude ever changes it.
+Claude's notes (Persistent memory in the icon menu) go to memory.md, next to this file.
 -->
-
-
-
-$MemoireSeparateur
-$MemoireEntete
 
 "@
 
@@ -47,15 +45,15 @@ function Write-FichierMemoire([string]$chemin, [string]$texte) {
     [IO.File]::WriteAllText($chemin, ($texte -replace '\r?\n', "`r`n"), (New-Object System.Text.UTF8Encoding $true))
 }
 
-function Test-MemoireActive([string]$fichierEtat) {
-    (Test-Path -LiteralPath $fichierEtat) -and ("$(Get-Content -LiteralPath $fichierEtat -Raw)".Trim() -eq 'on')
+# Sends a file to the Recycle Bin (never a permanent deletion).
+function Send-Corbeille([string]$chemin) {
+    Add-Type -AssemblyName Microsoft.VisualBasic
+    [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($chemin,
+        [Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs, [Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin)
 }
 
-# User part and memory part as written; Memoire is $null if there is no separator.
-function Split-Instruction([string]$texte) {
-    $m = [regex]::Match($texte, $MemoireLigne)
-    if (-not $m.Success) { return [pscustomobject]@{ Utilisateur = $texte; Memoire = $null } }
-    [pscustomobject]@{ Utilisateur = $texte.Substring(0, $m.Index); Memoire = $texte.Substring($m.Index + $m.Length) }
+function Test-MemoireActive([string]$fichierEtat) {
+    (Test-Path -LiteralPath $fichierEtat) -and ("$(Get-Content -LiteralPath $fichierEtat -Raw)".Trim() -eq 'on')
 }
 
 # Text without comments or empty lines.
@@ -65,54 +63,66 @@ function Format-Instruction([string]$texte) {
     $lignes -join "`n"
 }
 
-function Get-SectionVide([string]$utilisateur) {
-    $utilisateur.TrimEnd() + "`n`n" + $MemoireSeparateur + "`n" + $MemoireEntete + "`n"
-}
-
-# The user's instructions (above the separator), cleaned, 4000 characters at most.
+# The user's instructions (instructions.md), cleaned, 4000 characters at most.
 function Get-InstructionUtilisateur([string]$chemin) {
-    $texte = Format-Instruction (Split-Instruction (Read-FichierMemoire $chemin)).Utilisateur
+    $texte = Format-Instruction (Read-FichierMemoire $chemin)
     if ($texte.Length -gt $MemoireMaxInstructions) { $texte = $texte.Substring(0, $MemoireMaxInstructions) }
     $texte
 }
 
-# Claude's notes (below the separator), cleaned.
+# Claude's notes (memory.md), cleaned, 4000 characters at most.
 function Get-NoteMemoire([string]$chemin) {
-    $section = (Split-Instruction (Read-FichierMemoire $chemin)).Memoire
-    if ($null -eq $section) { return '' }
-    $texte = Format-Instruction $section
+    $texte = Format-Instruction (Read-FichierMemoire $chemin)
     if ($texte.Length -gt $MemoireMax) { $texte = $texte.Substring(0, $MemoireMax) }
     $texte
 }
 
-# Adds the separator at the end of the file if it is missing (the user's text is kept).
+# Creates memory.md (comment only) if it does not exist.
 function Initialize-Memoire([string]$chemin) {
-    $texte = Read-FichierMemoire $chemin
-    if ($null -eq (Split-Instruction $texte).Memoire) { Write-FichierMemoire $chemin (Get-SectionVide $texte) }
+    if (-not (Test-Path -LiteralPath $chemin)) { Write-FichierMemoire $chemin ($MemoireEntete + "`n") }
 }
 
-# Erases Claude's notes. Everything above the separator stays as it is. $true if notes were erased.
-function Clear-Memoire([string]$chemin) {
-    $parties = Split-Instruction (Read-FichierMemoire $chemin)
-    if ($null -eq $parties.Memoire -or -not (Format-Instruction $parties.Memoire)) { return $false }
-    Write-FichierMemoire $chemin (Get-SectionVide $parties.Utilisateur)
-    $true
+# Persistent memory turned off: memory.md goes to the Recycle Bin. $true if it held notes.
+function Remove-Memoire([string]$chemin) {
+    if (-not (Test-Path -LiteralPath $chemin)) { return $false }
+    $notes = Format-Instruction (Read-FichierMemoire $chemin)
+    Send-Corbeille $chemin
+    [bool]$notes
 }
 
-# Adds a note at the end of the memory section. Throws if it is empty or too long.
-function Add-NoteMemoire([string]$chemin, [string]$note) {
-    $note = ($note -replace '\s+', ' ').Trim()
-    if (-not $note) { throw 'Usage: memoire "note"' }
-    if ($note.Length -gt $MemoireMaxNote) {
-        throw "Note too long ($($note.Length) characters, $MemoireMaxNote max): keep one short fact per note."
+# Splits Claude's final answer: Texte = what the user sees, Notes = the "MEMORY: ..." lines.
+function Find-NoteReponse([string]$reponse) {
+    $texte = New-Object System.Collections.Generic.List[string]
+    $notes = New-Object System.Collections.Generic.List[string]
+    foreach ($ligne in ($reponse -split '\r?\n')) {
+        if ($ligne -cmatch '^\s*(?:[-*]\s+)?\**MEMORY\**\s*:\s*\**\s*(.*?)\s*$') {
+            if ($Matches[1]) { $notes.Add($Matches[1]) }
+        } else { $texte.Add($ligne) }
     }
-    if (-not (Test-Path -LiteralPath $chemin)) { throw "$chemin not found." }
+    [pscustomobject]@{ Texte = ($texte -join "`n").Trim(); Notes = @($notes) }
+}
+
+# Adds notes at the end of memory.md (created if needed). One line per note, 300 characters at most,
+# a note already there is skipped. Ajoutees = notes written; Pleine = $true if some did not fit (4000 characters in all).
+function Add-NoteMemoire([string]$chemin, [string[]]$notes) {
     Initialize-Memoire $chemin
-    $texte = Read-FichierMemoire $chemin
-    if ((Format-Instruction (Split-Instruction $texte).Memoire).Length + $note.Length + 3 -gt $MemoireMax) {
-        throw "Memory is full ($MemoireMax characters): the user must turn persistent memory off and on again to empty it. Do not save more notes."
+    $texte = (Read-FichierMemoire $chemin).TrimEnd()
+    $existantes = Format-Instruction $texte
+    $deja = @($existantes -split "`n" | ForEach-Object { ($_ -replace '^\s*-\s*', '').Trim() })
+    $taille = $existantes.Length
+    $ajoutees = 0; $pleine = $false
+    foreach ($note in $notes) {
+        $note = ((($note -replace '<!--|-->', '') -replace '\s+', ' ').Trim() -replace '^-\s*', '')
+        if ($note.Length -gt $MemoireMaxNote) { $note = $note.Substring(0, $MemoireMaxNote - 3).TrimEnd() + '...' }
+        if (-not $note -or $deja -contains $note) { continue }
+        if ($taille + $note.Length + 3 -gt $MemoireMax) { $pleine = $true; break }
+        $texte += "`n- " + $note
+        $taille += $note.Length + 3
+        $deja += $note
+        $ajoutees++
     }
-    Write-FichierMemoire $chemin ($texte.TrimEnd() + "`n- " + $note + "`n")
+    if ($ajoutees) { Write-FichierMemoire $chemin ($texte + "`n") }
+    [pscustomobject]@{ Ajoutees = $ajoutees; Pleine = $pleine }
 }
 
 # instructions.txt (older versions) -> instructions.md: lines starting with # become comments.
@@ -126,7 +136,26 @@ function Convert-AncienneInstruction([string]$ancien, [string]$nouveau) {
             if ($reste) { "<!-- $reste -->" } else { '' }
         } else { $ligne.TrimEnd() }
     }
-    Write-FichierMemoire $nouveau (Get-SectionVide (@($lignes) -join "`n"))
-    Remove-Item -LiteralPath $ancien -Force
+    Write-FichierMemoire $nouveau ((@($lignes) -join "`n").TrimEnd() + "`n")
+    Send-Corbeille $ancien
+    $true
+}
+
+# The previous version kept Claude's notes at the end of instructions.md, below a line of dashes.
+# Done once: the notes move to memory.md and that end (which the app had added) leaves instructions.md.
+# Nothing is changed unless what follows the dashes is the app's own section: its comment, then only "- note" lines.
+function Convert-AncienneMemoire([string]$instructions, [string]$memoire) {
+    $texte = (Read-FichierMemoire $instructions) -replace '\r\n', "`n"
+    $m = [regex]::Match($texte, '(?m)^[ \t]*-{10,}[ \t]*$')
+    if (-not $m.Success) { return $false }
+    $fin = $texte.Substring($m.Index + $m.Length)
+    if (-not $fin.Contains("<!-- Claude's notes (persistent memory)")) { return $false }
+    $notes = @((Format-Instruction $fin) -split "`n" | Where-Object { $_ })
+    if (@($notes | Where-Object { $_ -notmatch '^\s*- ' }).Count) { return $false }
+    if ($notes.Count) { Add-NoteMemoire $memoire $notes | Out-Null }
+    $utilisateur = $texte.Substring(0, $m.Index).TrimEnd()
+    # The old template explained the dashed line: say where the notes go now.
+    $utilisateur = $utilisateur -creplace 'Keep the dashed line below\. What you write above it is yours: it is never changed\.\nBelow it, Claude writes its notes while "Persistent memory" is checked in the icon menu;\nthey are erased when you uncheck it\.', "This file is yours: neither the app nor Claude ever changes it.`nClaude's notes (Persistent memory in the icon menu) go to memory.md, next to this file."
+    Write-FichierMemoire $instructions ($utilisateur + "`n")
     $true
 }

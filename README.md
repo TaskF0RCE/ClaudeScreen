@@ -18,8 +18,10 @@ ClaudeScreen runs on top of the **[Claude Code](https://docs.claude.com/en/docs/
    - **Sonnet** for a multiple-choice quiz, a course question or a simple form (fast, uses little quota);
    - **Opus** for calculations, programming, networking and infrastructure (subnetting, VLANs, routers...).
    If the active window is Packet Tracer, GNS3, PuTTY, Wireshark, MATLAB, etc., Opus is picked directly, without triage.
-4. Claude does the task with the mouse and keyboard, takes a new screenshot after each action to check, then writes a short summary (in French by default).
+4. Claude does the task with the mouse and keyboard, takes a new screenshot after each action to check, then writes a short summary (in the language of your Windows by default).
 5. Click the icon to see the summary.
+
+In the notification area the app is called **Claude-Work** (tooltip, menu, result window), like the folder in your Documents where Claude puts the files it creates.
 
 ### Giving an instruction
 
@@ -30,9 +32,10 @@ ClaudeScreen runs on top of the **[Claude Code](https://docs.claude.com/en/docs/
 
 ### Standing context (optional)
 
-The `Documents\Claude-Travail\System-Context` folder is created on first launch, with a `README.md` that explains how to use it.
+The `Documents\Claude-Work\System-Context` folder is created on first launch, with a `README.md` that explains how to use it. (The work folder was called `Claude-Travail` in older versions: it is renamed automatically, with everything in it.)
 
-- **`instructions.md`**: your standing instructions, one per line, added to every task while the app is running. For example: "I'm a BTS SIO student", "never click Finish exam", "always answer in French". Write them **above the dashed line** (`---------------------`): that part is yours and is never changed. Comments (`<!-- ... -->`) are ignored: as long as you write nothing else, the file does nothing. It is re-read for every task: a change applies right away, without restarting the app. Below the line, Claude writes its notes when [Persistent memory](#persistent-memory) is on. An `instructions.txt` from an older version is converted automatically (its `#` lines become comments).
+- **`instructions.md`**: your standing instructions, one per line, added to every task while the app is running. For example: "I'm a second-year computer science student", "never click Finish exam", "always answer in English". Comments (`<!-- ... -->`) are ignored: as long as you write nothing else, the file does nothing. It is re-read for every task: a change applies right away, without restarting the app. **This file is yours: neither the app nor Claude ever changes it.** A file from an older version is converted once: an `instructions.txt` becomes `instructions.md` (its `#` lines become comments, the old file goes to the Recycle Bin), and the notes Claude used to keep at the end of `instructions.md` move to `memory.md`.
+- **`memory.md`**: Claude's notes, when [Persistent memory](#persistent-memory) is on.
 - **The other files in the folder**, subfolders included (courses, notes, technical documentation, assignments, bibliography, sources...): Claude gets their list with every task. It treats them as more reliable than its general knowledge: it reads the ones related to the task and relies on them first. Best-read formats: `.pdf`, `.txt`, `.md`, images, code, `.csv`, `.html` (for a Word or PowerPoint file, also save it as PDF). Hidden or temporary files (`desktop.ini`, `~$...`) are ignored, as is the folder's `README.md`.
 - **PDFs**: the app extracts their text in advance, page by page, into `data\context-cache\` (redone only when the PDF changes). Claude reads that text, which is fast and saves quota, and can search it. For a diagram or a scanned PDF (no text), it shows the page as an image with the `page-pdf` action. All of this uses [Poppler](https://poppler.freedesktop.org/) (see [Installation](#installation)).
 - **Read-only**: Claude can read this folder, but cannot change, move, send to the Recycle Bin or run anything in it (see [Security](#security)).
@@ -41,9 +44,13 @@ Priority order: the instruction typed in the bar (for one task), then `instructi
 
 The folder is in your Documents, outside the repository: your courses and instructions never end up on GitHub.
 
-### Packet Tracer
+### Ready-made context for some software
 
-You place the devices and connect them. Claude touches neither devices nor cables: it configures each device through its **CLI** tab (one command file per device, typed into the console) and checks with `show` commands. For PCs, it uses Desktop > IP Configuration.
+The instructions built into the app stay general: they work for any task. Know-how for one piece of software goes into a context file, which you add only if you use that software. The `examples` folder of the repository has some; copy the ones you need into `System-Context`. Claude reads them when the task is in that software.
+
+- **`examples/packet-tracer.md`**: you place the devices and Claude never adds, moves or deletes one. It configures each device through its **CLI** tab (one command file per device, typed into the console) and checks with `show` commands; for PCs, it uses Desktop > IP Configuration. **Cabling**: only when you ask for it, for example "connect R1 to R2 with a crossover cable". Claude picks the cable in the Connections bar, clicks the first device and its port, then the second device and its port, and takes a screenshot to check the link. With "Automatically Choose Connection Type", the `relier` action does both clicks in one go. This is slower than cabling by hand: check the ports it picked.
+
+You can write your own for other software in the same way (a `.md` file with what Claude should do and avoid in it), and edit the copies freely: the app never changes them.
 
 ### The icon
 
@@ -59,7 +66,8 @@ Right-click the icon:
 - **Model**: Auto, Always Sonnet or Always Opus (the choice is remembered)
 - **Smooth mode**: the mouse glides and the text is typed at a human pace (see below; the choice is remembered)
 - **Persistent memory**: Claude keeps notes from one task to the next (see below; the choice is remembered)
-- **Open the Claude-Travail folder**
+- **Fast control (MCP)**: Claude drives the PC through a small server kept open during the task (see below; the choice is remembered)
+- **Open the Claude-Work folder**
 - **Stop the current task**
 - **Quit**
 
@@ -74,22 +82,35 @@ The choice is remembered (`data/smooth.txt`) and applies at once, even in the mi
 
 ### Persistent memory
 
-By default, each task starts from scratch. Check **Persistent memory** in the icon menu to open a kind of mini session: Claude saves short notes during a task (what it learned about you, the course or the exercise, how far it got) and gets them back at the next tasks. For example, "questions 1 to 10 done" or "the course is OSPF, chapter 3".
+By default, each task starts from scratch. Check **Persistent memory** in the icon menu to open a kind of mini session: Claude ends each task with short notes (what it learned about you, the course or the exercise, how far it got) and gets them back at the next tasks. For example, "questions 1 to 10 done" or "the course is OSPF, chapter 3".
+
+`System-Context\memory.md`:
 
 ```
-I'm a BTS SIO student.              <- your instructions: never changed
-Always answer in French.
-
----------------------
-<!-- Claude's notes (persistent memory): erased when the mode is turned off. -->
-- The quiz is about OSPF, chapter 3  <- Claude's notes
+<!-- Claude's notes (persistent memory), one per line. ... -->
+- The quiz is about OSPF, chapter 3
 - Questions 1 to 10 done
 ```
 
-- The notes go into `System-Context\instructions.md`, **below the dashed line**. You can read them, or delete one by hand.
-- **Unchecking the mode erases the notes.** Everything above the line (your instructions) stays exactly as it is. If you removed the line yourself, nothing is erased; it is added back the next time you check the mode.
-- Claude still cannot edit the folder: it adds a note only through the `memoire` action of `outils/pc.ps1`, which writes below the line and nowhere else, and refuses when the mode is off. One note is at most 300 characters, and all notes together at most 4000.
+- The notes go into `System-Context\memory.md`, one per line. You can read them, fix one or delete one by hand. `instructions.md` is never touched.
+- **Unchecking the mode sends `memory.md` to the Recycle Bin**: the notes are gone for Claude, and you can still get them back from the bin. Checking it again starts an empty file.
+- Claude cannot write in the folder, not even in `memory.md`: it ends its answer with `MEMORY: ...` lines, and the app saves them (and hides them from the result you see). That costs no extra action during the task. One note is at most 300 characters, and all notes together at most 4000: past that, new notes are no longer saved and the result says so.
+- A task you stop saves no note.
 - The choice is remembered (`data/memory.txt`): the notes stay after a restart of the app as long as the mode is checked.
+
+### Fast control (MCP)
+
+By default, every action of Claude (a click, a key, a screenshot) starts PowerShell twice: once for the safety hook, once for `outils/pc.ps1`. That costs 2 to 3 seconds per action, and a screenshot takes two steps (take it, then read it).
+
+Check **Fast control (MCP)** in the icon menu to use `outils/mcp.ps1` instead: a small [MCP](https://modelcontextprotocol.io) server that Claude Code starts at the beginning of the task and stops at the end.
+
+- Claude sends several actions in one call (for example: click a field, type the answer, press Enter).
+- The screenshot taken after the last action comes back in the same answer.
+- There is no terminal at all in this mode: Claude only gets the file tools and the `pc` tool.
+
+It is a single PowerShell script of a few kilobytes: nothing to install, nothing running outside a task, no network port (Claude Code talks to it through its standard input and output). The actions are the same in both modes (`outils/actions.ps1`), and so are smooth mode and the protection of `System-Context`. The choice applies to the next task and is remembered (`data/mcp.txt`). The result window and the log show how long each task took, so you can compare the two modes.
+
+Windows only for now; the macOS/Linux port keeps its `data/pc` command.
 
 ### Stopping a task
 
@@ -102,15 +123,16 @@ During a task, don't touch the mouse or keyboard: Claude uses the real ones. If 
 Claude is started with limited permissions (`data\settings.json`, generated at startup). It can only:
 
 - read the screenshots;
-- click, type and scroll, through `outils/pc.ps1` (no other command is allowed);
-- create or edit files in `Documents\Claude-Travail` (except in `System-Context`, which is read-only).
+- click, type and scroll, through `outils/pc.ps1` (no other command is allowed), or through the `pc` tool of `outils/mcp.ps1` when Fast control is on (then there is no terminal at all);
+- create or edit files in `Documents\Claude-Work` (except in `System-Context`, which is read-only).
 
 On top of that:
 
-- **`System-Context` is read-only**, locked three times: a `deny` rule in `data\settings.json` (`Edit(...)`, which also covers Write), the hook `outils/garde.ps1` that refuses any file write in that folder, and `pc.ps1 corbeille` that refuses to touch it (or `Claude-Travail`, which contains it). The only write allowed is `pc.ps1 memoire`, when [Persistent memory](#persistent-memory) is on: it adds a note below the dashed line of `instructions.md`, and nothing else.
+- **`System-Context` is read-only**, locked three times: a `deny` rule in `data\settings.json` (`Edit(...)`, which also covers Write), the hook `outils/garde.ps1` that refuses any file write in that folder, and `pc.ps1 corbeille` that refuses to touch it (or `Claude-Work`, which contains it). Claude has no way to write there: its [Persistent memory](#persistent-memory) notes are saved by the app itself.
 - **Nothing is ever permanently deleted.** The hook `outils/garde.ps1` blocks `Remove-Item`, `del`, `rm`, `format`, etc. To remove a file, Claude sends it to the Recycle Bin (`pc.ps1 corbeille`).
 - Its instructions forbid buying, paying, sending messages, entering passwords or bank details, and changing Windows settings. Text displayed on screen cannot override these rules.
 - No web access (WebFetch and WebSearch are denied).
+- Claude is started with only the tools a task needs (`Read`, `Write`, `Edit`, `Glob`, `Grep` and `PowerShell` for `pc.ps1`), without the MCP servers, connectors and skills of your account: tasks start faster and use less quota.
 
 ## Installation
 
@@ -127,7 +149,7 @@ Requirements: Windows 10 or 11, with PowerShell 5.1 (built into Windows). Nothin
    powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\ClaudeScreen\Installer-Demarrage.ps1"
    Start-ScheduledTask -TaskName ClaudeScreen
    ```
-   The icon appears in the notification area. A scheduled task named "ClaudeScreen" restarts it 20 s after each logon, without any window. To remove it, add `-Retirer` to the first command.
+   The icon appears in the notification area. A scheduled task named "ClaudeScreen" restarts it 20 s after each logon, without any window. To remove it, add `-Retirer` to the first command: it removes the scheduled task and closes the app if it is running.
 
 **PDF reading**: `Installer-Demarrage.ps1` also downloads [Poppler for Windows](https://github.com/oschwartz10612/poppler-windows) (`pdftotext`, `pdftoppm`, about 16 MB) into `outils\poppler`, only once. If that hasn't happened yet, ClaudeScreen downloads it in the background when it starts. The version is pinned and the file is rejected if its SHA-256 hash doesn't match. Without Poppler, Claude Code cannot read PDFs (it needs `pdftoppm`). To reinstall it by hand: `powershell -ExecutionPolicy Bypass -File outils\poppler.ps1`.
 
@@ -160,36 +182,42 @@ Lancer.vbs          starts the app without a window (by hand)
 Installer-Demarrage.ps1  installs or removes the startup scheduled task
 outils/natif.cs     Windows calls (DPI, screenshot, mouse, keyboard, smooth mode, global hotkeys, active window)
 outils/natif.ps1    compiles natif.cs into a DLL only once (the name changes when the source changes)
-outils/pc.ps1       PC control tool used by Claude
+outils/actions.ps1  the PC control actions (click, type, screenshot...), shared by the two files below
+outils/pc.ps1       PC control tool used by Claude: one action per call
+outils/mcp.ps1      the same actions as an MCP server (Fast control): several actions per call, screenshot in the answer
 outils/garde.ps1    hook that blocks permanent deletions and writes to System-Context
 outils/pdf.ps1      PDF reading: text extracted in advance, page as an image (with Poppler)
-outils/memoire.ps1  instructions.md and persistent memory (your part above the dashed line, Claude's notes below)
+outils/memoire.ps1  instructions.md (yours, never changed) and memory.md (Claude's notes, persistent memory)
 outils/poppler.ps1  downloads Poppler (pinned version, verified hash) into outils/poppler (ignored by git)
-outils/System-Context-README.md  user guide copied into Documents\Claude-Travail\System-Context on first launch
+outils/System-Context-README.md  user guide copied into Documents\Claude-Work\System-Context (kept up to date at each start)
+examples/           ready-made context files for some software (Packet Tracer...), to copy into System-Context if you use it
 data/               EVERYTHING the app generates, kept apart from the program (private, ignored by git):
   runs/<date>/        one folder per task, deleted after 30 days:
     images/             screenshot-01.png, zoom-01.png, pdf-01.png...
     prompts/            task.txt (instructions sent to Claude), triage.txt (model choice)
     responses/          task.txt, task-errors.txt, triage.txt, triage-errors.txt
     screen.json         position and scale of the captured screen
+    mcp.json            with Fast control: tells Claude Code how to start outils/mcp.ps1 for this task
   context-cache/      text extracted from the System-Context PDFs (rebuilt when needed)
   log.txt             app log
   settings.json       permissions given to Claude (regenerated at each start)
   model.txt           model choice (Model menu)
   smooth.txt          smooth mode: on or off (Smooth mode menu)
   memory.txt          persistent memory: on or off (Persistent memory menu)
+  mcp.txt             fast control: on or off (Fast control menu)
 ```
 
 The macOS/Linux version uses exactly the same `data/` layout. Older versions kept these files at the root of the folder (`runs/`, `journal.txt`...): they are moved into `data/` automatically at startup.
 
-Files created by Claude go to `Documents\Claude-Travail`. Your instructions and context documents are in `Documents\Claude-Travail\System-Context`.
+Files created by Claude go to `Documents\Claude-Work`. Your instructions, Claude's notes and your context documents are in `Documents\Claude-Work\System-Context`.
 
-Automatic cleanup: at startup and then every 6 hours, the app permanently deletes the `data\runs\` folders older than 30 days (`$JoursConserves` variable in `ClaudeScreen.ps1`). They don't go through the Recycle Bin, so the space is really freed. The log is trimmed too. Files in `Documents\Claude-Travail` are never touched.
+Automatic cleanup: at startup and then every 6 hours, the app permanently deletes the `data\runs\` folders older than 30 days (`$JoursConserves` variable in `ClaudeScreen.ps1`). They don't go through the Recycle Bin, so the space is really freed. The log is trimmed too. Files in `Documents\Claude-Work` are never touched.
 
 ## Limitations
 
 - Claude cannot run any program or command other than the control tool. For example, it cannot generate an image with Python, but it can write a diagram in SVG or HTML.
-- Precise drag and drop (cables in Packet Tracer, for example) is slow and not always reliable: that's why you do the cabling and Claude configures through the console.
+- Precise mouse work (cables in Packet Tracer, drag and drop) is slow and not always reliable: cabling a large topology by hand is faster.
+- The Claude Code CLI must be up to date (`claude update`): the app uses recent options (`--tools`, `--effort`, `--strict-mcp-config`). With an old version, tasks fail with "unknown option".
 - For websites, the Claude in Chrome extension is often more reliable: it reads the page content directly instead of going through screenshots.
 - Only one screen is captured: the one the mouse is on when you press the shortcut.
 

@@ -1,24 +1,38 @@
-"""instructions.md (System-Context) and persistent memory (equivalent of memoire.ps1).
+"""instructions.md and memory.md in System-Context (equivalent of memoire.ps1).
 
-instructions.md has two parts, split by a line of dashes (SEPARATEUR):
-  - above: the user's standing instructions. Neither the app nor Claude ever changes them;
-  - below: Claude's notes, added with "pc memoire" while "Persistent memory" is checked
-    in the icon menu, and erased when it is unchecked.
-Comments (<!-- ... -->) are ignored everywhere.
+  instructions.md: the user's standing instructions. It is the user's file: once it exists,
+    neither the app nor Claude ever changes it.
+  memory.md: Claude's notes (persistent memory). While "Persistent memory" is checked in the icon
+    menu, the app saves there the "MEMORY: ..." lines found at the end of Claude's final answer.
+    Unchecking the mode sends the file to the trash.
+Comments (<!-- ... -->) are ignored in both files.
 """
 from __future__ import annotations
 
 import os
 import re
 
-SEPARATEUR = '---------------------'
-# Any line made only of dashes (10 or more) counts, so the user can retype it by hand.
-LIGNE_SEPARATEUR = re.compile(r'^[ \t]*-{10,}[ \t]*$', re.MULTILINE)
 COMMENTAIRE = re.compile(r'<!--.*?-->', re.DOTALL)
-ENTETE_MEMOIRE = "<!-- Claude's notes (persistent memory): erased when the mode is turned off. -->"
+# A note in Claude's final answer: "MEMORY: text" (a list dash or bold around the word is accepted).
+LIGNE_NOTE = re.compile(r'^\s*(?:[-*]\s+)?\**MEMORY\**\s*:\s*\**\s*(.*?)\s*$')
+# The previous version kept the notes at the end of instructions.md, below a line of dashes.
+ANCIEN_SEPARATEUR = re.compile(r'^[ \t]*-{10,}[ \t]*$', re.MULTILINE)
+ANCIEN_ENTETE = "<!-- Claude's notes (persistent memory)"
+ANCIEN_GABARIT = ('Keep the dashed line below. What you write above it is yours: it is never changed.\n'
+                  'Below it, Claude writes its notes while "Persistent memory" is checked in the icon menu;\n'
+                  'they are erased when you uncheck it.')
+NOUVEAU_GABARIT = ('This file is yours: neither the app nor Claude ever changes it.\n'
+                   "Claude's notes (Persistent memory in the icon menu) go to memory.md, next to this file.")
 MAX_INSTRUCTIONS = 4000
 MAX_NOTE = 300
 MAX_MEMOIRE = 4000
+
+ENTETE = """<!--
+Claude's notes (persistent memory), one per line. The app adds them after each task
+while "Persistent memory" is checked in the icon menu. You can edit or remove lines.
+Unchecking the mode sends this file to the trash.
+-->
+"""
 
 GABARIT = """<!--
 Standing instructions for Claude (optional): write them below this comment, one per line.
@@ -28,18 +42,13 @@ Comments like this one are ignored. You can also drop courses, PDFs or assignmen
 in this folder: Claude will read them if needed.
 
 Examples:
-I'm a BTS SIO student, SISR track. Cisco hardware, Packet Tracer 8.
+I'm a second-year computer science student.
 For quizzes: tick the answers and click Next, but never click "Finish exam".
-Always answer in French.
+Always answer in English.
 
-Keep the dashed line below. What you write above it is yours: it is never changed.
-Below it, Claude writes its notes while "Persistent memory" is checked in the icon menu;
-they are erased when you uncheck it.
+""" + NOUVEAU_GABARIT + """
 -->
-
-
-
-""" + SEPARATEUR + '\n' + ENTETE_MEMOIRE + '\n'
+"""
 
 
 def active(fichier_etat):
@@ -60,71 +69,88 @@ def ecrire(chemin, texte):
         f.write(texte)
 
 
-def decouper(texte):
-    """(user part, memory part) as written; memory part is None if there is no separator."""
-    m = LIGNE_SEPARATEUR.search(texte)
-    if not m:
-        return texte, None
-    return texte[:m.start()], texte[m.end():]
-
-
 def nettoyer(texte):
     """Text without comments or empty lines."""
     lignes = (l.rstrip() for l in COMMENTAIRE.sub('', texte).splitlines())
     return '\n'.join(l for l in lignes if l.strip())
 
 
-def _avec_section_vide(utilisateur):
-    return utilisateur.rstrip() + '\n\n' + SEPARATEUR + '\n' + ENTETE_MEMOIRE + '\n'
-
-
 def instructions(chemin):
-    """The user's instructions (above the separator), cleaned, 4000 characters at most."""
-    return nettoyer(decouper(lire(chemin))[0])[:MAX_INSTRUCTIONS]
+    """The user's instructions (instructions.md), cleaned, 4000 characters at most."""
+    return nettoyer(lire(chemin))[:MAX_INSTRUCTIONS]
 
 
 def notes(chemin):
-    """Claude's notes (below the separator), cleaned."""
-    section = decouper(lire(chemin))[1]
-    return nettoyer(section)[:MAX_MEMOIRE] if section else ''
+    """Claude's notes (memory.md), cleaned, 4000 characters at most."""
+    return nettoyer(lire(chemin))[:MAX_MEMOIRE]
 
 
 def preparer(chemin):
-    """Adds the separator at the end of the file if it is missing (the user's text is kept)."""
-    texte = lire(chemin)
-    if decouper(texte)[1] is None:
-        ecrire(chemin, _avec_section_vide(texte))
-
-
-def vider(chemin):
-    """Erases Claude's notes. Everything above the separator stays as it is. True if notes were erased."""
-    texte = lire(chemin)
-    utilisateur, section = decouper(texte)
-    if section is None or not nettoyer(section):
-        return False
-    ecrire(chemin, _avec_section_vide(utilisateur))
-    return True
-
-
-def ajouter(chemin, note):
-    """Adds a note at the end of the memory section. ValueError if it is empty or too long."""
-    note = ' '.join(note.split())
-    if not note:
-        raise ValueError('Usage: memoire "note"')
-    if len(note) > MAX_NOTE:
-        raise ValueError('Note too long (%d characters, %d max): keep one short fact per note.' % (len(note), MAX_NOTE))
+    """Creates memory.md (comment only) if it does not exist."""
     if not os.path.exists(chemin):
-        raise ValueError('%s not found.' % chemin)
+        ecrire(chemin, ENTETE)
+
+
+def retirer(chemin, corbeille):
+    """Persistent memory turned off: memory.md goes to the trash (corbeille = function that does it).
+
+    True if it held notes.
+    """
+    if not os.path.exists(chemin):
+        return False
+    avait = bool(notes(chemin))
+    corbeille(chemin)
+    return avait
+
+
+def extraire(reponse):
+    """Splits Claude's final answer: (what the user sees, the "MEMORY: ..." lines)."""
+    texte, trouvees = [], []
+    for ligne in reponse.splitlines():
+        m = LIGNE_NOTE.match(ligne)
+        if m:
+            if m.group(1):
+                trouvees.append(m.group(1))
+        else:
+            texte.append(ligne)
+    return '\n'.join(texte).strip(), trouvees
+
+
+def ajouter(chemin, nouvelles):
+    """Adds notes at the end of memory.md (created if needed).
+
+    One line per note, 300 characters at most; a note already there is skipped.
+    Returns (number of notes written, True if some did not fit in the 4000 characters).
+    """
     preparer(chemin)
-    texte = lire(chemin)
-    if len(nettoyer(decouper(texte)[1])) + len(note) + 3 > MAX_MEMOIRE:
-        raise ValueError('Memory is full (%d characters): the user must turn persistent memory off and on '
-                         'again to empty it. Do not save more notes.' % MAX_MEMOIRE)
-    ecrire(chemin, texte.rstrip() + '\n- ' + note + '\n')
+    texte = lire(chemin).rstrip()
+    existantes = nettoyer(texte)
+    deja = {re.sub(r'^\s*-\s*', '', l).strip() for l in existantes.split('\n')}
+    taille = len(existantes)
+    ajoutees, pleine = 0, False
+    for note in nouvelles:
+        note = re.sub(r'^-\s*', '', ' '.join(note.replace('<!--', '').replace('-->', '').split()))
+        if len(note) > MAX_NOTE:
+            note = note[:MAX_NOTE - 3].rstrip() + '...'
+        if not note or note in deja:
+            continue
+        if taille + len(note) + 3 > MAX_MEMOIRE:
+            pleine = True
+            break
+        texte += '\n- ' + note
+        taille += len(note) + 3
+        deja.add(note)
+        ajoutees += 1
+    if ajoutees:
+        ecrire(chemin, texte + '\n')
+    return ajoutees, pleine
 
 
-def migrer(ancien, nouveau):
-    """instructions.txt (older versions) -> instructions.md: lines starting with # become comments."""
+def migrer(ancien, nouveau, corbeille):
+    """instructions.txt (older versions) -> instructions.md: lines starting with # become comments.
+
+    The old file goes to the trash (corbeille = function that does it).
+    """
     if not os.path.exists(ancien) or os.path.exists(nouveau):
         return False
     lignes = []
@@ -136,6 +162,29 @@ def migrer(ancien, nouveau):
                            'Comments like this one are ignored. Write your instructions below, one per line.', reste)
             ligne = '<!-- %s -->' % reste if reste else ''
         lignes.append(ligne.rstrip())
-    ecrire(nouveau, _avec_section_vide('\n'.join(lignes)))
-    os.remove(ancien)
+    ecrire(nouveau, '\n'.join(lignes).rstrip() + '\n')
+    corbeille(ancien)
+    return True
+
+
+def migrer_memoire(fichier_instructions, fichier_memoire):
+    """Notes kept at the end of instructions.md by the previous version -> memory.md. Done once.
+
+    That end (which the app had added) leaves instructions.md. Nothing is changed unless what follows
+    the dashes is the app's own section: its comment, then only "- note" lines.
+    """
+    texte = lire(fichier_instructions).replace('\r\n', '\n')
+    m = ANCIEN_SEPARATEUR.search(texte)
+    if not m:
+        return False
+    fin = texte[m.end():]
+    if ANCIEN_ENTETE not in fin:
+        return False
+    anciennes = [l for l in nettoyer(fin).split('\n') if l]
+    if any(not re.match(r'\s*- ', l) for l in anciennes):
+        return False
+    if anciennes:
+        ajouter(fichier_memoire, anciennes)
+    # The old template explained the dashed line: say where the notes go now.
+    ecrire(fichier_instructions, texte[:m.start()].rstrip().replace(ANCIEN_GABARIT, NOUVEAU_GABARIT) + '\n')
     return True

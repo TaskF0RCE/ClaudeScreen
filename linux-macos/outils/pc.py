@@ -13,16 +13,12 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import humain  # noqa: E402
-import memoire  # noqa: E402
 import natif  # noqa: E402
-
-MEMOIRE = os.path.join(os.path.dirname(humain.FICHIER), 'memory.txt')  # persistent memory: on or off
 
 USAGE = """Actions:
   capture | zoom X Y W H | clic X Y | doubleclic X Y | clicdroit X Y | survol X Y
-  glisser X1 Y1 X2 Y2 | defiler X Y N | ecrire "text" | ecrire-fichier PATH
+  glisser X1 Y1 X2 Y2 | relier X1 Y1 X2 Y2 | defiler X Y N | ecrire "text" | ecrire-fichier PATH
   touche COMBO | attendre MS | corbeille PATH | page-pdf PATH N
-  memoire "note"
 """
 
 
@@ -84,6 +80,15 @@ def main(argv):
     elif action == 'glisser':
         natif.glisser(X(nombre(0)), Y(nombre(1)), X(nombre(2)), Y(nombre(3)), doux)
         print('OK')
+    elif action == 'relier':
+        # relier X1 Y1 X2 Y2: click on point 1, then on point 2. Links two items in tools where a link is made
+        # with two clicks (Packet Tracer or GNS3 cable, the cable tool being selected). The 4 numbers are checked
+        # first, so a bad argument never leaves a link half done. Smooth mode applies, like for any click.
+        x1, y1, x2, y2 = X(nombre(0)), Y(nombre(1)), X(nombre(2)), Y(nombre(3))
+        natif.clic(x1, y1, doux=doux)
+        time.sleep(0.4)  # the first click must be taken in before the second one
+        natif.clic(x2, y2, doux=doux)
+        print('OK')
     elif action == 'defiler':
         natif.molette(X(nombre(0)), Y(nombre(1)), int(nombre(2)), doux)
         print('OK')
@@ -138,19 +143,6 @@ def main(argv):
         except ValueError as ex:
             raise SystemExit(str(ex))
         print('Page %d/%d: %s (read it with Read)' % (numero, pages, png))
-    elif action == 'memoire':
-        # memoire "note": persistent memory (icon menu). Only appends below the separator of
-        # System-Context/instructions.md: the user's part above it is never touched.
-        if not memoire.active(MEMOIRE):
-            raise SystemExit('Refused: persistent memory is off (the user turns it on in the icon menu).')
-        ctx = os.environ.get('ECRAN_CONTEXTE')
-        if not ctx:
-            raise SystemExit('ECRAN_CONTEXTE is not set: this script must be started by ClaudeScreen.')
-        try:
-            memoire.ajouter(os.path.join(ctx, 'instructions.md'), ' '.join(valeurs))
-        except (ValueError, OSError) as ex:
-            raise SystemExit(str(ex))
-        print('Note saved.')
     else:
         raise SystemExit('Unknown action: %s\n%s' % (action, USAGE))
 
