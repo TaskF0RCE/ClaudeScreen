@@ -11,9 +11,9 @@ Comments (`<!-- ... -->`) are ignored. The file is read again for each task: you
 Examples:
 
 ```
-I'm a BTS SIO student, SISR track. Cisco hardware, Packet Tracer 8.
+I'm a second-year computer science student.
 For quizzes: tick the answers and click Next, but never click "Finish exam".
-Always answer in French.
+Always answer in English.
 ```
 
 This file is yours: neither ClaudeScreen nor Claude ever changes it.

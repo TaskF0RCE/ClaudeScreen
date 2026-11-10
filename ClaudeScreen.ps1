@@ -26,6 +26,9 @@ $DureeMax = [TimeSpan]::FromMinutes(20)
 $JoursConserves = 30
 # Apps where triage is pointless: go straight to Opus (networking, maths).
 $AppsOpus = '^(PacketTracer|gns3|putty|MobaXterm|SecureCRT|Wireshark|winbox|matlab|Mathematica|GeoGebra)'
+# Language of the final answer: the Windows display language (unless the user's instructions ask for another one).
+$Langue = try { $c = [Globalization.CultureInfo]::CurrentUICulture; if ($c.IsNeutralCulture) { $c.EnglishName } else { $c.Parent.EnglishName } } catch { '' }
+if (-not $Langue -or $Langue -match 'Invariant') { $Langue = 'English' }
 # Earlier versions put the generated files at the root of the folder: move them into data/.
 New-Item -ItemType Directory -Force $Donnees | Out-Null
 function Noter([string]$texte) { Add-Content -Path $Journal -Value ("{0:yyyy-MM-dd HH:mm:ss}  {1}" -f (Get-Date), $texte) -Encoding UTF8 }
@@ -281,7 +284,7 @@ function Lancer-Tache($capture, [string]$instruction) {
 
 Persistent memory is ON (the user turned it on in the icon menu). Your notes from the previous tasks:
 $notes
-They may be outdated: the screen and the user's instructions take priority. To save what will help with the next tasks (what you learned about the user, the course or the exercise, how far you got), end your final answer with one line per new note, each starting with "MEMORY: " (for example: MEMORY: Quiz on OSPF chapter 3, questions 1 to 10 done). The app saves these lines and does not show them to the user. One short fact per line (300 characters at most), do not repeat a note already listed, never save passwords or personal data.
+They may be outdated: the screen and the user's instructions take priority. To save what will help with the next tasks (what you learned about the user, the course or the exercise, how far you got), end your final answer with one line per new note, each starting with "MEMORY: " (for example: MEMORY: Quiz on chapter 3, questions 1 to 10 done). The app saves these lines and does not show them to the user. One short fact per line (300 characters at most), do not repeat a note already listed, never save passwords or personal data.
 
 "@
         }
@@ -346,7 +349,7 @@ $instructions$memoire$documents$precision
    - If the task asks you to produce something (diagram, document, code, summary, HTML page, SVG...), create the files with the Write tool in the current folder: $Travail
    - Do not add, move or delete what the user has set up on screen (items of a diagram or a topology...) unless the task asks for it. To type a sequence of commands into a console, write them to a file in the current folder and type it with ecrire-fichier, then check the result.
    - If another window comes to the front or the user takes back control, stop so you don't type into their window, and say how far you got.
-3. Your final answer: plain text, in French, short. What you did and/or the answer, and the path of any files created. It is shown when the user clicks the icon.
+3. Your final answer: plain text, short, in $Langue (the language of this computer) unless the user's instructions ask for another language. What you did and/or the answer, and the path of any files created. It is shown when the user clicks the icon.
 
 $outil
 Actions:
@@ -383,7 +386,7 @@ Strict rules:
         $tri = @"
 Read the image $png with the Read tool. Active window: $($fenetre[0]) - "$($fenetre[1])".
 $instructions$precision
-What is the task visible on screen? Answer OPUS if it requires calculations (maths, physics, subnetting, conversions), programming, network or infrastructure configuration (routers, switches, VLANs, servers), a diagram to design or long reasoning.
+What is the task visible on screen? Answer OPUS if it requires calculations (maths, physics, conversions...), programming, technical configuration (network, servers, software), a diagram to design or long reasoning.
 Answer SONNET for a course multiple-choice quiz, a knowledge question, a simple form, a short text to write, or if it is unclear.
 Answer with a single word: OPUS or SONNET.
 "@

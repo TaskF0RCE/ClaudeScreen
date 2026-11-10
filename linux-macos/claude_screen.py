@@ -99,6 +99,25 @@ OPTIONS_TACHE = ['--tools', 'Read,Write,Edit,Glob,Grep,Bash']
 APPS_OPUS = re.compile(r'packet ?tracer|gns3|putty|mobaxterm|securecrt|wireshark|winbox|matlab|mathematica'
                        r'|geogebra|minicom|termius|zoc|royal ?tsx', re.IGNORECASE)
 SYSTEME = 'macOS' if MAC else 'Linux'
+
+
+def langue_systeme():
+    """Code of the system language (fr, en, de...), for the language of the final answer."""
+    code = ''
+    if MAC:
+        try:
+            code = subprocess.run(['defaults', 'read', '-g', 'AppleLocale'], capture_output=True, text=True,
+                                  timeout=3).stdout.strip()
+        except Exception:
+            code = ''
+    for variable in ('LC_ALL', 'LC_MESSAGES', 'LANG'):
+        if not code:
+            code = os.environ.get(variable, '')
+    code = re.split(r'[_.@-]', code)[0].lower()
+    return code if re.fullmatch(r'[a-z]{2,3}', code) else 'en'
+
+
+LANGUE = langue_systeme()
 NOMS_RACCOURCIS = raccourcis.noms()
 
 
@@ -184,7 +203,7 @@ Active window: {fenetre[0]} - "{fenetre[1]}"
    - If the task asks you to produce something (diagram, document, code, summary, HTML page, SVG...), create the files with the Write tool in the current folder: {TRAVAIL}
    - Do not add, move or delete what the user has set up on screen (items of a diagram or a topology...) unless the task asks for it. To type a sequence of commands into a console, write them to a file in the current folder and type it with ecrire-fichier, then check the result.
    - If another window comes to the front or the user takes back control, stop so you don't type into their window, and say how far you got.
-3. Your final answer: plain text, in French, short. What you did and/or the answer, and the path of any files created. It is shown when the user clicks the icon.
+3. Your final answer: plain text, short, in the language of this computer (language code: {LANGUE}) unless the user's instructions ask for another language. What you did and/or the answer, and the path of any files created. It is shown when the user clicks the icon.
 
 Computer control tool: run EXACTLY this command in the terminal (no quotes around the path, nothing before or after, one action per command):
   {PC_COMMANDE} <action> [arguments]
@@ -216,7 +235,7 @@ Strict rules:
 def texte_tri(png, fenetre, precision, instructions=''):
     return f"""Read the image {png} with the Read tool. Active window: {fenetre[0]} - "{fenetre[1]}".
 {instructions}{precision}
-What is the task visible on screen? Answer OPUS if it requires calculations (maths, physics, subnetting, conversions), programming, network or infrastructure configuration (routers, switches, VLANs, servers), a diagram to design or long reasoning.
+What is the task visible on screen? Answer OPUS if it requires calculations (maths, physics, conversions...), programming, technical configuration (network, servers, software), a diagram to design or long reasoning.
 Answer SONNET for a course multiple-choice quiz, a knowledge question, a simple form, a short text to write, or if it is unclear.
 Answer with a single word: OPUS or SONNET.
 """
@@ -300,7 +319,7 @@ def texte_memoire():
             "They may be outdated: the screen and the user's instructions take priority. To save what will help "
             "with the next tasks (what you learned about the user, the course or the exercise, how far you got), "
             "end your final answer with one line per new note, each starting with \"MEMORY: \" (for example: "
-            "MEMORY: Quiz on OSPF chapter 3, questions 1 to 10 done). The app saves these lines and does not show "
+            "MEMORY: Quiz on chapter 3, questions 1 to 10 done). The app saves these lines and does not show "
             "them to the user. One short fact per line (300 characters at most), do not repeat a note already "
             "listed, never save passwords or personal data.\n" % notes)
 

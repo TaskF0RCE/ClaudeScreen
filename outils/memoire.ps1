@@ -26,9 +26,9 @@ Comments like this one are ignored. You can also drop courses, PDFs or assignmen
 in this folder: Claude will read them if needed.
 
 Examples:
-I'm a BTS SIO student, SISR track. Cisco hardware, Packet Tracer 8.
+I'm a second-year computer science student.
 For quizzes: tick the answers and click Next, but never click "Finish exam".
-Always answer in French.
+Always answer in English.
 
 This file is yours: neither the app nor Claude ever changes it.
 Claude's notes (Persistent memory in the icon menu) go to memory.md, next to this file.
