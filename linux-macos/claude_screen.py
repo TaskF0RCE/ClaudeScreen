@@ -431,6 +431,8 @@ class Appli:
         self.fenetre_resultat = None
         self.dernier_appui = 0.0
         self.dernier_nettoyage = 0.0
+        self.maj = None          # "claude update" process, see mettre_a_jour_claude
+        self.derniere_maj = None
         self.icone = None
         self.choix_modele = lire_texte(FICHIER_MODELE) or 'auto'
         if self.choix_modele not in ('auto', 'sonnet', 'opus'):
@@ -478,6 +480,11 @@ class Appli:
         claude = trouver_claude()
         if not claude:
             raise RuntimeError('Claude Code not found. Install it: curl -fsSL https://claude.ai/install.sh | bash')
+        if self.maj and self.maj.poll() is None:
+            try:
+                self.maj.wait(timeout=60)  # an update still running: let it finish first (at most 1 min)
+            except subprocess.TimeoutExpired:
+                pass
         run = self.run
         env = {k: v for k, v in os.environ.items() if not k.startswith('CLAUDE')}
         env['ECRAN_RUN'] = run
@@ -492,6 +499,23 @@ class Appli:
             self.proc = subprocess.Popen(commande, stdin=entree, stdout=sortie, stderr=erreurs, cwd=TRAVAIL, env=env,
                                          start_new_session=True)  # separate group: stop the whole tree
         self.tuer_a = None
+
+    def mettre_a_jour_claude(self):
+        """Claude Code update, at startup then once a day: the app only runs "claude -p", which may never update
+        it, and the app needs recent options. In the background, never during a task; if it fails (no internet...),
+        the current version stays."""
+        self.derniere_maj = time.monotonic()
+        if self.maj and self.maj.poll() is None:
+            return
+        claude = trouver_claude()
+        if not claude:
+            return
+        env = {k: v for k, v in os.environ.items() if not k.startswith('CLAUDE')}
+        try:
+            self.maj = subprocess.Popen([claude, 'update'], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                        stderr=subprocess.DEVNULL, cwd=DONNEES, env=env, start_new_session=True)
+        except OSError:
+            self.maj = None
 
     def lire_run(self, nom):
         return lire_texte(os.path.join(self.run, nom))
@@ -709,6 +733,13 @@ class Appli:
         maintenant = time.monotonic()
         if maintenant - self.dernier_nettoyage >= 6 * 3600:
             self.nettoyer_runs()
+        if not self.proc and (self.derniere_maj is None or maintenant - self.derniere_maj >= 24 * 3600):
+            self.mettre_a_jour_claude()
+        if self.maj and self.maj.poll() is None and maintenant - self.derniere_maj >= 600:
+            try:
+                self.maj.kill()  # stuck update: the next try is in 24 h
+            except OSError:
+                pass
         if not self.proc:
             return
         if self.proc.poll() is not None:

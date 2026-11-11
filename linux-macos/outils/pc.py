@@ -1,4 +1,4 @@
-"""Computer control for Claude (equivalent of pc.ps1).
+"""Computer control for Claude (equivalent of the Windows actions.ps1 and mcp.ps1).
 
 Coordinates are in screenshot pixels (see screen.json in the task folder).
 Claude calls it through the small data/pc script generated when the app starts.

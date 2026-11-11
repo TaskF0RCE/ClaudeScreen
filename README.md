@@ -66,7 +66,6 @@ Right-click the icon:
 - **Model**: Auto, Always Sonnet or Always Opus (the choice is remembered)
 - **Smooth mode**: the mouse glides and the text is typed at a human pace (see below; the choice is remembered)
 - **Persistent memory**: Claude keeps notes from one task to the next (see below; the choice is remembered)
-- **Fast control (MCP)**: Claude drives the PC through a small server kept open during the task (on by default, see below; the choice is remembered)
 - **Open the Claude-Work folder**
 - **Stop the current task**
 - **Quit**
@@ -98,17 +97,17 @@ By default, each task starts from scratch. Check **Persistent memory** in the ic
 - A task you stop saves no note.
 - The choice is remembered (`data/memory.txt`): the notes stay after a restart of the app as long as the mode is checked.
 
-### Fast control (MCP)
+### PC control (MCP)
 
-**On by default.** Claude drives the PC through `outils/mcp.ps1`: a small [MCP](https://modelcontextprotocol.io) server that Claude Code starts at the beginning of the task and stops at the end.
+Claude drives the PC through `outils/mcp.ps1`: a small [MCP](https://modelcontextprotocol.io) server that Claude Code starts at the beginning of the task and stops at the end. Nothing to check or set up.
 
 - Claude sends several actions in one call (for example: click a field, type the answer, press Enter).
 - The screenshot taken after the last action comes back in the same answer.
-- There is no terminal at all in this mode: Claude only gets the file tools and the `pc` tool.
+- There is no terminal: Claude only gets the file tools and the `pc` tool.
 
-Unchecking **Fast control (MCP)** in the icon menu goes back to the classic mode, in case the server does not start on your PC: every action (a click, a key, a screenshot) then starts PowerShell twice, once for the safety hook and once for `outils/pc.ps1`. That costs 2 to 3 seconds per action, and a screenshot takes two steps (take it, then read it).
+It is a single PowerShell script of a few kilobytes: nothing to install, nothing running outside a task, no network port (Claude Code talks to it through its standard input and output). The result window and the log show how long each task took.
 
-It is a single PowerShell script of a few kilobytes: nothing to install, nothing running outside a task, no network port (Claude Code talks to it through its standard input and output). The actions are the same in both modes (`outils/actions.ps1`), and so are smooth mode and the protection of `System-Context`. The choice applies to the next task and is remembered (`data/mcp.txt`, `off` for the classic mode). The result window and the log show how long each task took, so you can compare the two modes.
+Older versions started PowerShell twice for every action (once for the safety hook, once for a `pc.ps1` script), about 5 seconds per action.
 
 Windows only for now; the macOS/Linux port keeps its `data/pc` command.
 
@@ -123,16 +122,16 @@ During a task, don't touch the mouse or keyboard: Claude uses the real ones. If 
 Claude is started with limited permissions (`data\settings.json`, generated at startup). It can only:
 
 - read the screenshots;
-- click, type and scroll, through the `pc` tool of `outils/mcp.ps1` (Fast control, the default: no terminal at all), or through `outils/pc.ps1` when Fast control is off (no other command is allowed);
+- click, type and scroll, through the `pc` tool of `outils/mcp.ps1` (no terminal at all);
 - create or edit files in `Documents\Claude-Work` (except in `System-Context`, which is read-only).
 
 On top of that:
 
-- **`System-Context` is read-only**, locked three times: a `deny` rule in `data\settings.json` (`Edit(...)`, which also covers Write), the hook `outils/garde.ps1` that refuses any file write in that folder, and `pc.ps1 corbeille` that refuses to touch it (or `Claude-Work`, which contains it). Claude has no way to write there: its [Persistent memory](#persistent-memory) notes are saved by the app itself.
-- **Nothing is ever permanently deleted.** The hook `outils/garde.ps1` blocks `Remove-Item`, `del`, `rm`, `format`, etc. To remove a file, Claude sends it to the Recycle Bin (`pc.ps1 corbeille`).
+- **`System-Context` is read-only**, locked three times: a `deny` rule in `data\settings.json` (`Edit(...)`, which also covers Write), the hook `outils/garde.ps1` that refuses any file write in that folder, and the `corbeille` action that refuses to touch it (or `Claude-Work`, which contains it). Claude has no way to write there: its [Persistent memory](#persistent-memory) notes are saved by the app itself.
+- **Nothing is ever permanently deleted.** The hook `outils/garde.ps1` blocks `Remove-Item`, `del`, `rm`, `format`, etc. To remove a file, Claude sends it to the Recycle Bin (`corbeille` action).
 - Its instructions forbid buying, paying, sending messages, entering passwords or bank details, and changing Windows settings. Text displayed on screen cannot override these rules.
 - No web access (WebFetch and WebSearch are denied).
-- Claude is started with only the tools a task needs (`Read`, `Write`, `Edit`, `Glob`, `Grep`, plus the `pc` tool, or `PowerShell` for `pc.ps1` when Fast control is off), without the MCP servers, connectors and skills of your account: tasks start faster and use less quota.
+- Claude is started with only the tools a task needs (`Read`, `Write`, `Edit`, `Glob`, `Grep` and the `pc` tool), without the MCP servers, connectors and skills of your account: tasks start faster and use less quota.
 
 ## Installation
 
@@ -182,9 +181,8 @@ Lancer.vbs          starts the app without a window (by hand)
 Installer-Demarrage.ps1  installs or removes the startup scheduled task
 outils/natif.cs     Windows calls (DPI, screenshot, mouse, keyboard, smooth mode, global hotkeys, active window)
 outils/natif.ps1    compiles natif.cs into a DLL only once (the name changes when the source changes)
-outils/actions.ps1  the PC control actions (click, type, screenshot...), shared by the two files below
-outils/pc.ps1       PC control tool used by Claude: one action per call
-outils/mcp.ps1      the same actions as an MCP server (Fast control): several actions per call, screenshot in the answer
+outils/actions.ps1  the PC control actions (click, type, screenshot...)
+outils/mcp.ps1      MCP server that gives these actions to Claude: several actions per call, screenshot in the answer
 outils/garde.ps1    hook that blocks permanent deletions and writes to System-Context
 outils/pdf.ps1      PDF reading: text extracted in advance, page as an image (with Poppler)
 outils/memoire.ps1  instructions.md (yours, never changed) and memory.md (Claude's notes, persistent memory)
@@ -197,14 +195,13 @@ data/               EVERYTHING the app generates, kept apart from the program (p
     prompts/            task.txt (instructions sent to Claude), triage.txt (model choice)
     responses/          task.txt, task-errors.txt, triage.txt, triage-errors.txt
     screen.json         position and scale of the captured screen
-    mcp.json            with Fast control: tells Claude Code how to start outils/mcp.ps1 for this task
+    mcp.json            tells Claude Code how to start outils/mcp.ps1 for this task
   context-cache/      text extracted from the System-Context PDFs (rebuilt when needed)
   log.txt             app log
   settings.json       permissions given to Claude (regenerated at each start)
   model.txt           model choice (Model menu)
   smooth.txt          smooth mode: on or off (Smooth mode menu)
   memory.txt          persistent memory: on or off (Persistent memory menu)
-  mcp.txt             fast control: on (default) or off (Fast control menu)
 ```
 
 The macOS/Linux version uses exactly the same `data/` layout. Older versions kept these files at the root of the folder (`runs/`, `journal.txt`...): they are moved into `data/` automatically at startup.
@@ -217,7 +214,7 @@ Automatic cleanup: at startup and then every 6 hours, the app permanently delete
 
 - Claude cannot run any program or command other than the control tool. For example, it cannot generate an image with Python, but it can write a diagram in SVG or HTML.
 - Precise mouse work (cables in Packet Tracer, drag and drop) is slow and not always reliable: cabling a large topology by hand is faster.
-- The Claude Code CLI must be up to date (`claude update`): the app uses recent options (`--tools`, `--effort`, `--strict-mcp-config`). With an old version, tasks fail with "unknown option".
+- The app needs a recent Claude Code (it uses `--tools`, `--effort`, `--strict-mcp-config` and an MCP server). It runs `claude update` in the background at startup and then once a day, without a window and never during a task, even if automatic updates are turned off in Claude Code. If a task fails with "unknown option", run `claude update` by hand.
 - For websites, the Claude in Chrome extension is often more reliable: it reads the page content directly instead of going through screenshots.
 - Only one screen is captured: the one the mouse is on when you press the shortcut.
 

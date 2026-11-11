@@ -1,7 +1,7 @@
 # MCP server (stdio) that gives Claude the PC control actions through one tool, "pc".
-# Used when "Fast control" is checked in the icon menu. Claude Code starts it once per task and keeps it
-# open: an action no longer starts PowerShell twice (hook + pc.ps1), several actions go in one call, and
-# the screenshot comes back in the answer instead of being read in a second step.
+# Claude Code starts it once per task and keeps it open: an action does not start a new PowerShell,
+# several actions go in one call, and the screenshot comes back in the answer instead of being read
+# in a second step.
 # Protocol: one JSON-RPC message per line on stdin/stdout (Model Context Protocol). Nothing else may be
 # written to stdout. No network port is opened. The actions themselves are in actions.ps1.
 $ErrorActionPreference = 'Stop'
@@ -36,7 +36,7 @@ function Get-ImageBase64([string]$png) {
 function Format-Image([string]$png) { '{"type":"image","data":"' + (Get-ImageBase64 $png) + '","mimeType":"image/jpeg"}' }
 function Format-Texte([string]$texte) { '{"type":"text","text":' + (ConvertTo-Texte $texte) + '}' }
 
-# "clic 10 20" -> action + arguments, as pc.ps1 would receive them.
+# "clic 10 20" -> action + arguments, for Invoke-ActionPc.
 function Split-Action([string]$ligne) {
     $ligne = $ligne.Trim()
     $nom, $reste = $ligne -split '\s+', 2
