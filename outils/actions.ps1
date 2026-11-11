@@ -16,6 +16,7 @@ $ActionsTouches = @{
     enter = 0x0D; entree = 0x0D; return = 0x0D; tab = 0x09; esc = 0x1B; escape = 0x1B; echap = 0x1B
     backspace = 0x08; delete = 0x2E; suppr = 0x2E; insert = 0x2D; space = 0x20; espace = 0x20
     home = 0x24; end = 0x23; pageup = 0x21; pagedown = 0x22
+    plus = 0xBB; minus = 0xBD; comma = 0xBC; period = 0xBE
     left = 0x25; up = 0x26; right = 0x27; down = 0x28; gauche = 0x25; haut = 0x26; droite = 0x27; bas = 0x28
 }
 # Path of the image made by the last action (capture, zoom, page-pdf), otherwise $null.
@@ -95,6 +96,19 @@ function Invoke-ActionPc([string]$Action, [string[]]$Valeurs) {
                 if ($a.StartsWith($b, [StringComparison]::OrdinalIgnoreCase) -or $b.StartsWith($a, [StringComparison]::OrdinalIgnoreCase)) {
                     throw "Refused: $($env:ECRAN_CONTEXTE) is read-only (the user's documents)."
                 }
+            }
+            # Anything else may go to the Recycle Bin (it can be restored), except what would break the PC or
+            # the session: Windows and the programs, a whole drive, or the user's whole profile.
+            $cible = [IO.Path]::GetFullPath($chemin).Replace('/', '\').TrimEnd('\') + '\'
+            $systeme = @($env:WINDIR, $env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:ProgramData) | Where-Object { $_ }
+            foreach ($dossier in $systeme) {
+                $d = $dossier.TrimEnd('\') + '\'
+                if ($cible.StartsWith($d, [StringComparison]::OrdinalIgnoreCase) -or $d.StartsWith($cible, [StringComparison]::OrdinalIgnoreCase)) {
+                    throw "Refused: $chemin is part of Windows or of the installed programs, or contains them."
+                }
+            }
+            if (($env:USERPROFILE.TrimEnd('\') + '\').StartsWith($cible, [StringComparison]::OrdinalIgnoreCase)) {
+                throw "Refused: $chemin is a whole drive or the user's whole profile."
             }
             $fs = [Microsoft.VisualBasic.FileIO.FileSystem]
             $ui = [Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs

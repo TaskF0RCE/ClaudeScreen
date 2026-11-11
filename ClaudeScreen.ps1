@@ -10,17 +10,32 @@ $Outils = Join-Path $Racine 'outils'
 . (Join-Path $Outils 'memoire.ps1')
 # Everything the app generates goes to data/ (same layout as the macOS/Linux version):
 #   data/runs/<date>/  one folder per task: images/, prompts/, responses/ + screen.json
-#   data/context-cache/, data/log.txt, data/settings.json, data/model.txt, data/smooth.txt, data/memory.txt
+#   data/context-cache/, data/log.txt, data/settings.json, data/model.txt, data/smooth.txt, data/memory.txt,
+#   data/context.txt, data/terminal.txt
 $Donnees = Join-Path $Racine 'data'
 $Runs = Join-Path $Donnees 'runs'
 $Journal = Join-Path $Donnees 'log.txt'
 $FichierModele = Join-Path $Donnees 'model.txt'
 $FichierSmooth = Join-Path $Donnees 'smooth.txt'   # smooth mode: 'on' or 'off', read again at every action
 $FichierMemoire = Join-Path $Donnees 'memory.txt'  # persistent memory: 'on' or 'off'
+$FichierContexte = Join-Path $Donnees 'context.txt'   # name of the active context (Context menu); none = Default
+$FichierTerminal = Join-Path $Donnees 'terminal.txt'  # terminal access (PowerShell tool): 'on' (default) or 'off'
 $CacheContexte = Join-Path $Donnees 'context-cache'   # text extracted from the context PDFs
 # Name shown in the notification area (tooltip, menu, result window) and name of the work folder in Documents.
 $Nom = 'Claude-Work'
-$Claude = Join-Path $env:USERPROFILE '.local\bin\claude.exe'
+# Claude Code: the official installer puts it in %USERPROFILE%\.local\bin (checked first: no search needed).
+# Otherwise the PATH (npm, winget...), then the npm folder. Looked for again at each task while it is not found.
+function Trouver-Claude {
+    $defaut = Join-Path $env:USERPROFILE '.local\bin\claude.exe'
+    if (Test-Path -LiteralPath $defaut) { return $defaut }
+    $trouve = Get-Command claude -CommandType Application -ErrorAction SilentlyContinue |
+        Where-Object { $_.Source -match '\.(exe|cmd|bat)$' } | Select-Object -First 1
+    if ($trouve) { return $trouve.Source }
+    $npm = Join-Path $env:APPDATA 'npm\claude.cmd'
+    if (Test-Path -LiteralPath $npm) { return $npm }
+    $defaut
+}
+$Claude = Trouver-Claude
 $DureeMax = [TimeSpan]::FromMinutes(20)
 $JoursConserves = 30
 # Apps where triage is pointless: go straight to Opus (networking, maths).
@@ -59,6 +74,7 @@ $FichierInstructions = Join-Path $Contexte 'instructions.md'
 $FichierNotes = Join-Path $Contexte 'memory.md'
 $AnciennesInstructions = Join-Path $Contexte 'instructions.txt'   # older versions
 $FichierLisezMoi = Join-Path $Contexte 'README.md'
+$DossierContextes = Join-Path $Contexte 'Contexts'   # one .md file per context, chosen in the icon menu
 New-Item -ItemType Directory -Force $Runs, $Travail, $Contexte | Out-Null
 # Older versions: instructions.txt (# = comment), then Claude's notes at the end of instructions.md.
 # Converted once; after that, instructions.md is never changed again.
@@ -78,6 +94,13 @@ try {
         Copy-Item $guide $FichierLisezMoi
     }
 } catch { Noter "System-Context guide: $($_.Exception.Message)" }
+# Contexts: copied once from the app's contexts folder. After that the files belong to the user (edit, add, remove).
+try {
+    if (-not (Test-Path -LiteralPath $DossierContextes)) {
+        Copy-Item -LiteralPath (Join-Path $Racine 'contexts') -Destination $DossierContextes -Recurse
+        Noter 'Contexts folder created'
+    }
+} catch { Noter "Contexts folder: $($_.Exception.Message)" }
 # Claude Code permission rule for the context folder: POSIX-style path
 # (C:\Users\x -> //c/Users/x), as Claude Code does before comparing paths.
 $RegleContexte = $Contexte.Replace('\', '/')
@@ -97,15 +120,16 @@ if (-not (Test-Poppler)) {
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
 # Settings passed to Claude: limited permissions + a hook that blocks deletions.
-# Claude can only read, write files in the work folder (acceptEdits) and use the "pc" tool of outils/mcp.ps1.
+# Claude can read, write files in the work folder (acceptEdits), use the "pc" tool of outils/mcp.ps1 and, when
+# Terminal access is checked in the icon menu, run PowerShell commands: each one goes through the hook
+# outils/garde.ps1 first, which refuses what is outside a task (see that file).
 # System-Context is read-only: any change there is refused (deny rule, which takes precedence).
-# Claude gets no terminal; the command hook stays as a safety net.
 $Reglages = Join-Path $Donnees 'settings.json'
 $garde = (Join-Path $Outils 'garde.ps1').Replace('\', '/')
 @{
     permissions = @{
         defaultMode = 'acceptEdits'
-        allow       = @('Read', 'Glob', 'Grep', 'mcp__pc')
+        allow       = @('Read', 'Glob', 'Grep', 'mcp__pc', 'PowerShell')
         deny        = @('WebFetch', 'WebSearch', "Edit($RegleContexte)")
     }
     hooks = @{
@@ -192,6 +216,7 @@ $script:Debut = $null
 $script:Modele = $null
 $script:Arret = $null       # reason for the requested stop, otherwise $null
 $script:MemoireTache = $false   # persistent memory was on when the current task started
+$script:TerminalTache = $false  # terminal access was on when the current task started
 $script:Image = 0
 $script:ChoixModele = 'auto'
 if (Test-Path $FichierModele) { $script:ChoixModele = (Get-Content $FichierModele -Raw).Trim() }
@@ -199,12 +224,26 @@ if (Test-Path $FichierModele) { $script:ChoixModele = (Get-Content $FichierModel
 # Options for every call: no MCP server and no skill from the user's account. A task needs neither,
 # and loading them made each call slower and heavier (about 4 times more tokens for the triage).
 $OptionsClaude = '--strict-mcp-config --disable-slash-commands'
-# Triage only reads the screenshot. The task gets the file tools and no terminal: the PC actions go through
-# the "pc" tool of outils/mcp.ps1, an MCP server that Claude Code starts for the task and stops at the end
-# (several actions per call, the screenshot comes back in the result).
+# Triage only reads the screenshot. The task gets the file tools; the PC actions go through the "pc" tool of
+# outils/mcp.ps1, an MCP server that Claude Code starts for the task and stops at the end (several actions
+# per call, the screenshot comes back in the result). With Terminal access, the PowerShell tool is added.
 $OptionsTri = '--tools Read --effort low'
 $OptionsTache = '--tools Read,Write,Edit,Glob,Grep'
 $McpScript = Join-Path $Outils 'mcp.ps1'
+
+# Contexts (System-Context\Contexts\<name>.md): who the user is and how to work for them. One is active at a
+# time (Context menu, data/context.txt); "Default" when none is chosen or when the chosen file is gone.
+function Lister-Contextes {
+    $noms = @(Get-ChildItem -LiteralPath $DossierContextes -Filter *.md -File -ErrorAction SilentlyContinue |
+        ForEach-Object { $_.BaseName } | Sort-Object)
+    @($noms | Where-Object { $_ -eq 'Default' }) + @($noms | Where-Object { $_ -ne 'Default' })
+}
+function Lire-ContexteActif {
+    $nom = if (Test-Path -LiteralPath $FichierContexte) { "$(Get-Content -LiteralPath $FichierContexte -Raw -Encoding UTF8)".Trim() } else { '' }
+    if (-not $nom -or -not (Test-Path -LiteralPath (Join-Path $DossierContextes "$nom.md"))) { $nom = 'Default' }
+    $texte = Get-InstructionUtilisateur (Join-Path $DossierContextes "$nom.md")
+    [pscustomobject]@{ Nom = $nom; Texte = $texte }
+}
 
 # Claude Code update: at startup, then once a day. The app only runs "claude -p", which may never update it,
 # and the app needs recent options. In the background, without a window, never during a task (Windows
@@ -212,11 +251,12 @@ $McpScript = Join-Path $Outils 'mcp.ps1'
 $script:Maj = $null
 $script:DerniereMaj = [datetime]::MinValue
 function Mettre-A-Jour-Claude {
-    if ($script:Proc -or ($script:Maj -and -not $script:Maj.HasExited) -or -not (Test-Path $Claude)) { return }
+    if ($script:Proc -or ($script:Maj -and -not $script:Maj.HasExited) -or -not (Test-Path -LiteralPath $Claude)) { return }
     $script:DerniereMaj = Get-Date
     try {
         if ($script:Maj) { $script:Maj.Dispose() }
-        $psi = New-Object System.Diagnostics.ProcessStartInfo $Claude, 'update'
+        # Through cmd.exe: Claude Code installed with npm is a .cmd file.
+        $psi = New-Object System.Diagnostics.ProcessStartInfo 'cmd.exe', "/d /s /c `"`"$Claude`" update`""
         $psi.UseShellExecute = $false
         $psi.CreateNoWindow = $true
         $psi.WorkingDirectory = $Donnees
@@ -284,6 +324,13 @@ function Lancer-Tache($capture, [string]$instruction) {
         $script:Run = $run
         $script:Debut = Get-Date
         $script:Arret = $null
+        if (-not (Test-Path -LiteralPath $Claude)) { $script:Claude = Trouver-Claude }
+        if (-not (Test-Path -LiteralPath $Claude)) { throw "Claude Code not found ($Claude). Install it, log in once, then try again: see the README." }
+        $script:TerminalTache = $script:Terminal
+        $actif = Lire-ContexteActif
+        $contexteActif = "`nActive context: $($actif.Nom) (chosen by the user in the icon menu)."
+        if ($actif.Texte) { $contexteActif += " It says who the user is and how to work for them:`n$($actif.Texte)" }
+        $contexteActif += "`n"
         $precision = if ($instruction) { "`nUser instruction for this task (takes priority over everything else): $instruction`n" } else { '' }
 
         # Optional context from System-Context: instructions.md (user's part, without comments) + list of documents.
@@ -302,14 +349,16 @@ function Lancer-Tache($capture, [string]$instruction) {
 
 Persistent memory is ON (the user turned it on in the icon menu). Your notes from the previous tasks:
 $notes
-They may be outdated: the screen and the user's instructions take priority. To save what will help with the next tasks (what you learned about the user, the course or the exercise, how far you got), end your final answer with one line per new note, each starting with "MEMORY: " (for example: MEMORY: Quiz on chapter 3, questions 1 to 10 done). The app saves these lines and does not show them to the user. One short fact per line (300 characters at most), do not repeat a note already listed, never save passwords or personal data.
+They may be outdated: the screen and the user's instructions take priority. To save what will help with the next tasks (what you learned about the user, their work, how far you got), end your final answer with one line per new note, each starting with "MEMORY: " (for example: MEMORY: Report for client X, sections 1 to 3 done). The app saves these lines and does not show them to the user. One short fact per line (300 characters at most), do not repeat a note already listed, never save passwords or personal data.
 
 "@
         }
-        # Documents: everything except instructions.md, memory.md, the folder's README and system/hidden/temporary files.
+        # Documents: everything except instructions.md, memory.md, the folder's README, the Contexts folder and
+        # system/hidden/temporary files.
         $documents = ''
         $tous = @(Get-ChildItem $Contexte -File -Recurse -ErrorAction SilentlyContinue | Where-Object {
             $_.FullName -ne $FichierInstructions -and $_.FullName -ne $FichierNotes -and
+            -not $_.FullName.StartsWith($DossierContextes + '\', [StringComparison]::OrdinalIgnoreCase) -and
             $_.FullName -ne $AnciennesInstructions -and $_.FullName -ne $FichierLisezMoi -and
             [int]($_.Attributes -band ([IO.FileAttributes]::Hidden -bor [IO.FileAttributes]::System)) -eq 0 -and
             $_.Name -notmatch '^(\.|~\$|desktop\.ini$|thumbs\.db$)'
@@ -343,21 +392,27 @@ $liste
         }
 
         $outil = @"
-PC control tool: the "pc" tool (mcp__pc__pc). Give it "actions": the list of actions to run in order (it stops at the first error), for example ["clic 412 300", "ecrire Paris", "touche enter"]. Each call takes time: put in one call all the actions that need no look at the screen in between (several answers to tick, a field to click then fill, a text then enter). The result ends with a new screenshot taken after the last action: look at it instead of asking for another one, and pass "capture": false only when you do not need it. There is no terminal.
+PC control tool: the "pc" tool (mcp__pc__pc). Give it "actions": the list of actions to run in order (it stops at the first error), for example ["clic 412 300", "ecrire Paris", "touche enter"]. Each call takes time: put in one call all the actions that need no look at the screen in between (several answers to tick, a field to click then fill, a text then enter). The result ends with a new screenshot taken after the last action: look at it instead of asking for another one, and pass "capture": false only when you do not need it. The result also names the active window: if it is not the one you are working in, stop.
 "@
+        if ($script:TerminalTache) {
+            $outil += @"
+
+Terminal: you also have the PowerShell tool. The screen comes first: use a command only when the task cannot reasonably be done on screen, or is clearly better done that way (handling many files, processing data, converting or producing a document, reading the state of the system). Stay inside the task: work in the current folder unless the task is about other files, and change nothing else on the PC. No administrator rights, no installation, no download, no change to Windows, its settings, services, accounts or security, no stopping of other programs. A command that breaks these rules is blocked: do not try another way round, explain it in your final answer.
+"@
+        } else { $outil += "`nThere is no terminal." }
         $image = 'the image comes back in the result'
         $consigne = @"
 You were started by a keyboard shortcut: the user just pressed Ctrl+Alt+C so that you do the task visible on their screen. Nobody can answer you while you work: do not ask any questions.
 
 Screenshot: $png ($largeur x $hauteur px). Start by reading it with the Read tool.
 Active window: $($fenetre[0]) - "$($fenetre[1])"
-$instructions$memoire$documents$precision
-1. Find what is being asked. If an instruction or instructions from the user are given above, follow them instead of guessing. Otherwise, first priority: underlined, highlighted or boxed text. Otherwise, the main element on screen: multiple-choice quiz, exercise, question, form, diagram or image to reproduce, network or software configuration, etc.
+$contexteActif$instructions$memoire$documents$precision
+1. Find what is being asked. If an instruction or instructions from the user are given above, follow them instead of guessing. Otherwise, the active context above says how to find the task. Otherwise, the main thing on screen that calls for an action.
 2. Do the whole task, from start to finish.
-   - If the answer must go on the screen (ticking boxes, filling in fields, clicking, writing in an open document, typing commands in a console), control the PC with the tool below. After each important action, take a new screenshot to check. If there is more further down (other questions), scroll and continue. You may click Submit/Next on a quiz or exercise once all the answers are in.
-   - If the task asks you to produce something (diagram, document, code, summary, HTML page, SVG...), create the files with the Write tool in the current folder: $Travail
+   - If the answer must go on the screen (ticking boxes, filling in fields, clicking, writing in an open document, typing commands in a console), control the PC with the tool below. After each important action, take a new screenshot to check. If there is more further down (other questions), scroll and continue. You may click Next or Submit on a form, quiz or exercise once everything asked is filled in.
+   - If the task asks you to produce something (diagram, document, code, summary, HTML page, SVG...), create the files in the current folder: $Travail
    - Do not add, move or delete what the user has set up on screen (items of a diagram or a topology...) unless the task asks for it. To type a sequence of commands into a console, write them to a file in the current folder and type it with ecrire-fichier, then check the result.
-   - If another window comes to the front or the user takes back control, stop so you don't type into their window, and say how far you got.
+   - If another window comes to the front or the user takes back control (the screenshot or the active window changes without you), stop so you don't type into their window, and say how far you got.
 3. Your final answer: plain text, short, in $Langue (the language of this computer) unless the user's instructions ask for another language. What you did and/or the answer, and the path of any files created. It is shown when the user clicks the icon.
 
 $outil
@@ -370,7 +425,7 @@ Actions:
   defiler X Y N           N mouse-wheel notches; N>0 scrolls up, N<0 scrolls down
   ecrire "text"           types the text where the cursor is (click in the field first)
   ecrire-fichier PATH     types the content of a UTF-8 text file (long texts, quotes, line breaks, command sequences)
-  touche COMBO            key combo, e.g. enter, tab, ctrl+a, ctrl+s, pagedown, f5
+  touche COMBO            key combo, e.g. enter, tab, ctrl+a, ctrl+s, pagedown, f5, ctrl+plus (plus, minus, comma, period are key names)
   attendre MS             wait
   corbeille PATH          sends a file or folder to the Recycle Bin
   page-pdf PATH N         image of page N of a PDF (diagrams, scanned pages); $image
@@ -394,9 +449,10 @@ Strict rules:
 
         $tri = @"
 Read the image $png with the Read tool. Active window: $($fenetre[0]) - "$($fenetre[1])".
+Active context: $($actif.Nom).
 $instructions$precision
-What is the task visible on screen? Answer OPUS if it requires calculations (maths, physics, conversions...), programming, technical configuration (network, servers, software), a diagram to design or long reasoning.
-Answer SONNET for a course multiple-choice quiz, a knowledge question, a simple form, a short text to write, or if it is unclear.
+What is the task visible on screen? Answer OPUS if it requires calculations (maths, physics, conversions...), programming, technical configuration (network, servers, software), data processing, a diagram to design or long reasoning.
+Answer SONNET for a knowledge question, multiple-choice questions, a simple form, a short text to write, a few clicks, or if it is unclear.
 Answer with a single word: OPUS or SONNET.
 "@
         [IO.File]::WriteAllText((Join-Path $run 'prompts\triage.txt'), $tri, $utf8)
@@ -420,9 +476,10 @@ function Lancer-Travail([string]$modele) {
             env     = @{ ECRAN_RUN = $script:Run; ECRAN_CONTEXTE = $Contexte }
         } } } | ConvertTo-Json -Depth 5
         [IO.File]::WriteAllText($config, $json, (New-Object System.Text.UTF8Encoding $false))
-        Demarrer-Claude $modele 'task' "$OptionsTache --mcp-config `"$config`""
+        $outils = $OptionsTache + $(if ($script:TerminalTache) { ',PowerShell' } else { '' })
+        Demarrer-Claude $modele 'task' "$outils --mcp-config `"$config`""
         Infobulle "working ($modele)..."
-        Noter "Model: $modele"
+        Noter ("Model: $modele" + $(if ($script:TerminalTache) { ', terminal' } else { '' }))
     } catch {
         Echec "Could not start the task: $($_.Exception.Message)"
     }
@@ -518,6 +575,13 @@ function Processus-Fini {
     }
 
     if ($script:Etape -eq 'tri') {
+        if ($code -ne 0) {
+            # Claude Code itself failed (not logged in, no internet, quota, option unknown to an old version...):
+            # the task would fail the same way, so stop here with its message.
+            $detail = ("$(Lire-Run 'responses\triage-errors.txt')`n$(Lire-Run 'responses\triage.txt')").Trim()
+            Echec "Claude Code could not start the task (code $code).`n$detail`nIf it says the option is unknown, run: claude update. If it asks to log in, run claude once in a terminal.".Trim()
+            return
+        }
         $modele = if ((Lire-Run 'responses\triage.txt') -match 'OPUS') { 'opus' } else { 'sonnet' }
         Lancer-Travail $modele
         return
@@ -538,6 +602,11 @@ function Processus-Fini {
                 }
             } catch { Noter "Persistent memory: $($_.Exception.Message)" }
         }
+    }
+    if ($code -eq 0 -and $reponse -and -not (Test-Path -LiteralPath (Join-Path $script:Run 'mcp-started.txt'))) {
+        # outils/mcp.ps1 writes this file when Claude Code connects to it: without it, Claude had no way to act.
+        $reponse += "`n`n(Warning: the PC control tool did not start, so Claude could not act on the screen. Try again; if it happens every time, run: claude update.)"
+        Noter 'The PC control tool (MCP) did not start'
     }
     if ($code -eq 0 -and $reponse) {
         $script:Dernier = "[$script:Modele, $duree s] $reponse"
@@ -560,7 +629,7 @@ $minuteur.add_Tick({
         if (((Get-Date) - $script:DernierNettoyage).TotalHours -ge 6) { Nettoyer-Runs }
         if (-not $script:Proc -and ((Get-Date) - $script:DerniereMaj).TotalHours -ge 24) { Mettre-A-Jour-Claude }
         if ($script:Maj -and -not $script:Maj.HasExited -and ((Get-Date) - $script:DerniereMaj).TotalMinutes -ge 10) {
-            try { $script:Maj.Kill() } catch { }   # stuck update: the next try is in 24 h
+            try { & taskkill.exe /PID $script:Maj.Id /T /F | Out-Null } catch { }   # stuck update: the next try is in 24 h
         }
         if (-not $script:Proc) { return }
         if ($script:Proc.HasExited) { Processus-Fini; return }
@@ -616,6 +685,43 @@ $menuMemoire.add_Click({
     } catch { Noter "Persistent memory: $($_.Exception.Message)" }
 })
 $menu.Items.Add($menuMemoire) | Out-Null
+# Terminal access: Claude may also run PowerShell commands when the screen is not enough (files, data, documents).
+# Every command goes through outils/garde.ps1 first. Unchecked: mouse and keyboard only.
+$script:Terminal = -not ((Test-Path $FichierTerminal) -and ("$(Get-Content $FichierTerminal -Raw)".Trim() -eq 'off'))
+$menuTerminal = New-Object System.Windows.Forms.ToolStripMenuItem 'Terminal access'
+$menuTerminal.CheckOnClick = $true
+$menuTerminal.Checked = $script:Terminal
+$menuTerminal.add_Click({
+    $script:Terminal = $menuTerminal.Checked
+    $etat = if ($script:Terminal) { 'on' } else { 'off' }
+    Set-Content -Path $FichierTerminal -Value $etat -Encoding ASCII
+    Noter "Terminal access: $etat"
+})
+$menu.Items.Add($menuTerminal) | Out-Null
+# Context: one .md file of System-Context\Contexts is active. The list is read again each time the menu opens,
+# so a file added, renamed or removed by the user shows at once. The active one is in the menu title.
+$menuContexte = New-Object System.Windows.Forms.ToolStripMenuItem 'Context'
+function Remplir-MenuContexte {
+    $actif = (Lire-ContexteActif).Nom
+    $menuContexte.Text = "Context: $actif"
+    $menuContexte.DropDownItems.Clear()
+    foreach ($nom in (Lister-Contextes)) {
+        $item = New-Object System.Windows.Forms.ToolStripMenuItem $nom
+        $item.Tag = $nom
+        $item.Checked = ($nom -eq $actif)
+        $item.add_Click({
+            [IO.File]::WriteAllText($FichierContexte, $this.Tag, (New-Object System.Text.UTF8Encoding $false))
+            Noter "Context: $($this.Tag)"
+            Remplir-MenuContexte
+        })
+        $menuContexte.DropDownItems.Add($item) | Out-Null
+    }
+    $menuContexte.DropDownItems.Add('-') | Out-Null
+    $menuContexte.DropDownItems.Add('Open the Contexts folder', $null, { Start-Process explorer.exe $DossierContextes }) | Out-Null
+}
+Remplir-MenuContexte
+$menu.add_Opening({ try { Remplir-MenuContexte } catch { Noter "Context menu: $($_.Exception.Message)" } })
+$menu.Items.Add($menuContexte) | Out-Null
 $menu.Items.Add("Open the $Nom folder", $null, { Start-Process explorer.exe $Travail }) | Out-Null
 $menu.Items.Add('Stop the current task', $null, { Arreter-Tache 'menu' }) | Out-Null
 $menu.Items.Add('-') | Out-Null

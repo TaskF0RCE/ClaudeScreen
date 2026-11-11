@@ -18,10 +18,21 @@ Always answer in English.
 
 This file is yours: neither ClaudeScreen nor Claude ever changes it.
 
+## Contexts: who you are and how to work for you
+
+The `Contexts` folder holds one small file per context: Default, Studies, Software development, Networking,
+Office productivity... One is active at a time: right-click the ClaudeScreen icon, open **Context** and pick one.
+Default is used when you choose nothing.
+
+- Edit these files freely: ClaudeScreen copies them here once and never changes them afterwards.
+- Add your own: create `My job.md` in `Contexts` and write a few lines (who you are, what is usually on your
+  screen, what to do when you give no instruction, what never to do). It appears in the menu.
+- Remove the ones you don't need.
+
 ## memory.md: Claude's notes (Persistent memory)
 
 When **Persistent memory** is checked in the icon menu, Claude ends each task with short notes
-(what it learned about you, the course or the exercise, how far it got). ClaudeScreen saves them in `memory.md`
+(what it learned about you and your work, how far it got). ClaudeScreen saves them in `memory.md`
 and gives them back to Claude at the next tasks: a kind of mini session.
 
 You can open `memory.md`, fix a note or remove a line. When you uncheck Persistent memory,
@@ -29,7 +40,7 @@ the file goes to the Recycle Bin (the trash on macOS and Linux), and a new empty
 
 ## Your documents
 
-Drop anything that can help here: courses, notes, technical documentation, assignments, bibliography, sources...
+Drop anything that can help here: courses, notes, procedures, technical documentation, templates, sources...
 You can create subfolders.
 
 For each task, Claude receives the list of these files. It treats them as more reliable than its general knowledge: it reads the ones related to the task and relies on them to answer.
@@ -46,7 +57,8 @@ Formats read best: `.pdf`, `.txt`, `.md`, images (`.png`, `.jpg`), code, `.csv`,
 
 1. The instruction typed in the small bar (Ctrl+Alt+Shift+C, or ⌃⌥⇧C on a Mac), for a single task.
 2. `instructions.md`, for every task (then Claude's notes in `memory.md`, if Persistent memory is on).
-3. What Claude guesses from the screen.
+3. The active context.
+4. What Claude guesses from the screen.
 
 ## Security
 

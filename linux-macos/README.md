@@ -1,6 +1,6 @@
 # ClaudeScreen for macOS and Linux
 
-Port of [ClaudeScreen](../README.md) (Windows version): a keyboard shortcut gives Claude what is on your screen, so it does the task for you (answer a multiple-choice quiz, fill in a form, type commands in Packet Tracer or GNS3, create a file...).
+Port of [ClaudeScreen](../README.md) (Windows version): a keyboard shortcut gives Claude what is on your screen, so it does the task for you (fill in a form, answer questions, carry on with a document, configure something in an application, create a file...).
 
 There is no window, only an icon in the **menu bar** (macOS) or the **notification area** (Linux).
 
@@ -31,7 +31,8 @@ Like on Windows, the **`~/Documents/Claude-Work/System-Context`** folder is crea
 - **The other files**, subfolders included (courses, notes, technical documentation, assignments, bibliography, sources...): Claude gets their list with every task, treats them as more reliable than its general knowledge, reads the ones related to the task and relies on them first. Best-read formats: `.pdf`, `.txt`, `.md`, images, code, `.csv`, `.html` (for a Word or Keynote file, also export it as PDF). Hidden or temporary files (`.DS_Store`, `~$...`) are ignored, as is the folder's `README.md`.
 - **PDFs**: the app extracts their text in advance, page by page, into `data/context-cache/` (at startup, then only when a PDF changes), with the `pypdfium2` Python library: nothing extra to install, no need for `pdftoppm`. Claude reads that text, which is fast and saves quota, and can search it. For a diagram or a scanned PDF (no text), it shows the page as an image with the `page-pdf` action. If you installed ClaudeScreen before this feature, run `./installer.sh` again to add `pypdfium2`.
 - **Read-only**: Claude can read this folder, but cannot change, move, send to the trash or run anything in it.
-- **Ready-made context**: the `examples` folder at the root of the repository has context files for some software (`packet-tracer.md`...). Copy the ones you need into `System-Context`, as explained in the [Windows README](../README.md#ready-made-context-for-some-software).
+- **Contexts**: who you are and how to work for you, one small file per context in `System-Context/Contexts` (Default, Studies, Software development, Networking, Office productivity...). Pick the active one in the icon menu (**Context**); edit the files, add your own or remove some, as explained in the [Windows README](../README.md#contexts).
+- **Know-how for one piece of software**: the `examples` folder at the root of the repository has ready-made files (`packet-tracer.md`...). Copy the ones you use into `System-Context`.
 
 Priority order: the instruction from the bar (for one task), then `instructions.md` (for every task), then what Claude infers from the screen.
 
@@ -56,7 +57,7 @@ Same as on Windows: with **Smooth mode** checked in the menu, the mouse glides t
 
 ### Persistent memory
 
-Same as on Windows ([details](../README.md#persistent-memory)): with **Persistent memory** checked in the menu, Claude ends each task with short notes (what it learned about you, the course or the exercise, how far it got) and gets them back at the next tasks, a kind of mini session. The notes go into `System-Context/memory.md`, one per line; `instructions.md` is never touched. **Unchecking the mode sends `memory.md` to the trash.** Claude cannot write in the folder: it ends its answer with `MEMORY: ...` lines, and the app saves them and hides them from the result (300 characters per note, 4000 in all). The choice is remembered (`data/memory.txt`). The code is in `outils/memoire.py`.
+Same as on Windows ([details](../README.md#persistent-memory)): with **Persistent memory** checked in the menu, Claude ends each task with short notes (what it learned about you and your work, how far it got) and gets them back at the next tasks, a kind of mini session. The notes go into `System-Context/memory.md`, one per line; `instructions.md` is never touched. **Unchecking the mode sends `memory.md` to the trash.** Claude cannot write in the folder: it ends its answer with `MEMORY: ...` lines, and the app saves them and hides them from the result (300 characters per note, 4000 in all). The choice is remembered (`data/memory.txt`). The code is in `outils/memoire.py`.
 
 On Wayland, the mouse position cannot be read: the first move of a task jumps to its target, the next ones glide from the last known position.
 
@@ -149,8 +150,8 @@ As on Windows, Claude is started with limited permissions (`data/settings.json`,
 On top of that:
 
 - **`System-Context` is read-only**, locked three times: a `deny` rule in `data/settings.json` (`Edit(//...)`, which also covers Write), the hook `outils/garde.py` that refuses any file write in that folder (including through a symbolic link or `..`), and `pc corbeille` that refuses to touch it (or `Claude-Work`, which contains it). Claude has no way to write there: its [Persistent memory](#persistent-memory) notes are saved by the app itself.
-- **Nothing is ever permanently deleted.** The hook `outils/garde.py` blocks `rm`, `rmdir`, `unlink`, `shred`, `find -delete`, `dd`, `mkfs`, `diskutil erase`, `git clean`, `shutdown`, etc. To remove a file, Claude sends it to the trash (`pc corbeille`).
-- Its instructions forbid buying, paying, sending messages, entering passwords or bank details, and changing system settings. Text displayed on screen cannot override these rules.
+- **No command can delete permanently.** The hook `outils/garde.py` blocks `rm`, `rmdir`, `unlink`, `shred`, `find -delete`, `dd`, `mkfs`, `diskutil erase`, `git clean`, `shutdown`, etc. To remove a file, Claude sends it to the trash (`pc corbeille`).
+- Its instructions forbid buying, paying, sending messages, entering passwords or bank details, changing system settings and deleting anything for good. Text displayed on screen cannot override these rules. This part relies on Claude: what it does with the mouse and keyboard is not filtered by the program.
 - No web access (WebFetch and WebSearch are denied).
 - Claude is started with only the tools a task needs (`Read`, `Write`, `Edit`, `Glob`, `Grep` and `Bash` for `data/pc`), without the MCP servers, connectors and skills of your account. This needs a recent Claude Code: the app runs `claude update` in the background at startup and then once a day, never during a task.
 
@@ -201,5 +202,5 @@ Mapping to the Windows version: `ClaudeScreen.ps1` → `claude_screen.py`, `Lanc
 
 - Same limitations as the Windows version: Claude runs no program other than the control tool; precise mouse work (cabling in Packet Tracer, drag and drop) is slow; only one screen is captured (the one with the mouse).
 - Wayland: see the table above.
-- The Windows MCP server for PC control is not ported yet: here Claude runs one action per call through `data/pc`. The result and the log show how long each task took.
+- The Windows MCP server for PC control and **Terminal access** are not ported yet: here Claude runs one action per call through `data/pc`, and no other command. The result and the log show how long each task took.
 - macOS: if you move the folder after installing, run `./installer.sh` again (the app and the autostart contain the path). On macOS 15 and later, the system may periodically ask again for the screen recording permission.

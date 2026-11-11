@@ -87,6 +87,8 @@ function Invoke-Outil($arguments) {
                 $contenu.Add((Format-Image $script:ActionsImage))
             } catch { $lignes.Add("Screenshot failed: $($_.Exception.Message)") }
         }
+        # The window that has the keyboard now: lets Claude notice that another one came to the front.
+        try { $f = [ClaudeScreen.Natif]::FenetreActive(); $lignes.Add("Active window: $($f[0]) - `"$($f[1])`"") } catch { }
     }
     '{"content":[' + ((@(Format-Texte ($lignes -join "`n")) + $contenu) -join ',') + '],"isError":' + $(if ($erreur) { 'true' } else { 'false' }) + '}'
 }
@@ -101,6 +103,8 @@ function Start-Serveur {
         try {
             switch ($requete.method) {
                 'initialize' {
+                    # Tells the app that Claude Code reached this server (the app warns the user otherwise).
+                    try { [IO.File]::WriteAllText((Join-Path $ActionsRun 'mcp-started.txt'), '') } catch { }
                     $version = if ($requete.params.protocolVersion) { [string]$requete.params.protocolVersion } else { '2024-11-05' }
                     $resultat = '{"protocolVersion":' + (ConvertTo-Texte $version) + ',"capabilities":{"tools":{}},"serverInfo":{"name":"claudescreen-pc","version":"1"}}'
                 }

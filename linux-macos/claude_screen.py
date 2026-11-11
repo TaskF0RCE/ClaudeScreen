@@ -56,6 +56,9 @@ JOURNAL = os.path.join(DONNEES, 'log.txt')
 FICHIER_MODELE = os.path.join(DONNEES, 'model.txt')
 FICHIER_SMOOTH = os.path.join(DONNEES, 'smooth.txt')  # smooth mode: "on" or "off", read by pc.py at every action
 FICHIER_MEMOIRE = os.path.join(DONNEES, 'memory.txt')  # persistent memory: "on" or "off"
+FICHIER_CONTEXTE = os.path.join(DONNEES, 'context.txt')  # name of the active context (Context menu); none = Default
+# Contexts shipped with the app (at the root of the repository), copied once into System-Context/Contexts.
+CONTEXTES_FOURNIS = os.path.join(os.path.dirname(RACINE), 'contexts')
 REGLAGES = os.path.join(DONNEES, 'settings.json')
 DERNIER = os.path.join(DONNEES, 'last-result.txt')
 PC_COMMANDE = os.path.join(DONNEES, 'pc')
@@ -74,12 +77,14 @@ def definir_dossiers(travail):
     see outils/memoire.py) and documents (courses, notes, documentation...).
     """
     global TRAVAIL, CONTEXTE, FICHIER_INSTRUCTIONS, FICHIER_NOTES, ANCIEN_INSTRUCTIONS, FICHIER_LISEZMOI
+    global DOSSIER_CONTEXTES
     TRAVAIL = travail
     CONTEXTE = os.path.join(TRAVAIL, 'System-Context')
     FICHIER_INSTRUCTIONS = os.path.join(CONTEXTE, 'instructions.md')
     FICHIER_NOTES = os.path.join(CONTEXTE, 'memory.md')
     ANCIEN_INSTRUCTIONS = os.path.join(CONTEXTE, 'instructions.txt')  # older versions
     FICHIER_LISEZMOI = os.path.join(CONTEXTE, 'README.md')
+    DOSSIER_CONTEXTES = os.path.join(CONTEXTE, 'Contexts')  # one .md file per context, chosen in the icon menu
 
 
 definir_dossiers(os.path.join(natif.dossier_documents(), NOM))
@@ -183,7 +188,8 @@ def dessiner(angle=0.0, pastille=None, taille=64):
 
 # ------------------------------------------------------------------ instructions for Claude
 
-def texte_consigne(png, largeur, hauteur, fenetre, precision, instructions='', documents='', memoire_active=False):
+def texte_consigne(png, largeur, hauteur, fenetre, precision, instructions='', documents='', memoire_active=False,
+                   contexte=''):
     if MAC:
         note_touches = ("  On macOS, editing shortcuts use cmd (cmd+a, cmd+c, cmd+v, cmd+s, cmd+z); "
                         "ctrl stays ctrl (useful in a terminal: ctrl+c, ctrl+z).\n")
@@ -196,10 +202,10 @@ def texte_consigne(png, largeur, hauteur, fenetre, precision, instructions='', d
 
 Screenshot: {png} ({largeur} x {hauteur} px). Start by reading it with the Read tool.
 Active window: {fenetre[0]} - "{fenetre[1]}"
-{instructions}{bloc_memoire}{documents}{precision}
-1. Find what is being asked. If an instruction or instructions from the user are given above, follow them rather than guessing. Otherwise, first priority: underlined, highlighted or boxed text. Otherwise, the main element on screen: multiple-choice quiz, exercise, question, form, diagram or image to reproduce, network or software configuration, etc.
+{contexte}{instructions}{bloc_memoire}{documents}{precision}
+1. Find what is being asked. If an instruction or instructions from the user are given above, follow them rather than guessing. Otherwise, the active context above says how to find the task. Otherwise, the main thing on screen that calls for an action.
 2. Do the whole task, from start to finish.
-   - If the answer must go on the screen (ticking boxes, filling in fields, clicking, writing in an open document, typing commands in a console), control the computer with the tool below. After each important action, take a new screenshot to check. If there is more further down (other questions), scroll and continue. You may click Submit/Next on a quiz or exercise once all the answers are in.
+   - If the answer must go on the screen (ticking boxes, filling in fields, clicking, writing in an open document, typing commands in a console), control the computer with the tool below. After each important action, take a new screenshot to check. If there is more further down (other questions), scroll and continue. You may click Next or Submit on a form, quiz or exercise once everything asked is filled in.
    - If the task asks you to produce something (diagram, document, code, summary, HTML page, SVG...), create the files with the Write tool in the current folder: {TRAVAIL}
    - Do not add, move or delete what the user has set up on screen (items of a diagram or a topology...) unless the task asks for it. To type a sequence of commands into a console, write them to a file in the current folder and type it with ecrire-fichier, then check the result.
    - If another window comes to the front or the user takes back control, stop so you don't type into their window, and say how far you got.
@@ -232,11 +238,12 @@ Strict rules:
 """
 
 
-def texte_tri(png, fenetre, precision, instructions=''):
+def texte_tri(png, fenetre, precision, instructions='', nom_contexte='Default'):
     return f"""Read the image {png} with the Read tool. Active window: {fenetre[0]} - "{fenetre[1]}".
+Active context: {nom_contexte}.
 {instructions}{precision}
-What is the task visible on screen? Answer OPUS if it requires calculations (maths, physics, conversions...), programming, technical configuration (network, servers, software), a diagram to design or long reasoning.
-Answer SONNET for a course multiple-choice quiz, a knowledge question, a simple form, a short text to write, or if it is unclear.
+What is the task visible on screen? Answer OPUS if it requires calculations (maths, physics, conversions...), programming, technical configuration (network, servers, software), data processing, a diagram to design or long reasoning.
+Answer SONNET for a knowledge question, multiple-choice questions, a simple form, a short text to write, a few clicks, or if it is unclear.
 Answer with a single word: OPUS or SONNET.
 """
 
@@ -299,6 +306,38 @@ def preparer_contexte():
             shutil.copyfile(guide, FICHIER_LISEZMOI)
     except Exception as ex:
         noter('System-Context guide: %s' % ex)
+    # Contexts: copied once from the app's contexts folder. After that the files belong to the user.
+    try:
+        if not os.path.exists(DOSSIER_CONTEXTES) and os.path.isdir(CONTEXTES_FOURNIS):
+            shutil.copytree(CONTEXTES_FOURNIS, DOSSIER_CONTEXTES)
+            noter('Contexts folder created')
+    except Exception as ex:
+        noter('Contexts folder: %s' % ex)
+
+
+def lister_contextes():
+    """Names of the contexts (System-Context/Contexts/<name>.md), Default first."""
+    try:
+        noms = sorted(n[:-3] for n in os.listdir(DOSSIER_CONTEXTES)
+                      if n.lower().endswith('.md') and os.path.isfile(os.path.join(DOSSIER_CONTEXTES, n)))
+    except OSError:
+        noms = []
+    return [n for n in noms if n == 'Default'] + [n for n in noms if n != 'Default']
+
+
+def contexte_actif():
+    """(name, text) of the active context: the one chosen in the menu, Default if none or if its file is gone."""
+    nom = lire_texte(FICHIER_CONTEXTE)
+    if not nom or not os.path.isfile(os.path.join(DOSSIER_CONTEXTES, nom + '.md')):
+        nom = 'Default'
+    return nom, memoire.instructions(os.path.join(DOSSIER_CONTEXTES, nom + '.md'))
+
+
+def texte_contexte(nom, texte):
+    bloc = "\nActive context: %s (chosen by the user in the icon menu)." % nom
+    if texte:
+        bloc += " It says who the user is and how to work for them:\n%s" % texte
+    return bloc + "\n"
 
 
 def lire_instructions():
@@ -317,9 +356,9 @@ def texte_memoire():
     return ("\nPersistent memory is ON (the user turned it on in the icon menu). Your notes from the previous tasks:\n"
             "%s\n"
             "They may be outdated: the screen and the user's instructions take priority. To save what will help "
-            "with the next tasks (what you learned about the user, the course or the exercise, how far you got), "
+            "with the next tasks (what you learned about the user, their work, how far you got), "
             "end your final answer with one line per new note, each starting with \"MEMORY: \" (for example: "
-            "MEMORY: Quiz on chapter 3, questions 1 to 10 done). The app saves these lines and does not show "
+            "MEMORY: Report for client X, sections 1 to 3 done). The app saves these lines and does not show "
             "them to the user. One short fact per line (300 characters at most), do not repeat a note already "
             "listed, never save passwords or personal data.\n" % notes)
 
@@ -336,7 +375,7 @@ def lister_documents():
 def _lister_documents():
     fichiers = []
     for dossier, sous, noms in os.walk(CONTEXTE):
-        sous[:] = sorted(d for d in sous if not d.startswith('.'))
+        sous[:] = sorted(d for d in sous if not d.startswith('.') and os.path.join(dossier, d) != DOSSIER_CONTEXTES)
         for nom in sorted(noms):
             chemin = os.path.join(dossier, nom)
             if (chemin in (FICHIER_INSTRUCTIONS, FICHIER_NOTES, ANCIEN_INSTRUCTIONS, FICHIER_LISEZMOI)
@@ -562,9 +601,11 @@ class Appli:
             # Re-read for every task: a change to instructions.md or to the documents applies right away.
             instructions = lire_instructions()
             self.memoire_tache = self.memoire
+            nom_contexte, contenu_contexte = contexte_actif()
             ecrire_texte(os.path.join(run, 'prompts', 'task.txt'),
                          texte_consigne(png, capture['largeur'], capture['hauteur'], fenetre, precision,
-                                        instructions, lister_documents(), self.memoire))
+                                        instructions, lister_documents(), self.memoire,
+                                        texte_contexte(nom_contexte, contenu_contexte)))
 
             modele = self.choix_modele
             if modele == 'auto' and fenetre[0] and APPS_OPUS.search(fenetre[0]):
@@ -574,7 +615,7 @@ class Appli:
             if modele != 'auto':
                 self.lancer_travail(modele)
                 return
-            ecrire_texte(os.path.join(run, 'prompts', 'triage.txt'), texte_tri(png, fenetre, precision, instructions))
+            ecrire_texte(os.path.join(run, 'prompts', 'triage.txt'), texte_tri(png, fenetre, precision, instructions, nom_contexte))
             self.etape = 'tri'
             self.demarrer_claude('haiku', 'triage', OPTIONS_TRI)
             self.infobulle('looking at the screen...')
@@ -852,6 +893,21 @@ class Appli:
                 noter('Persistent memory: %s' % ex)
             icone.update_menu()
 
+        def choisir_contexte(nom):
+            def action(icone, _item):
+                ecrire_texte(FICHIER_CONTEXTE, nom)
+                noter('Context: %s' % nom)
+                icone.update_menu()
+            return action
+
+        def menu_contextes():
+            # Read again each time the menu is built: a file added or removed by the user shows at once.
+            actif = contexte_actif()[0]
+            for nom in lister_contextes():
+                yield M(nom, choisir_contexte(nom), checked=lambda _item, n=nom: n == actif, radio=True)
+            yield pystray.Menu.SEPARATOR
+            yield M('Open the Contexts folder', lambda: natif.ouvrir(DOSSIER_CONTEXTES))
+
         return pystray.Menu(
             M('Last result', lambda: self.poster('resultat'), default=True),
             M('Model', pystray.Menu(
@@ -860,6 +916,7 @@ class Appli:
                 M('Always Opus', choisir('opus'), checked=coche('opus'), radio=True))),
             M('Smooth mode', basculer_smooth, checked=lambda _item: self.smooth),
             M('Persistent memory', basculer_memoire, checked=lambda _item: self.memoire),
+            M(lambda _item: 'Context: %s' % contexte_actif()[0], pystray.Menu(menu_contextes)),
             M('Open the %s folder' % NOM, lambda: natif.ouvrir(TRAVAIL)),
             M('Stop the current task', lambda: self.poster('arreter', 'menu')),
             pystray.Menu.SEPARATOR,
