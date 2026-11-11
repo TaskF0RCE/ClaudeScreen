@@ -52,8 +52,9 @@ function Send-Corbeille([string]$chemin) {
         [Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs, [Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin)
 }
 
+# Persistent memory is on unless the user unchecked it (data/memory.txt = off).
 function Test-MemoireActive([string]$fichierEtat) {
-    (Test-Path -LiteralPath $fichierEtat) -and ("$(Get-Content -LiteralPath $fichierEtat -Raw)".Trim() -eq 'on')
+    -not ((Test-Path -LiteralPath $fichierEtat) -and ("$(Get-Content -LiteralPath $fichierEtat -Raw)".Trim() -eq 'off'))
 }
 
 # Text without comments or empty lines.
@@ -103,26 +104,34 @@ function Find-NoteReponse([string]$reponse) {
 }
 
 # Adds notes at the end of memory.md (created if needed). One line per note, 300 characters at most,
-# a note already there is skipped. Ajoutees = notes written; Pleine = $true if some did not fit (4000 characters in all).
+# a note already there is skipped. The notes hold 4000 characters in all: when a new one does not fit, the oldest
+# ones (the first lines) are removed to make room. Ajoutees = notes written; Retirees = old notes removed.
 function Add-NoteMemoire([string]$chemin, [string[]]$notes) {
     Initialize-Memoire $chemin
-    $texte = (Read-FichierMemoire $chemin).TrimEnd()
-    $existantes = Format-Instruction $texte
+    $lignes = New-Object System.Collections.Generic.List[string]
+    $lignes.AddRange([string[]]((Read-FichierMemoire $chemin).TrimEnd() -split '\r?\n'))
+    $existantes = Format-Instruction ($lignes -join "`n")
     $deja = @($existantes -split "`n" | ForEach-Object { ($_ -replace '^\s*-\s*', '').Trim() })
     $taille = $existantes.Length
-    $ajoutees = 0; $pleine = $false
+    $ajoutees = 0; $retirees = 0
     foreach ($note in $notes) {
         $note = ((($note -replace '<!--|-->', '') -replace '\s+', ' ').Trim() -replace '^-\s*', '')
         if ($note.Length -gt $MemoireMaxNote) { $note = $note.Substring(0, $MemoireMaxNote - 3).TrimEnd() + '...' }
         if (-not $note -or $deja -contains $note) { continue }
-        if ($taille + $note.Length + 3 -gt $MemoireMax) { $pleine = $true; break }
-        $texte += "`n- " + $note
+        while ($taille + $note.Length + 3 -gt $MemoireMax) {
+            $i = $lignes.FindIndex([Predicate[string]] { param($l) $l -match '^\s*-\s' })
+            if ($i -lt 0) { break }
+            $taille -= $lignes[$i].TrimEnd().Length + 1
+            $lignes.RemoveAt($i)
+            $retirees++
+        }
+        $lignes.Add('- ' + $note)
         $taille += $note.Length + 3
         $deja += $note
         $ajoutees++
     }
-    if ($ajoutees) { Write-FichierMemoire $chemin ($texte + "`n") }
-    [pscustomobject]@{ Ajoutees = $ajoutees; Pleine = $pleine }
+    if ($ajoutees) { Write-FichierMemoire $chemin (($lignes -join "`n") + "`n") }
+    [pscustomobject]@{ Ajoutees = $ajoutees; Retirees = $retirees }
 }
 
 # instructions.txt (older versions) -> instructions.md: lines starting with # become comments.

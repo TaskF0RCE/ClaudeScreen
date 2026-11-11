@@ -17,9 +17,9 @@ $Runs = Join-Path $Donnees 'runs'
 $Journal = Join-Path $Donnees 'log.txt'
 $FichierModele = Join-Path $Donnees 'model.txt'
 $FichierSmooth = Join-Path $Donnees 'smooth.txt'   # smooth mode: 'on' or 'off', read again at every action
-$FichierMemoire = Join-Path $Donnees 'memory.txt'  # persistent memory: 'on' or 'off'
+$FichierMemoire = Join-Path $Donnees 'memory.txt'  # persistent memory: 'on' (default) or 'off'
 $FichierContexte = Join-Path $Donnees 'context.txt'   # name of the active context (Context menu); none = Default
-$FichierTerminal = Join-Path $Donnees 'terminal.txt'  # terminal access (PowerShell tool): 'on' (default) or 'off'
+$FichierTerminal = Join-Path $Donnees 'terminal.txt'  # terminal access (PowerShell tool): 'on' or 'off' (default)
 $CacheContexte = Join-Path $Donnees 'context-cache'   # text extracted from the context PDFs
 # Name shown in the notification area (tooltip, menu, result window) and name of the work folder in Documents.
 $Nom = 'Claude-Work'
@@ -392,7 +392,7 @@ $liste
         }
 
         $outil = @"
-PC control tool: the "pc" tool (mcp__pc__pc). Give it "actions": the list of actions to run in order (it stops at the first error), for example ["clic 412 300", "ecrire Paris", "touche enter"]. Each call takes time: put in one call all the actions that need no look at the screen in between (several answers to tick, a field to click then fill, a text then enter). The result ends with a new screenshot taken after the last action: look at it instead of asking for another one, and pass "capture": false only when you do not need it. The result also names the active window: if it is not the one you are working in, stop.
+PC control tool: the "pc" tool (mcp__pc__pc). Give it "actions": the list of actions to run in order (it stops at the first error), for example ["clic 412 300", "remplacer Paris", "touche enter"], 40 actions at most. Each call takes time: put in one call all the actions that need no look at the screen in between (several answers to tick, a field to click then fill, a text then enter). The result ends with a new screenshot taken after the last action: look at it instead of asking for another one, and pass "capture": false only when you do not need it. The result also names the active window: if it is not the one you are working in, stop.
 "@
         if ($script:TerminalTache) {
             $outil += @"
@@ -409,7 +409,7 @@ Active window: $($fenetre[0]) - "$($fenetre[1])"
 $contexteActif$instructions$memoire$documents$precision
 1. Find what is being asked. If an instruction or instructions from the user are given above, follow them instead of guessing. Otherwise, the active context above says how to find the task. Otherwise, the main thing on screen that calls for an action.
 2. Do the whole task, from start to finish.
-   - If the answer must go on the screen (ticking boxes, filling in fields, clicking, writing in an open document, typing commands in a console), control the PC with the tool below. After each important action, take a new screenshot to check. If there is more further down (other questions), scroll and continue. You may click Next or Submit on a form, quiz or exercise once everything asked is filled in.
+   - If the answer must go on the screen (ticking boxes, filling in fields, clicking, writing in an open document, typing commands in a console), control the PC with the tool below. After each important action, take a new screenshot to check. One clic is enough for a button, a tab, a link or an item of a tool; keep doubleclic for what only opens with a double-click (a file or a desktop icon). If a click seems to have done nothing, look at a new screenshot before clicking again: a second click on the same spot often closes what the first one opened. If there is more further down (other questions), scroll and continue. You may click Next or Submit on a form, quiz or exercise once everything asked is filled in.
    - If the task asks you to produce something (diagram, document, code, summary, HTML page, SVG...), create the files in the current folder: $Travail
    - Do not add, move or delete what the user has set up on screen (items of a diagram or a topology...) unless the task asks for it. To type a sequence of commands into a console, write them to a file in the current folder and type it with ecrire-fichier, then check the result.
    - If another window comes to the front or the user takes back control (the screenshot or the active window changes without you), stop so you don't type into their window, and say how far you got.
@@ -423,7 +423,8 @@ Actions:
   glisser X1 Y1 X2 Y2     drag: press on point 1, move, release on point 2 (to move an item, or to link two items where links are drawn by dragging)
   relier X1 Y1 X2 Y2      click on point 1, then on point 2 (to link two items where links are made with two clicks, the link or cable tool being selected)
   defiler X Y N           N mouse-wheel notches; N>0 scrolls up, N<0 scrolls down
-  ecrire "text"           types the text where the cursor is (click in the field first)
+  ecrire "text"           types the text where the cursor is (click in the field first); it adds to what the field already holds
+  remplacer "text"        selects everything in the field that has the cursor, then types the text over it. Use it for form fields: a field often already holds a value (a default, or one filled in automatically after the previous field). Never in a document or an editor: it would replace the whole text
   ecrire-fichier PATH     types the content of a UTF-8 text file (long texts, quotes, line breaks, command sequences)
   touche COMBO            key combo, e.g. enter, tab, ctrl+a, ctrl+s, pagedown, f5, ctrl+plus (plus, minus, comma, period are key names)
   attendre MS             wait
@@ -491,6 +492,7 @@ $script:Boite = $null
 $script:Attente = $null
 $script:BoiteValidee = $false
 $script:BoiteFermeture = $false
+$script:Brouillon = ''          # text typed in the bar when it was closed without Enter: shown again next time
 
 function Demander-Consigne {
     if ($script:Boite) { return }
@@ -526,6 +528,8 @@ function Demander-Consigne {
         $texte = $script:Boite.Controls[0].Controls[0].Text.Trim()
         $capture = $script:Attente
         $script:Boite = $null; $script:Attente = $null
+        # Closed without Enter (Esc, click elsewhere, by accident): the text is kept for the next time.
+        $script:Brouillon = if ($script:BoiteValidee) { '' } else { $texte }
         if ($script:BoiteValidee) {
             [ClaudeScreen.Natif]::MettreAuPremierPlan($capture.Hwnd)
             Lancer-Tache $capture $texte
@@ -539,6 +543,7 @@ function Demander-Consigne {
     $f.Show()
     [ClaudeScreen.Natif]::Indice($t.Handle, 'Instruction...')
     $f.Activate(); $t.Focus() | Out-Null
+    if ($script:Brouillon) { $t.Text = $script:Brouillon; $t.SelectionStart = $t.TextLength }
 }
 
 function Arreter-Tache([string]$raison) {
@@ -596,10 +601,7 @@ function Processus-Fini {
         if ($trouve.Notes.Count -and $script:Memoire) {
             try {
                 $ajout = Add-NoteMemoire $FichierNotes $trouve.Notes
-                Noter "Persistent memory: $($ajout.Ajoutees) note(s) saved"
-                if ($ajout.Pleine) {
-                    $reponse += "`n`n(Persistent memory is full: the new notes were not saved. Uncheck then check Persistent memory in the icon menu to empty it.)"
-                }
+                Noter ("Persistent memory: $($ajout.Ajoutees) note(s) saved" + $(if ($ajout.Retirees) { ", $($ajout.Retirees) oldest removed to make room" } else { '' }))
             } catch { Noter "Persistent memory: $($_.Exception.Message)" }
         }
     }
@@ -686,8 +688,8 @@ $menuMemoire.add_Click({
 })
 $menu.Items.Add($menuMemoire) | Out-Null
 # Terminal access: Claude may also run PowerShell commands when the screen is not enough (files, data, documents).
-# Every command goes through outils/garde.ps1 first. Unchecked: mouse and keyboard only.
-$script:Terminal = -not ((Test-Path $FichierTerminal) -and ("$(Get-Content $FichierTerminal -Raw)".Trim() -eq 'off'))
+# Every command goes through outils/garde.ps1 first. Unchecked (the default): mouse and keyboard only.
+$script:Terminal = (Test-Path $FichierTerminal) -and ("$(Get-Content $FichierTerminal -Raw)".Trim() -eq 'on')
 $menuTerminal = New-Object System.Windows.Forms.ToolStripMenuItem 'Terminal access'
 $menuTerminal.CheckOnClick = $true
 $menuTerminal.Checked = $script:Terminal

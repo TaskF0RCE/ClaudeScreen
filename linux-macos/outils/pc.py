@@ -17,7 +17,7 @@ import natif  # noqa: E402
 
 USAGE = """Actions:
   capture | zoom X Y W H | clic X Y | doubleclic X Y | clicdroit X Y | survol X Y
-  glisser X1 Y1 X2 Y2 | relier X1 Y1 X2 Y2 | defiler X Y N | ecrire "text" | ecrire-fichier PATH
+  glisser X1 Y1 X2 Y2 | relier X1 Y1 X2 Y2 | defiler X Y N | ecrire "text" | remplacer "text" | ecrire-fichier PATH
   touche COMBO | attendre MS | corbeille PATH | page-pdf PATH N
 """
 
@@ -93,6 +93,12 @@ def main(argv):
         natif.molette(X(nombre(0)), Y(nombre(1)), int(nombre(2)), doux)
         print('OK')
     elif action == 'ecrire':
+        natif.taper(' '.join(valeurs), doux)
+        print('OK')
+    elif action == 'remplacer':
+        # Replaces what the focused field holds: select all, then type over the selection.
+        natif.combo(['cmd' if natif.MAC else 'ctrl', 'a'])
+        time.sleep(0.08)
         natif.taper(' '.join(valeurs), doux)
         print('OK')
     elif action == 'ecrire-fichier':

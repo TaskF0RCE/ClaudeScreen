@@ -52,8 +52,8 @@ Always answer in English.
 
 
 def active(fichier_etat):
-    """True if persistent memory is switched on (data/memory.txt contains "on")."""
-    return lire(fichier_etat).strip().lower() == 'on'
+    """True unless the user switched persistent memory off (data/memory.txt contains "off")."""
+    return lire(fichier_etat).strip().lower() != 'off'
 
 
 def lire(chemin):
@@ -120,30 +120,34 @@ def ajouter(chemin, nouvelles):
     """Adds notes at the end of memory.md (created if needed).
 
     One line per note, 300 characters at most; a note already there is skipped.
-    Returns (number of notes written, True if some did not fit in the 4000 characters).
+    The notes hold 4000 characters in all: when a new one does not fit, the oldest ones (the first lines)
+    are removed to make room. Returns (number of notes written, number of old notes removed).
     """
     preparer(chemin)
-    texte = lire(chemin).rstrip()
-    existantes = nettoyer(texte)
+    lignes = lire(chemin).rstrip().split('\n')
+    existantes = nettoyer('\n'.join(lignes))
     deja = {re.sub(r'^\s*-\s*', '', l).strip() for l in existantes.split('\n')}
     taille = len(existantes)
-    ajoutees, pleine = 0, False
+    ajoutees, retirees = 0, 0
     for note in nouvelles:
         note = re.sub(r'^-\s*', '', ' '.join(note.replace('<!--', '').replace('-->', '').split()))
         if len(note) > MAX_NOTE:
             note = note[:MAX_NOTE - 3].rstrip() + '...'
         if not note or note in deja:
             continue
-        if taille + len(note) + 3 > MAX_MEMOIRE:
-            pleine = True
-            break
-        texte += '\n- ' + note
+        while taille + len(note) + 3 > MAX_MEMOIRE:
+            i = next((n for n, l in enumerate(lignes) if re.match(r'\s*-\s', l)), None)
+            if i is None:
+                break
+            taille -= len(lignes.pop(i).rstrip()) + 1
+            retirees += 1
+        lignes.append('- ' + note)
         taille += len(note) + 3
         deja.add(note)
         ajoutees += 1
     if ajoutees:
-        ecrire(chemin, texte + '\n')
-    return ajoutees, pleine
+        ecrire(chemin, '\n'.join(lignes) + '\n')
+    return ajoutees, retirees
 
 
 def migrer(ancien, nouveau, corbeille):

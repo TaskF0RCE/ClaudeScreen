@@ -73,6 +73,13 @@ function Invoke-ActionPc([string]$Action, [string[]]$Valeurs) {
         }
         'defiler'   { [ClaudeScreen.Natif]::Molette((X (Nombre 0)), (Y (Nombre 1)), [int](Nombre 2)); 'OK' }
         'ecrire'    { [ClaudeScreen.Natif]::Taper(($Valeurs -join ' ')); 'OK' }
+        'remplacer' {
+            # Replaces what the focused field holds: select all, then type over the selection. Typing alone
+            # would add to a value that is already there (a default, or one filled in by the program).
+            [ClaudeScreen.Natif]::Combo([uint16[]]@(0x11, 0x41))
+            Start-Sleep -Milliseconds 80
+            [ClaudeScreen.Natif]::Taper(($Valeurs -join ' ')); 'OK'
+        }
         'ecrire-fichier' {
             [ClaudeScreen.Natif]::Taper([IO.File]::ReadAllText(($Valeurs -join ' '), [Text.Encoding]::UTF8)); 'OK'
         }

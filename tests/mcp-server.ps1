@@ -43,7 +43,7 @@ Appel 'Recycle Bin: System-Context refused' (Outil @('corbeille "' + (Join-Path 
 Appel 'Recycle Bin: Windows refused' (Outil @("corbeille $env:WINDIR\System32\drivers\etc") $false) { param($o) $o.result.isError -and $o.result.content[0].text -match 'Refused: .* part of Windows' }
 Appel 'Recycle Bin: the whole profile refused' (Outil @("corbeille $env:USERPROFILE") $false) { param($o) $o.result.isError -and $o.result.content[0].text -match 'Refused: ' -and (Test-Path $env:USERPROFILE) }
 Appel 'Recycle Bin: a whole drive refused' (Outil @("corbeille $env:SystemDrive\") $false) { param($o) $o.result.isError -and $o.result.content[0].text -match 'Refused: ' }
-Appel 'more than 20 actions refused' (Outil (1..21 | ForEach-Object { 'attendre 1' }) $null) { param($o) $o.result.isError -and $o.result.content[0].text -match 'Nothing was run' }
+Appel 'more than 40 actions refused' (Outil (1..41 | ForEach-Object { 'attendre 1' }) $null) { param($o) $o.result.isError -and $o.result.content[0].text -match 'Nothing was run' }
 if ($SansEcran) { '  skip  screenshot after the last action (-SansEcran)' }
 else {
     Appel 'screenshot after the last action, as a JPEG' (Outil @('attendre 5') $null) { param($o) -not $o.result.isError -and @($o.result.content).Count -eq 2 -and $o.result.content[1].type -eq 'image' -and $o.result.content[1].mimeType -eq 'image/jpeg' -and $o.result.content[1].data.Length -gt 5000 -and $o.result.content[0].text -match 'Screenshot after the last action' }
