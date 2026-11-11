@@ -46,7 +46,7 @@ Verifier 'triage: nothing specific either' ($tri -notmatch 'Packet Tracer|GNS3|s
 Ecrire-Reponse $cap 'SONNET' 'triage'
 $script:Proc = Faux-Proc 0
 Processus-Fini
-Verifier 'task started with the MCP config of this task' ($global:Appels[-1] -eq "sonnet|task|--tools Read,Write,Edit,Glob,Grep,PowerShell --mcp-config `"$(Join-Path $cap.Run 'mcp.json')`"") ($global:Appels[-1])
+Verifier 'task started with the MCP config of this task' ($global:Appels[-1] -eq "sonnet|task|--tools Read,Write,Edit,Glob,Grep --mcp-config `"$(Join-Path $cap.Run 'mcp.json')`"") ($global:Appels[-1])
 $j = Get-Content (Join-Path $cap.Run 'mcp.json') -Raw | ConvertFrom-Json
 Verifier 'mcp.json starts mcp.ps1 for this task' ($j.mcpServers.pc.command -eq 'powershell.exe' -and $j.mcpServers.pc.args[-1] -eq (Join-Path $Outils 'mcp.ps1') -and $j.mcpServers.pc.env.ECRAN_RUN -eq $cap.Run -and $j.mcpServers.pc.env.ECRAN_CONTEXTE -eq $Contexte -and [IO.File]::ReadAllBytes((Join-Path $cap.Run 'mcp.json'))[0] -eq 123)
 
@@ -61,17 +61,21 @@ Verifier 'log: notes saved, duration' ([bool]((Get-Content $Journal -Encoding UT
 Verifier 'instructions.md untouched by the task' ([IO.File]::ReadAllText($FichierInstructions, [Text.Encoding]::UTF8) -eq $ins)
 Verifier 'tooltip named Claude-Work' ($icone.Text.StartsWith('Claude-Work - done: ')) $icone.Text
 
-'--- memory full'
-$grosses = 1..14 | ForEach-Object { "note $_ " + ('x' * 280) }
+'--- memory full: the oldest notes make room'
+$grosses = 1..16 | ForEach-Object { "note $_ " + ('x' * 280) }
 $a = Add-NoteMemoire $FichierNotes $grosses
-Verifier 'memory full: stops before 4000 characters' ($a.Pleine -and $a.Ajoutees -lt 14 -and (Get-NoteMemoire $FichierNotes).Length -le 4000) "$($a.Ajoutees) $($a.Pleine)"
+$mem = Get-NoteMemoire $FichierNotes
+Verifier 'all the new notes are written, old ones removed' ($a.Ajoutees -eq 16 -and $a.Retirees -ge 5) "$($a.Ajoutees) $($a.Retirees)"
+Verifier 'never more than 4000 characters' ($mem.Length -le 4000 -and $mem.Length -gt 3000) $mem.Length
+Verifier 'the oldest are gone, the newest are kept' ($mem -notmatch 'Dupont' -and $mem -notmatch '(?m)^- note 1 x' -and $mem -match '(?m)^- note 16 x')
+Verifier 'the comment at the top of memory.md is kept' ([IO.File]::ReadAllText($FichierNotes, [Text.Encoding]::UTF8).StartsWith('<!--'))
 $cap2 = Fausse-Capture
 $script:ChoixModele = 'sonnet'
 Lancer-Tache $cap2 ''
-Ecrire-Reponse $cap2 ("Done.`nMEMORY: one note too many " + ('y' * 280))
+Ecrire-Reponse $cap2 ("Done.`nMEMORY: the newest note " + ('y' * 250))
 $script:Proc = Faux-Proc 0
 Processus-Fini
-Verifier 'memory full: said in the result' ((Sans-Duree $script:Dernier) -match '^\[sonnet\] Done\.' -and $script:Dernier -match 'Persistent memory is full') $script:Dernier
+Verifier 'a task on a full memory: note saved, nothing said to the user' ((Sans-Duree $script:Dernier) -eq '[sonnet] Done.' -and (Get-NoteMemoire $FichierNotes) -match '(?m)^- the newest note y+$' -and [bool]((Get-Content $Journal -Encoding UTF8) -match '1 note\(s\) saved, \d+ oldest removed')) $script:Dernier
 
 '--- Persistent memory menu'
 $libelles = @($menu.Items | ForEach-Object { $_.Text })

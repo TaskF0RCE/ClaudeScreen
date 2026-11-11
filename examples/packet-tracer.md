@@ -9,6 +9,11 @@ Read this file for any task in Cisco Packet Tracer.
   Write the commands in a file in the current folder (one command file per device) and type it with `ecrire-fichier`.
 - Check the result with `show` commands (`show running-config`, `show ip interface brief`, `show vlan brief`...).
 - For a PC: Desktop tab > IP Configuration.
+- Open a device with **one** `clic`, never `doubleclic`: a second click on the device closes the window that the
+  first one opened. If the window does not show yet, wait (`attendre 1000`) and look again before clicking.
+- Fill in address fields with `remplacer`, not `ecrire`: Packet Tracer fills the subnet mask in by itself once the
+  IP address is entered, so typing a mask after it gives it twice. An incomplete address opens an "Error" box:
+  click OK, then fix the field.
 
 ## Cabling
 

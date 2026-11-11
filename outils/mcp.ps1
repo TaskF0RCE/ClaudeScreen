@@ -11,11 +11,11 @@ $sortie = New-Object System.IO.StreamWriter ([Console]::OpenStandardOutput()), $
 $sortie.AutoFlush = $true
 . (Join-Path $PSScriptRoot 'actions.ps1')
 
-$MaxActions = 20
+$MaxActions = 40
 # Actions whose argument is one text or one path: everything after the action name, spaces included.
-$ActionsTexte = @('ecrire', 'ecrire-fichier', 'corbeille')
+$ActionsTexte = @('ecrire', 'remplacer', 'ecrire-fichier', 'corbeille')
 $Outils = @'
-[{"name":"pc","description":"Controls the user's PC with the mouse and keyboard. Runs the given actions in order and stops at the first error. By default the result ends with a new screenshot taken after the last action.","inputSchema":{"type":"object","properties":{"actions":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":20,"description":"Actions to run in order, one per string, written as listed in your instructions, e.g. [\"clic 412 300\", \"ecrire Paris\", \"touche enter\"]."},"capture":{"type":"boolean","description":"true (default): take a screenshot after the last action and return it. false: no screenshot."}},"required":["actions"]}}]
+[{"name":"pc","description":"Controls the user's PC with the mouse and keyboard. Runs the given actions in order and stops at the first error. By default the result ends with a new screenshot taken after the last action.","inputSchema":{"type":"object","properties":{"actions":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":40,"description":"Actions to run in order, one per string, written as listed in your instructions, e.g. [\"clic 412 300\", \"remplacer Paris\", \"touche enter\"]."},"capture":{"type":"boolean","description":"true (default): take a screenshot after the last action and return it. false: no screenshot."}},"required":["actions"]}}]
 '@
 
 function ConvertTo-Texte($valeur) { ConvertTo-Json -InputObject $valeur -Compress }

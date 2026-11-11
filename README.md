@@ -18,7 +18,7 @@ ClaudeScreen runs on top of the **[Claude Code](https://docs.claude.com/en/docs/
    - **Sonnet** for simple tasks: a question, a form, a short text, a few clicks (fast, uses little quota);
    - **Opus** for calculations, programming, technical configuration, data processing and long reasoning.
    If the active window is a technical tool (Packet Tracer, GNS3, PuTTY, Wireshark, MATLAB...), Opus is picked directly, without triage.
-4. Claude does the task with the mouse and keyboard, and with commands when the screen is not enough (see [Terminal access](#terminal-access)). It checks its work on new screenshots, then writes a short summary in the language of your Windows.
+4. Claude does the task with the mouse and keyboard, and with commands if you allow them (see [Terminal access](#terminal-access)). It checks its work on new screenshots, then writes a short summary in the language of your Windows.
 5. Click the icon to see the summary.
 
 In the notification area the app is called **Claude-Work** (tooltip, menu, result window), like the folder in your Documents where Claude puts the files it creates.
@@ -29,6 +29,7 @@ In the notification area the app is called **Claude-Work** (tooltip, menu, resul
 
 - **Esc** or clicking elsewhere cancels the task and deletes the screenshot.
 - **Enter** on an empty bar starts a normal task.
+- If the bar closes before you press Enter (Esc, a click elsewhere, by accident), what you typed is not lost: it is back in the bar the next time you open it.
 
 Without an instruction, Claude does what the screen is asking for. When the screen asks for nothing in particular, give an instruction.
 
@@ -94,9 +95,9 @@ Right-click the icon (every choice is remembered):
 
 ### Terminal access
 
-Checked by default. With it, Claude can also run PowerShell commands, which opens what the mouse cannot do well: renaming or sorting many files, processing a CSV, producing or converting a document, reading the state of the system (network, processes, disk).
+Unchecked by default: Claude only has the mouse and keyboard. Check **Terminal access** in the icon menu and Claude can also run PowerShell commands, which opens what the mouse cannot do well: renaming or sorting many files, processing a CSV, producing or converting a document, reading the state of the system (network, processes, disk).
 
-The screen comes first: Claude is told to use a command only when the task cannot reasonably be done on screen or is clearly better done that way, and to stay inside the task. Every command goes through a guard before it runs (see [Security](#security)). Uncheck **Terminal access** to give Claude the mouse and keyboard only.
+The screen comes first: Claude is told to use a command only when the task cannot reasonably be done on screen or is clearly better done that way, and to stay inside the task. Every command goes through a guard before it runs (see [Security](#security)).
 
 ### Smooth mode
 
@@ -109,7 +110,7 @@ It applies at once, even in the middle of a task. Tasks take a bit longer in thi
 
 ### Persistent memory
 
-By default, each task starts from scratch. Check **Persistent memory** to open a kind of mini session: Claude ends each task with short notes (what it learned about you and your work, how far it got) and gets them back at the next tasks.
+Checked by default. It works like a mini session: Claude ends each task with short notes (what it learned about you and your work, how far it got) and gets them back at the next tasks.
 
 `System-Context\memory.md`:
 
@@ -120,8 +121,9 @@ By default, each task starts from scratch. Check **Persistent memory** to open a
 ```
 
 - You can read the notes, fix one or delete one by hand. `instructions.md` is never touched.
+- Uncheck **Persistent memory** and each task starts from scratch.
 - **Unchecking the mode sends `memory.md` to the Recycle Bin**: the notes are gone for Claude, and you can still get them back from the bin. Checking it again starts an empty file.
-- Claude cannot write in the folder: it ends its answer with `MEMORY: ...` lines, and the app saves them (and hides them from the result you see). One note is at most 300 characters, and all notes together at most 4000: past that, new notes are no longer saved and the result says so.
+- Claude cannot write in the folder: it ends its answer with `MEMORY: ...` lines, and the app saves them (and hides them from the result you see). One note is at most 300 characters, and all notes together at most 4000: past that, the oldest notes are removed to make room for the new ones.
 - A task you stop saves no note.
 
 ### Stopping a task

@@ -37,21 +37,44 @@ $c = Fausse-Capture; Lancer-Tache $c ''
 Verifier 'no Default file either: the task still starts' ((Lire-Prompt $c) -match 'Active context: Default \(chosen by the user in the icon menu\)\.\r?\n')
 
 '--- Terminal access'
-Verifier 'on by default, nothing saved yet' ($script:Terminal -and $menuTerminal.Checked -and -not (Test-Path $FichierTerminal))
+Verifier 'off by default, nothing saved yet' (-not $script:Terminal -and -not $menuTerminal.Checked -and -not (Test-Path $FichierTerminal))
 $script:ChoixModele = 'opus'
+$c = Fausse-Capture; Lancer-Tache $c ''
+$p = Lire-Prompt $c
+Verifier 'off: no terminal in the prompt' ($p -match 'There is no terminal\.' -and $p -notmatch 'PowerShell')
+Verifier 'off: no PowerShell among the tools' ($global:Appels[-1] -like 'opus|task|--tools Read,Write,Edit,Glob,Grep --mcp-config *') $global:Appels[-1]
+$menuTerminal.PerformClick()
+Verifier 'checked: on saved' ($script:Terminal -and (Get-Content $FichierTerminal -Raw).Trim() -eq 'on')
 $c = Fausse-Capture; Lancer-Tache $c ''
 $p = Lire-Prompt $c
 Verifier 'on: prompt gives the PowerShell tool and its limits' ($p -match 'you also have the PowerShell tool' -and $p -match 'The screen comes first' -and $p -match 'No administrator rights' -and $p -notmatch 'There is no terminal')
 Verifier 'on: PowerShell among the tools' ($global:Appels[-1] -like 'opus|task|--tools Read,Write,Edit,Glob,Grep,PowerShell --mcp-config *') $global:Appels[-1]
 Verifier 'on: said in the log' ([bool]((Get-Content $Journal -Encoding UTF8) -match 'Model: opus, terminal$'))
 $menuTerminal.PerformClick()
-Verifier 'unchecked: off saved' (-not $script:Terminal -and (Get-Content $FichierTerminal -Raw).Trim() -eq 'off')
-$c = Fausse-Capture; Lancer-Tache $c ''
-$p = Lire-Prompt $c
-Verifier 'off: no terminal in the prompt' ($p -match 'There is no terminal\.' -and $p -notmatch 'PowerShell')
-Verifier 'off: no PowerShell among the tools' ($global:Appels[-1] -like 'opus|task|--tools Read,Write,Edit,Glob,Grep --mcp-config *') $global:Appels[-1]
-$menuTerminal.PerformClick()
-Verifier 'checked again: on saved' ($script:Terminal -and (Get-Content $FichierTerminal -Raw).Trim() -eq 'on')
+Verifier 'unchecked again: off saved' (-not $script:Terminal -and (Get-Content $FichierTerminal -Raw).Trim() -eq 'off')
+
+'--- prompt: fields and clicks'
+Verifier 'remplacer is listed, with its warning' ($p -match '(?m)^  remplacer "text" ' -and $p -match 'Never in a document')
+Verifier 'one click is enough, look before clicking again' ($p -match 'One clic is enough' -and $p -match 'a second click on the same spot often closes')
+
+'--- instruction bar: the text is kept when the bar is closed without Enter'
+function Capturer { Fausse-Capture }
+function Fermer-Barre([string]$texte, [bool]$valider) {
+    Demander-Consigne
+    $script:Boite.Controls[0].Controls[0].Text = $texte
+    $script:BoiteValidee = $valider; $script:BoiteFermeture = $true
+    $script:Boite.Close()
+}
+$nbAppels = $global:Appels.Count
+Fermer-Barre 'configure the DHCP pool' $false
+Verifier 'closed without Enter: no task, text kept' ($global:Appels.Count -eq $nbAppels -and $script:Brouillon -eq 'configure the DHCP pool' -and $null -eq $script:Boite)
+Demander-Consigne
+Verifier 'opened again: the text is back in the bar' ($script:Boite.Controls[0].Controls[0].Text -eq 'configure the DHCP pool')
+$script:BoiteValidee = $true; $script:BoiteFermeture = $true; $script:Boite.Close()
+Verifier 'Enter: task started with it, draft cleared' ($global:Appels.Count -eq ($nbAppels + 1) -and $script:Brouillon -eq '' -and (Get-Content $Journal -Encoding UTF8 | Select-Object -Last 3) -match 'with instruction')
+Demander-Consigne
+Verifier 'after a sent instruction: the bar is empty' ($script:Boite.Controls[0].Controls[0].Text -eq '')
+$script:BoiteFermeture = $true; $script:Boite.Close()
 
 '--- a task that goes wrong'
 $script:ChoixModele = 'auto'

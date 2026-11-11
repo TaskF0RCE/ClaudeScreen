@@ -57,7 +57,7 @@ Same as on Windows: with **Smooth mode** checked in the menu, the mouse glides t
 
 ### Persistent memory
 
-Same as on Windows ([details](../README.md#persistent-memory)): with **Persistent memory** checked in the menu, Claude ends each task with short notes (what it learned about you and your work, how far it got) and gets them back at the next tasks, a kind of mini session. The notes go into `System-Context/memory.md`, one per line; `instructions.md` is never touched. **Unchecking the mode sends `memory.md` to the trash.** Claude cannot write in the folder: it ends its answer with `MEMORY: ...` lines, and the app saves them and hides them from the result (300 characters per note, 4000 in all). The choice is remembered (`data/memory.txt`). The code is in `outils/memoire.py`.
+Same as on Windows ([details](../README.md#persistent-memory)): with **Persistent memory** checked in the menu (it is by default), Claude ends each task with short notes (what it learned about you and your work, how far it got) and gets them back at the next tasks, a kind of mini session. The notes go into `System-Context/memory.md`, one per line; `instructions.md` is never touched. **Unchecking the mode sends `memory.md` to the trash.** Claude cannot write in the folder: it ends its answer with `MEMORY: ...` lines, and the app saves them and hides them from the result (300 characters per note, 4000 in all; past that, the oldest notes make room). The choice is remembered (`data/memory.txt`). The code is in `outils/memoire.py`.
 
 On Wayland, the mouse position cannot be read: the first move of a task jumps to its target, the next ones glide from the last known position.
 

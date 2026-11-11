@@ -205,7 +205,7 @@ Active window: {fenetre[0]} - "{fenetre[1]}"
 {contexte}{instructions}{bloc_memoire}{documents}{precision}
 1. Find what is being asked. If an instruction or instructions from the user are given above, follow them rather than guessing. Otherwise, the active context above says how to find the task. Otherwise, the main thing on screen that calls for an action.
 2. Do the whole task, from start to finish.
-   - If the answer must go on the screen (ticking boxes, filling in fields, clicking, writing in an open document, typing commands in a console), control the computer with the tool below. After each important action, take a new screenshot to check. If there is more further down (other questions), scroll and continue. You may click Next or Submit on a form, quiz or exercise once everything asked is filled in.
+   - If the answer must go on the screen (ticking boxes, filling in fields, clicking, writing in an open document, typing commands in a console), control the computer with the tool below. After each important action, take a new screenshot to check. One clic is enough for a button, a tab, a link or an item of a tool; keep doubleclic for what only opens with a double-click (a file or a desktop icon). If a click seems to have done nothing, look at a new screenshot before clicking again: a second click on the same spot often closes what the first one opened. If there is more further down (other questions), scroll and continue. You may click Next or Submit on a form, quiz or exercise once everything asked is filled in.
    - If the task asks you to produce something (diagram, document, code, summary, HTML page, SVG...), create the files with the Write tool in the current folder: {TRAVAIL}
    - Do not add, move or delete what the user has set up on screen (items of a diagram or a topology...) unless the task asks for it. To type a sequence of commands into a console, write them to a file in the current folder and type it with ecrire-fichier, then check the result.
    - If another window comes to the front or the user takes back control, stop so you don't type into their window, and say how far you got.
@@ -221,7 +221,8 @@ Actions:
   glisser X1 Y1 X2 Y2     drag: press on point 1, move, release on point 2 (to move an item, or to link two items where links are drawn by dragging)
   relier X1 Y1 X2 Y2      click on point 1, then on point 2 (to link two items where links are made with two clicks, the link or cable tool being selected)
   defiler X Y N           N mouse-wheel notches; N>0 scrolls up, N<0 scrolls down
-  ecrire "text"           types the text where the cursor is (click in the field first)
+  ecrire "text"           types the text where the cursor is (click in the field first); it adds to what the field already holds
+  remplacer "text"        selects everything in the field that has the cursor, then types the text over it. Use it for form fields: a field often already holds a value (a default, or one filled in automatically after the previous field). Never in a document or an editor: it would replace the whole text
   ecrire-fichier PATH     types the content of a UTF-8 text file (long texts, quotes, line breaks, command sequences)
   touche COMBO            key combo, e.g. enter, tab, ctrl+a, cmd+s, pagedown, f5
 {note_touches}  attendre MS             wait
@@ -725,11 +726,9 @@ class Appli:
             reponse = reponse or '(done, no summary)'
             if nouvelles and self.memoire:
                 try:
-                    ajoutees, pleine = memoire.ajouter(FICHIER_NOTES, nouvelles)
-                    noter('Persistent memory: %d note(s) saved' % ajoutees)
-                    if pleine:
-                        reponse += ('\n\n(Persistent memory is full: the new notes were not saved. Uncheck then '
-                                    'check Persistent memory in the icon menu to empty it.)')
+                    ajoutees, retirees = memoire.ajouter(FICHIER_NOTES, nouvelles)
+                    noter('Persistent memory: %d note(s) saved' % ajoutees
+                          + (', %d oldest removed to make room' % retirees if retirees else ''))
                 except OSError as ex:
                     noter('Persistent memory: %s' % ex)
         if code == 0 and reponse:

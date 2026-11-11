@@ -179,20 +179,25 @@ a.lancer_tache(c, '')
 verifier('no Default file either: the task still starts', 'Active context: Default (chosen by the user in the icon menu).\n' in prompt(c))
 
 print('--- memory full, then off')
-n, pleine = memoire.ajouter(cs.FICHIER_NOTES, ['note %d %s' % (i, 'x' * 280) for i in range(14)])
-verifier('memory full: stops before 4000 characters', pleine and n < 14 and len(memoire.notes(cs.FICHIER_NOTES)) <= 4000, (n, pleine))
+n, retirees = memoire.ajouter(cs.FICHIER_NOTES, ['note %d %s' % (i, 'x' * 280) for i in range(1, 17)])
+mem = memoire.notes(cs.FICHIER_NOTES)
+verifier('memory full: the oldest notes make room', n == 16 and retirees >= 5 and 3000 < len(mem) <= 4000
+         and 'Dupont' not in mem and '\n- note 16 x' in mem and lire(cs.FICHIER_NOTES).startswith('<!--'), (n, retirees, len(mem)))
 c2 = capture()
 a.lancer_tache(c2, '')
-repondre(c2, 'Done.\nMEMORY: one note too many ' + 'y' * 280)
+repondre(c2, 'Done.\nMEMORY: the newest note')
 a.proc = types.SimpleNamespace(returncode=0)
 a.processus_fini()
-verifier('memory full: said in the result', a.dernier.startswith('[sonnet, ') and 'Persistent memory is full' in a.dernier, a.dernier)
+verifier('a task on a full memory: note saved, nothing said to the user',
+         re.fullmatch(r'\[sonnet, \d+ s\] Done\.', a.dernier) is not None and '\n- the newest note' in memoire.notes(cs.FICHIER_NOTES), a.dernier)
 verifier('memory off: memory.md to the trash', memoire.retirer(cs.FICHIER_NOTES, corbeille) and not os.path.exists(cs.FICHIER_NOTES)
          and any(n.startswith('memory.md') for n in os.listdir(poubelle)))
 a.memoire = False
 c3 = capture()
 a.lancer_tache(c3, '')
 verifier('memory off: nothing about memory in the prompt', 'MEMORY' not in prompt(c3) and 'Persistent memory' not in prompt(c3))
+
+verifier('memory is on unless switched off', memoire.active(os.path.join(bac, 'nothing.txt')) and not os.path.exists(os.path.join(bac, 'nothing.txt')))
 
 print('--- instructions.txt from an old version')
 vieux = os.path.join(bac, 'old')

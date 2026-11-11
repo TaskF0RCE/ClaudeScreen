@@ -31,7 +31,7 @@ Default is used when you choose nothing.
 
 ## memory.md: Claude's notes (Persistent memory)
 
-When **Persistent memory** is checked in the icon menu, Claude ends each task with short notes
+When **Persistent memory** is checked in the icon menu (it is by default), Claude ends each task with short notes
 (what it learned about you and your work, how far it got). ClaudeScreen saves them in `memory.md`
 and gives them back to Claude at the next tasks: a kind of mini session.
 
