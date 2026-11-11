@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/TaskF0RCE/ClaudeScreen/compare/v0.4.0...v0.5.0) (2026-11-11)
+
+
+### ✨ Features
+
+* contexts, limited terminal access, tests in the repository, MIT license ([#17](https://github.com/TaskF0RCE/ClaudeScreen/issues/17)) ([1d030bb](https://github.com/TaskF0RCE/ClaudeScreen/commit/1d030bb8e337e2608c675a310ca81d4789750bb2))
+
 ## [0.4.0](https://github.com/TaskF0RCE/ClaudeScreen/compare/v0.3.0...v0.4.0) (2026-11-11)
 
 
