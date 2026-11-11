@@ -195,7 +195,7 @@ data/               EVERYTHING the app generates, kept apart from the program (p
 
 Same `data/` layout as the Windows version. Coming from an older version (`donnees/` folder): run `./installer.sh` again, it moves your history into `data/` and rebuilds the Python environment.
 
-Mapping to the Windows version: `ClaudeScreen.ps1` → `claude_screen.py`, `Lancer.vbs` → `lancer.sh` / `ClaudeScreen.app`, `natif.cs` + `natif.ps1` → `natif.py` + `raccourcis.py`, `pc.ps1` → `pc.py`, smooth mode of `natif.cs` → `humain.py`, `garde.ps1` → `garde.py`, `pdf.ps1` + `poppler.ps1` → `pdf.py` (pypdfium2, no external program), `memoire.ps1` → `memoire.py`.
+Mapping to the Windows version: `ClaudeScreen.ps1` → `claude_screen.py`, `Lancer.vbs` → `lancer.sh` / `ClaudeScreen.app`, `natif.cs` + `natif.ps1` → `natif.py` + `raccourcis.py`, `actions.ps1` + `mcp.ps1` → `pc.py`, smooth mode of `natif.cs` → `humain.py`, `garde.ps1` → `garde.py`, `pdf.ps1` + `poppler.ps1` → `pdf.py` (pypdfium2, no external program), `memoire.ps1` → `memoire.py`.
 
 ## Limitations
 

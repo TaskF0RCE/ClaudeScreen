@@ -107,7 +107,7 @@ Claude drives the PC through `outils/mcp.ps1`: a small [MCP](https://modelcontex
 
 It is a single PowerShell script of a few kilobytes: nothing to install, nothing running outside a task, no network port (Claude Code talks to it through its standard input and output). The result window and the log show how long each task took.
 
-Older versions started PowerShell twice for every action (once for the safety hook, once for `outils/pc.ps1`), about 5 seconds per action. `pc.ps1` stays only to try an action by hand.
+Older versions started PowerShell twice for every action (once for the safety hook, once for a `pc.ps1` script), about 5 seconds per action.
 
 Windows only for now; the macOS/Linux port keeps its `data/pc` command.
 
@@ -183,7 +183,6 @@ outils/natif.cs     Windows calls (DPI, screenshot, mouse, keyboard, smooth mode
 outils/natif.ps1    compiles natif.cs into a DLL only once (the name changes when the source changes)
 outils/actions.ps1  the PC control actions (click, type, screenshot...)
 outils/mcp.ps1      MCP server that gives these actions to Claude: several actions per call, screenshot in the answer
-outils/pc.ps1       runs one action by hand, to try it
 outils/garde.ps1    hook that blocks permanent deletions and writes to System-Context
 outils/pdf.ps1      PDF reading: text extracted in advance, page as an image (with Poppler)
 outils/memoire.ps1  instructions.md (yours, never changed) and memory.md (Claude's notes, persistent memory)

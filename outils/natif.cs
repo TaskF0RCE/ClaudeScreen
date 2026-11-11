@@ -25,7 +25,7 @@ namespace ClaudeScreen
         [DllImport("winmm.dll")] static extern uint timeBeginPeriod(uint ms);
         [DllImport("winmm.dll")] static extern uint timeEndPeriod(uint ms);
 
-        // Smooth mode (icon menu, data\smooth.txt): human-like mouse moves and typing. Set by pc.ps1.
+        // Smooth mode (icon menu, data\smooth.txt): human-like mouse moves and typing. Set by actions.ps1.
         public static bool Doux = false;
         static readonly Random Hasard = new Random();
 

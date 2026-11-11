@@ -36,7 +36,7 @@ function Get-ImageBase64([string]$png) {
 function Format-Image([string]$png) { '{"type":"image","data":"' + (Get-ImageBase64 $png) + '","mimeType":"image/jpeg"}' }
 function Format-Texte([string]$texte) { '{"type":"text","text":' + (ConvertTo-Texte $texte) + '}' }
 
-# "clic 10 20" -> action + arguments, as pc.ps1 would receive them.
+# "clic 10 20" -> action + arguments, for Invoke-ActionPc.
 function Split-Action([string]$ligne) {
     $ligne = $ligne.Trim()
     $nom, $reste = $ligne -split '\s+', 2

@@ -1,4 +1,4 @@
-# The PC control actions, used by mcp.ps1 (the MCP server Claude goes through) and pc.ps1 (one action by hand).
+# The PC control actions, used by mcp.ps1 (the MCP server Claude goes through).
 # Dot-source this file, then call Invoke-ActionPc. Coordinates are in screenshot pixels (see screen.json).
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'natif.ps1')
