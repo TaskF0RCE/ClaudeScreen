@@ -17,7 +17,7 @@ $Journal = Join-Path $Donnees 'log.txt'
 $FichierModele = Join-Path $Donnees 'model.txt'
 $FichierSmooth = Join-Path $Donnees 'smooth.txt'   # smooth mode: 'on' or 'off', read by pc.ps1 at every action
 $FichierMemoire = Join-Path $Donnees 'memory.txt'  # persistent memory: 'on' or 'off'
-$FichierMcp = Join-Path $Donnees 'mcp.txt'         # fast control (MCP server instead of pc.ps1): 'on' or 'off'
+$FichierMcp = Join-Path $Donnees 'mcp.txt'         # fast control (MCP server instead of pc.ps1): 'on' (default) or 'off'
 $CacheContexte = Join-Path $Donnees 'context-cache'   # text extracted from the context PDFs
 # Name shown in the notification area (tooltip, menu, result window) and name of the work folder in Documents.
 $Nom = 'Claude-Work'
@@ -608,8 +608,9 @@ $menuMemoire.add_Click({
 })
 $menu.Items.Add($menuMemoire) | Out-Null
 # Fast control: Claude drives the PC through an MCP server (outils/mcp.ps1) kept open during the task,
-# instead of starting pc.ps1 for every action. Applies to the next task.
-$script:Mcp = (Test-Path $FichierMcp) -and ("$(Get-Content $FichierMcp -Raw)".Trim() -eq 'on')
+# instead of starting pc.ps1 for every action. On by default; unchecking it (data/mcp.txt = off) goes back to
+# pc.ps1, for example if the server does not start. Applies to the next task.
+$script:Mcp = -not ((Test-Path $FichierMcp) -and ("$(Get-Content $FichierMcp -Raw)".Trim() -eq 'off'))
 $menuMcp = New-Object System.Windows.Forms.ToolStripMenuItem 'Fast control (MCP)'
 $menuMcp.CheckOnClick = $true
 $menuMcp.Checked = $script:Mcp
