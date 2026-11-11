@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/TaskF0RCE/ClaudeScreen/compare/v0.5.0...v0.5.1) (2026-11-11)
+
+
+### 🐛 Bug fixes
+
+* fields typed twice and windows closed by a second click; memory on and terminal off by default ([#19](https://github.com/TaskF0RCE/ClaudeScreen/issues/19)) ([bad3b51](https://github.com/TaskF0RCE/ClaudeScreen/commit/bad3b51b0afb403e73a6e3d6a0bdb3262ceff1b6))
+
 ## [0.5.0](https://github.com/TaskF0RCE/ClaudeScreen/compare/v0.4.0...v0.5.0) (2026-11-11)
 
 
