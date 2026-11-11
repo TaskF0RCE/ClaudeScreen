@@ -46,3 +46,27 @@ jobs:
           "PSScriptAnalyzer: $($errors.Count) error(s), $($results.Count - $errors.Count) warning(s)." | Tee-Object -Variable summary
           "### PowerShell lint`n$summary" >> $env:GITHUB_STEP_SUMMARY
           if ($errors.Count -gt 0) { exit 1 }
+
+  # The test suite, on the PowerShell that users have (Windows PowerShell 5.1). Each scenario runs the real
+  # ClaudeScreen.ps1 in a sandbox: no Claude call, no screen action. See tests/Run-Tests.ps1.
+  tests-windows:
+    name: tests (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run the tests
+        shell: powershell
+        run: |
+          & .\tests\Run-Tests.ps1 -SansEcran
+          exit $LASTEXITCODE
+
+  # The logic of the macOS/Linux version, with fake system modules.
+  tests-linux:
+    name: tests (macOS/Linux logic)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run the tests
+        run: python3 tests/test_linux_macos.py
