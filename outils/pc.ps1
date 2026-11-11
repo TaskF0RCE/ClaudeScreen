@@ -1,5 +1,5 @@
-﻿# PC control for Claude, one action per call: pc.ps1 <action> [arguments]. The actions are in actions.ps1.
-# Used when "Fast control" is unchecked in the icon menu; otherwise Claude goes through mcp.ps1.
+﻿# Runs one PC control action by hand, to try it: pc.ps1 <action> [arguments], with ECRAN_RUN set to a task
+# folder (data/runs/<date>, it needs its screen.json). Claude itself goes through mcp.ps1. The actions are in actions.ps1.
 param(
     [Parameter(Mandatory = $true, Position = 0)][string]$Action,
     [Parameter(Position = 1, ValueFromRemainingArguments = $true)][string[]]$Valeurs

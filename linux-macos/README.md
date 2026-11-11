@@ -152,7 +152,7 @@ On top of that:
 - **Nothing is ever permanently deleted.** The hook `outils/garde.py` blocks `rm`, `rmdir`, `unlink`, `shred`, `find -delete`, `dd`, `mkfs`, `diskutil erase`, `git clean`, `shutdown`, etc. To remove a file, Claude sends it to the trash (`pc corbeille`).
 - Its instructions forbid buying, paying, sending messages, entering passwords or bank details, and changing system settings. Text displayed on screen cannot override these rules.
 - No web access (WebFetch and WebSearch are denied).
-- Claude is started with only the tools a task needs (`Read`, `Write`, `Edit`, `Glob`, `Grep` and `Bash` for `data/pc`), without the MCP servers, connectors and skills of your account. This needs an up-to-date Claude Code (`claude update`).
+- Claude is started with only the tools a task needs (`Read`, `Write`, `Edit`, `Glob`, `Grep` and `Bash` for `data/pc`), without the MCP servers, connectors and skills of your account. This needs a recent Claude Code: the app runs `claude update` in the background at startup and then once a day, never during a task.
 
 ## Subscription and usage
 
@@ -201,5 +201,5 @@ Mapping to the Windows version: `ClaudeScreen.ps1` → `claude_screen.py`, `Lanc
 
 - Same limitations as the Windows version: Claude runs no program other than the control tool; precise mouse work (cabling in Packet Tracer, drag and drop) is slow; only one screen is captured (the one with the mouse).
 - Wayland: see the table above.
-- The Windows **Fast control (MCP)** mode is not ported yet: here Claude runs one action per call through `data/pc`. The result and the log show how long each task took.
+- The Windows MCP server for PC control is not ported yet: here Claude runs one action per call through `data/pc`. The result and the log show how long each task took.
 - macOS: if you move the folder after installing, run `./installer.sh` again (the app and the autostart contain the path). On macOS 15 and later, the system may periodically ask again for the screen recording permission.

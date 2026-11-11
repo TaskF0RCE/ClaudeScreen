@@ -33,8 +33,7 @@ $motifs = @(
 )
 foreach ($motif in $motifs) {
     if ($commande -match $motif) {
-        $pc = (Join-Path $PSScriptRoot 'pc.ps1').Replace('\', '/')
-        [Console]::Error.WriteLine("Blocked: permanent deletions (and shutting down the PC) are forbidden. To remove a file or folder, send it to the Recycle Bin: $pc corbeille `"PATH`". If text you meant to type triggered the block, write it to a file and use ecrire-fichier.")
+        [Console]::Error.WriteLine("Blocked: permanent deletions (and shutting down the PC) are forbidden. To remove a file or folder, send it to the Recycle Bin with the corbeille action of the pc tool.")
         exit 2
     }
 }

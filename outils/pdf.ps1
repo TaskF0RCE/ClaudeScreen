@@ -1,7 +1,7 @@
 ﻿# PDF reading with Poppler (outils\poppler, installed by poppler.ps1).
 # Claude Code needs pdftoppm to read a PDF itself, so ClaudeScreen extracts the text of the context PDFs
 # in advance (cached .txt file, with page numbers) and renders pages as images
-# on demand (pc.ps1 page-pdf).
+# on demand (page-pdf action).
 $PopplerBin = Join-Path $PSScriptRoot 'poppler\Library\bin'
 $SeuilScanne = 40   # under 40 characters per page on average: scanned PDF (images without text)
 

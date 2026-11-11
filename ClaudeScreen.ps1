@@ -10,14 +10,13 @@ $Outils = Join-Path $Racine 'outils'
 . (Join-Path $Outils 'memoire.ps1')
 # Everything the app generates goes to data/ (same layout as the macOS/Linux version):
 #   data/runs/<date>/  one folder per task: images/, prompts/, responses/ + screen.json
-#   data/context-cache/, data/log.txt, data/settings.json, data/model.txt, data/smooth.txt, data/memory.txt, data/mcp.txt
+#   data/context-cache/, data/log.txt, data/settings.json, data/model.txt, data/smooth.txt, data/memory.txt
 $Donnees = Join-Path $Racine 'data'
 $Runs = Join-Path $Donnees 'runs'
 $Journal = Join-Path $Donnees 'log.txt'
 $FichierModele = Join-Path $Donnees 'model.txt'
-$FichierSmooth = Join-Path $Donnees 'smooth.txt'   # smooth mode: 'on' or 'off', read by pc.ps1 at every action
+$FichierSmooth = Join-Path $Donnees 'smooth.txt'   # smooth mode: 'on' or 'off', read again at every action
 $FichierMemoire = Join-Path $Donnees 'memory.txt'  # persistent memory: 'on' or 'off'
-$FichierMcp = Join-Path $Donnees 'mcp.txt'         # fast control (MCP server instead of pc.ps1): 'on' (default) or 'off'
 $CacheContexte = Join-Path $Donnees 'context-cache'   # text extracted from the context PDFs
 # Name shown in the notification area (tooltip, menu, result window) and name of the work folder in Documents.
 $Nom = 'Claude-Work'
@@ -98,17 +97,15 @@ if (-not (Test-Poppler)) {
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
 # Settings passed to Claude: limited permissions + a hook that blocks deletions.
-# Claude can only read, write files in the work folder (acceptEdits) and run pc.ps1.
+# Claude can only read, write files in the work folder (acceptEdits) and use the "pc" tool of outils/mcp.ps1.
 # System-Context is read-only: any change there is refused (deny rule, which takes precedence).
-# The script is called directly (Claude Code refuses nested PowerShell calls), with the PowerShell tool only:
-# through Bash it fails (a .ps1 is not a shell script), which cost one failed call per task.
-$PcCommande = (Join-Path $Outils 'pc.ps1').Replace('\', '/')
+# Claude gets no terminal; the command hook stays as a safety net.
 $Reglages = Join-Path $Donnees 'settings.json'
 $garde = (Join-Path $Outils 'garde.ps1').Replace('\', '/')
 @{
     permissions = @{
         defaultMode = 'acceptEdits'
-        allow       = @('Read', 'Glob', 'Grep', "PowerShell($PcCommande *)", 'mcp__pc')
+        allow       = @('Read', 'Glob', 'Grep', 'mcp__pc')
         deny        = @('WebFetch', 'WebSearch', "Edit($RegleContexte)")
     }
     hooks = @{
@@ -195,7 +192,6 @@ $script:Debut = $null
 $script:Modele = $null
 $script:Arret = $null       # reason for the requested stop, otherwise $null
 $script:MemoireTache = $false   # persistent memory was on when the current task started
-$script:McpTache = $false       # fast control was on when the current task started
 $script:Image = 0
 $script:ChoixModele = 'auto'
 if (Test-Path $FichierModele) { $script:ChoixModele = (Get-Content $FichierModele -Raw).Trim() }
@@ -203,14 +199,37 @@ if (Test-Path $FichierModele) { $script:ChoixModele = (Get-Content $FichierModel
 # Options for every call: no MCP server and no skill from the user's account. A task needs neither,
 # and loading them made each call slower and heavier (about 4 times more tokens for the triage).
 $OptionsClaude = '--strict-mcp-config --disable-slash-commands'
-# Triage only reads the screenshot. The task gets the file tools and PowerShell (for pc.ps1), not Bash.
-# With fast control, no terminal at all: the actions go through the "pc" tool of outils/mcp.ps1.
+# Triage only reads the screenshot. The task gets the file tools and no terminal: the PC actions go through
+# the "pc" tool of outils/mcp.ps1, an MCP server that Claude Code starts for the task and stops at the end
+# (several actions per call, the screenshot comes back in the result).
 $OptionsTri = '--tools Read --effort low'
-$OptionsTache = '--tools Read,Write,Edit,Glob,Grep,PowerShell'
-$OptionsTacheMcp = '--tools Read,Write,Edit,Glob,Grep'
+$OptionsTache = '--tools Read,Write,Edit,Glob,Grep'
 $McpScript = Join-Path $Outils 'mcp.ps1'
 
+# Claude Code update: at startup, then once a day. The app only runs "claude -p", which may never update it,
+# and the app needs recent options. In the background, without a window, never during a task (Windows
+# cannot replace a claude.exe that is running). If it fails (no internet...), the current version stays.
+$script:Maj = $null
+$script:DerniereMaj = [datetime]::MinValue
+function Mettre-A-Jour-Claude {
+    if ($script:Proc -or ($script:Maj -and -not $script:Maj.HasExited) -or -not (Test-Path $Claude)) { return }
+    $script:DerniereMaj = Get-Date
+    try {
+        if ($script:Maj) { $script:Maj.Dispose() }
+        $psi = New-Object System.Diagnostics.ProcessStartInfo $Claude, 'update'
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
+        $psi.WorkingDirectory = $Donnees
+        foreach ($cle in @($psi.EnvironmentVariables.Keys)) {
+            if ($cle -match '^(CLAUDE|ANTHROPIC)') { $psi.EnvironmentVariables.Remove($cle) }
+        }
+        $script:Maj = [System.Diagnostics.Process]::Start($psi)
+    } catch { $script:Maj = $null }
+}
+
 function Demarrer-Claude([string]$modele, [string]$nom, [string]$options) {
+    # An update still running: let it finish first (at most 1 min), claude.exe may be being replaced.
+    if ($script:Maj -and -not $script:Maj.HasExited) { [void]$script:Maj.WaitForExit(60000) }
     $run = $script:Run
     $ligne = "`"`"$Claude`" -p --model $modele $OptionsClaude $options --settings `"$Reglages`" --add-dir `"$run`" --output-format text < `"$run\prompts\$nom.txt`" > `"$run\responses\$nom.txt`" 2> `"$run\responses\$nom-errors.txt`"`""
     $psi = New-Object System.Diagnostics.ProcessStartInfo 'cmd.exe', "/d /s /c $ligne"
@@ -221,7 +240,7 @@ function Demarrer-Claude([string]$modele, [string]$nom, [string]$options) {
         if ($cle -match '^(CLAUDE|ANTHROPIC)') { $psi.EnvironmentVariables.Remove($cle) }
     }
     $psi.EnvironmentVariables['ECRAN_RUN'] = $run
-    $psi.EnvironmentVariables['ECRAN_CONTEXTE'] = $Contexte   # pc.ps1 refuses to touch it
+    $psi.EnvironmentVariables['ECRAN_CONTEXTE'] = $Contexte   # the hook refuses any change there
     # pdftoppm in the PATH: Claude Code can then read a PDF by itself (diagrams, scanned pages).
     if (Test-Poppler) { $psi.EnvironmentVariables['PATH'] = $PopplerBin + ';' + $psi.EnvironmentVariables['PATH'] }
     $script:Proc = [System.Diagnostics.Process]::Start($psi)
@@ -265,7 +284,6 @@ function Lancer-Tache($capture, [string]$instruction) {
         $script:Run = $run
         $script:Debut = Get-Date
         $script:Arret = $null
-        $script:McpTache = $script:Mcp
         $precision = if ($instruction) { "`nUser instruction for this task (takes priority over everything else): $instruction`n" } else { '' }
 
         # Optional context from System-Context: instructions.md (user's part, without comments) + list of documents.
@@ -324,19 +342,10 @@ $liste
 "@
         }
 
-        if ($script:McpTache) {
-            $outil = @"
+        $outil = @"
 PC control tool: the "pc" tool (mcp__pc__pc). Give it "actions": the list of actions to run in order (it stops at the first error), for example ["clic 412 300", "ecrire Paris", "touche enter"]. Each call takes time: put in one call all the actions that need no look at the screen in between (several answers to tick, a field to click then fill, a text then enter). The result ends with a new screenshot taken after the last action: look at it instead of asking for another one, and pass "capture": false only when you do not need it. There is no terminal.
 "@
-            $image = 'the image comes back in the result'
-        } else {
-            $outil = @"
-PC control tool: run EXACTLY this command with the PowerShell tool (no quotes around the path, nothing before or after, one action per command):
-  $PcCommande <action> [arguments]
-Any other command is refused.
-"@
-            $image = 'prints the path of the PNG to read with Read'
-        }
+        $image = 'the image comes back in the result'
         $consigne = @"
 You were started by a keyboard shortcut: the user just pressed Ctrl+Alt+C so that you do the task visible on their screen. Nobody can answer you while you work: do not ask any questions.
 
@@ -403,21 +412,17 @@ function Lancer-Travail([string]$modele) {
     try {
         $script:Modele = $modele
         $script:Etape = 'tache'
-        $options = $OptionsTache
-        if ($script:McpTache) {
-            # One MCP server for this task: Claude Code starts outils/mcp.ps1 and stops it at the end.
-            $config = Join-Path $script:Run 'mcp.json'
-            $json = @{ mcpServers = @{ pc = @{
-                command = 'powershell.exe'
-                args    = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $McpScript)
-                env     = @{ ECRAN_RUN = $script:Run; ECRAN_CONTEXTE = $Contexte }
-            } } } | ConvertTo-Json -Depth 5
-            [IO.File]::WriteAllText($config, $json, (New-Object System.Text.UTF8Encoding $false))
-            $options = "$OptionsTacheMcp --mcp-config `"$config`""
-        }
-        Demarrer-Claude $modele 'task' $options
+        # One MCP server for this task: Claude Code starts outils/mcp.ps1 and stops it at the end.
+        $config = Join-Path $script:Run 'mcp.json'
+        $json = @{ mcpServers = @{ pc = @{
+            command = 'powershell.exe'
+            args    = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $McpScript)
+            env     = @{ ECRAN_RUN = $script:Run; ECRAN_CONTEXTE = $Contexte }
+        } } } | ConvertTo-Json -Depth 5
+        [IO.File]::WriteAllText($config, $json, (New-Object System.Text.UTF8Encoding $false))
+        Demarrer-Claude $modele 'task' "$OptionsTache --mcp-config `"$config`""
         Infobulle "working ($modele)..."
-        Noter ("Model: $modele" + $(if ($script:McpTache) { ', fast control' } else { '' }))
+        Noter "Model: $modele"
     } catch {
         Echec "Could not start the task: $($_.Exception.Message)"
     }
@@ -547,12 +552,16 @@ function Processus-Fini {
 
 Nettoyer-Runs
 
-# Animation + task monitoring, cleanup every 6 h.
+# Animation + task monitoring, cleanup every 6 h, Claude Code update at startup then every 24 h.
 $minuteur = New-Object System.Windows.Forms.Timer
 $minuteur.Interval = 90
 $minuteur.add_Tick({
     try {
         if (((Get-Date) - $script:DernierNettoyage).TotalHours -ge 6) { Nettoyer-Runs }
+        if (-not $script:Proc -and ((Get-Date) - $script:DerniereMaj).TotalHours -ge 24) { Mettre-A-Jour-Claude }
+        if ($script:Maj -and -not $script:Maj.HasExited -and ((Get-Date) - $script:DerniereMaj).TotalMinutes -ge 10) {
+            try { $script:Maj.Kill() } catch { }   # stuck update: the next try is in 24 h
+        }
         if (-not $script:Proc) { return }
         if ($script:Proc.HasExited) { Processus-Fini; return }
         $script:Image = ($script:Image + 1) % $IconesTravail.Count
@@ -607,20 +616,6 @@ $menuMemoire.add_Click({
     } catch { Noter "Persistent memory: $($_.Exception.Message)" }
 })
 $menu.Items.Add($menuMemoire) | Out-Null
-# Fast control: Claude drives the PC through an MCP server (outils/mcp.ps1) kept open during the task,
-# instead of starting pc.ps1 for every action. On by default; unchecking it (data/mcp.txt = off) goes back to
-# pc.ps1, for example if the server does not start. Applies to the next task.
-$script:Mcp = -not ((Test-Path $FichierMcp) -and ("$(Get-Content $FichierMcp -Raw)".Trim() -eq 'off'))
-$menuMcp = New-Object System.Windows.Forms.ToolStripMenuItem 'Fast control (MCP)'
-$menuMcp.CheckOnClick = $true
-$menuMcp.Checked = $script:Mcp
-$menuMcp.add_Click({
-    $script:Mcp = $menuMcp.Checked
-    $etat = if ($script:Mcp) { 'on' } else { 'off' }
-    Set-Content -Path $FichierMcp -Value $etat -Encoding ASCII
-    Noter "Fast control: $etat"
-})
-$menu.Items.Add($menuMcp) | Out-Null
 $menu.Items.Add("Open the $Nom folder", $null, { Start-Process explorer.exe $Travail }) | Out-Null
 $menu.Items.Add('Stop the current task', $null, { Arreter-Tache 'menu' }) | Out-Null
 $menu.Items.Add('-') | Out-Null
