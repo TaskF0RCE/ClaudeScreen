@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.2](https://github.com/TaskF0RCE/ClaudeScreen/compare/v0.5.1...v0.5.2) (2026-11-13)
+
+
+### 🐛 Bug fixes
+
+* clicks that land wrong in a chain, memory.md no longer sent to the bin; MCP server on macOS/Linux ([#21](https://github.com/TaskF0RCE/ClaudeScreen/issues/21)) ([ea39c0b](https://github.com/TaskF0RCE/ClaudeScreen/commit/ea39c0b3b8b492b03adf8dc1d6874d309eaae4e4))
+
 ## [0.5.1](https://github.com/TaskF0RCE/ClaudeScreen/compare/v0.5.0...v0.5.1) (2026-11-11)
 
 
