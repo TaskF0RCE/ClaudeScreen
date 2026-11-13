@@ -177,7 +177,7 @@ python tests\test_linux_macos.py
 - `tests\scenarios\*.ps1`: each one runs the real `ClaudeScreen.ps1` in a sandbox and checks what it did (an upgrade from an old version, a first start, the contexts and the menu, Terminal access, the Claude Code update...). `-Seul upgrade` runs only one.
 - `tests\guard.ps1`: the commands the guard must allow and the ones it must block. **If you touch `outils\garde.ps1`, add your cases there.**
 - `tests\mcp-server.ps1`: the MCP server, driven like Claude Code drives it.
-- `tests\test_linux_macos.py`: the logic of the macOS/Linux version with fake system modules; it runs on Windows too.
+- `tests\test_linux_macos.py`: the logic of the macOS/Linux version with fake system modules, and its MCP server (`outils/mcp.py`) driven like Claude Code drives it; it runs on Windows too.
 - What the tests cannot cover: a real task on a real screen. After a change to the prompt or to the actions, try a real task before you ask for a review.
 
 The prompt sent to Claude exists twice (`ClaudeScreen.ps1` and `linux-macos/claude_screen.py`): change both.

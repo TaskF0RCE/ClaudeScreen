@@ -21,5 +21,11 @@ Read this file for any task in Cisco Packet Tracer.
 - Click the **Connections** icon (lightning bolt) in the bottom-left device bar, then the cable type.
 - With a precise cable (straight-through, crossover, serial, console...): click the first device, pick the port
   in the list that opens, click the second device, pick its port.
+- Never guess where a port will be in the list: its place and its length change with the device and with the
+  ports already used. Click the device, end the call, read the list on the screenshot, then click the port.
+  A click that misses the list lands on the workspace or on a device: it drops the cable, and the next click
+  on a device opens its window instead of cabling it.
+- If a device window opens while you are cabling, the cable tool is no longer selected: close the window,
+  look at the screen, and select the cable again.
 - With "Automatically Choose Connection Type": `relier X1 Y1 X2 Y2` does both clicks.
 - Take a screenshot to check that the link is there, then press `esc` to put the cable tool away.

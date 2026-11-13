@@ -16,6 +16,7 @@ namespace ClaudeScreen
         [DllImport("user32.dll")] static extern bool SetProcessDPIAware();
         [DllImport("user32.dll")] static extern bool SetCursorPos(int x, int y);
         [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT p);
+        [DllImport("user32.dll")] static extern uint GetDoubleClickTime();
         [DllImport("user32.dll", SetLastError = true)] static extern uint SendInput(uint n, INPUT[] entrees, int taille);
         [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
@@ -169,15 +170,32 @@ namespace ClaudeScreen
             else { SetCursorPos(x, y); Thread.Sleep(30); }
         }
 
+        // The last click, to keep two separate clicks on one spot from being read as a double-click.
+        static int dernierX, dernierY;
+        static bool dernierDroit;
+        static Stopwatch depuisClic = null;
+
         public static void Clic(int x, int y, bool droit, int nombre)
         {
+            // Two "clic" actions on the same spot, one right after the other, are two clicks: Windows would
+            // turn them into a double-click (which opens or closes something else), so the second one waits.
+            if (nombre == 1 && depuisClic != null && droit == dernierDroit && Math.Abs(x - dernierX) <= 8 && Math.Abs(y - dernierY) <= 8)
+            {
+                long reste = GetDoubleClickTime() + 60 - depuisClic.ElapsedMilliseconds;
+                if (reste > 0) Thread.Sleep((int)reste);
+            }
             Deplacer(x, y);
             for (int i = 0; i < nombre; i++)
             {
-                if (droit) Envoyer(Souris(DROIT_BAS, 0), Souris(DROIT_HAUT, 0));
-                else Envoyer(Souris(GAUCHE_BAS, 0), Souris(GAUCHE_HAUT, 0));
-                Thread.Sleep(Doux ? (int)Entre(70, 110) : 60);
+                if (i > 0) Thread.Sleep(Doux ? (int)Entre(70, 110) : 60);   // between the two clicks of a double-click
+                // The button stays down for a moment, like a finger: some programs miss a press of no length.
+                Envoyer(Souris(droit ? DROIT_BAS : GAUCHE_BAS, 0));
+                Thread.Sleep(Doux ? (int)Entre(40, 90) : 25);
+                Envoyer(Souris(droit ? DROIT_HAUT : GAUCHE_HAUT, 0));
             }
+            dernierX = x; dernierY = y; dernierDroit = droit; depuisClic = Stopwatch.StartNew();
+            // Lets a menu, a list or a window open before the next action of the same call.
+            Thread.Sleep(Doux ? (int)Entre(180, 260) : 150);
         }
 
         public static void Glisser(int x1, int y1, int x2, int y2)

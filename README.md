@@ -122,7 +122,7 @@ Checked by default. It works like a mini session: Claude ends each task with sho
 
 - You can read the notes, fix one or delete one by hand. `instructions.md` is never touched.
 - Uncheck **Persistent memory** and each task starts from scratch.
-- **Unchecking the mode sends `memory.md` to the Recycle Bin**: the notes are gone for Claude, and you can still get them back from the bin. Checking it again starts an empty file.
+- **Unchecking the mode empties `memory.md`**: the notes are gone for Claude. The ones it just cleared are kept in `data\memory-previous.md` (one file, replaced each time), so a click by mistake can be undone by copying them back. Uncheck and check again to start from an empty memory.
 - Claude cannot write in the folder: it ends its answer with `MEMORY: ...` lines, and the app saves them (and hides them from the result you see). One note is at most 300 characters, and all notes together at most 4000: past that, the oldest notes are removed to make room for the new ones.
 - A task you stop saves no note.
 
@@ -269,7 +269,7 @@ Automatic cleanup: at startup and then every 6 hours, the app permanently delete
 - Precise mouse work (drag and drop, cabling in a simulator) is slow and not always reliable.
 - For websites, the Claude in Chrome extension is often more reliable: it reads the page content directly instead of going through screenshots.
 - Only one screen is captured: the one the mouse is on when you press the shortcut.
-- The macOS/Linux port has the contexts but not yet the MCP server or Terminal access (see its README).
+- The macOS/Linux port has the contexts and the MCP server, but no Terminal access (see its README). It has not been tried on as many machines as the Windows version.
 
 ## Contributing and versions
 

@@ -3,7 +3,7 @@
 #     neither the app nor Claude ever changes it.
 #   memory.md: Claude's notes (persistent memory). While "Persistent memory" is checked in the icon
 #     menu, the app saves there the "MEMORY: ..." lines found at the end of Claude's final answer.
-#     Unchecking the mode sends the file to the Recycle Bin.
+#     Unchecking the mode empties the file (the notes it held are kept once in data\memory-previous.md).
 # Comments (<!-- ... -->) are ignored in both files. Same logic as linux-macos/outils/memoire.py.
 
 $MemoireMaxInstructions = 4000
@@ -13,7 +13,7 @@ $MemoireEntete = @"
 <!--
 Claude's notes (persistent memory), one per line. The app adds them after each task
 while "Persistent memory" is checked in the icon menu. You can edit or remove lines.
-Unchecking the mode sends this file to the Recycle Bin.
+Unchecking the mode empties this file.
 -->
 "@
 
@@ -83,12 +83,16 @@ function Initialize-Memoire([string]$chemin) {
     if (-not (Test-Path -LiteralPath $chemin)) { Write-FichierMemoire $chemin ($MemoireEntete + "`n") }
 }
 
-# Persistent memory turned off: memory.md goes to the Recycle Bin. $true if it held notes.
-function Remove-Memoire([string]$chemin) {
+# Persistent memory turned off: memory.md is emptied (its comment stays). $true if it held notes.
+# The notes it held are copied first to $sauvegarde, one file that is replaced each time: a click by
+# mistake can be undone, and the Recycle Bin does not fill up with one memory.md per click.
+function Clear-Memoire([string]$chemin, [string]$sauvegarde) {
     if (-not (Test-Path -LiteralPath $chemin)) { return $false }
     $notes = Format-Instruction (Read-FichierMemoire $chemin)
-    Send-Corbeille $chemin
-    [bool]$notes
+    if (-not $notes) { return $false }
+    if ($sauvegarde) { Copy-Item -LiteralPath $chemin -Destination $sauvegarde -Force }
+    Write-FichierMemoire $chemin ($MemoireEntete + "`n")
+    $true
 }
 
 # Splits Claude's final answer: Texte = what the user sees, Notes = the "MEMORY: ..." lines.
