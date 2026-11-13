@@ -36,6 +36,11 @@ function Get-ImageBase64([string]$png) {
 function Format-Image([string]$png) { '{"type":"image","data":"' + (Get-ImageBase64 $png) + '","mimeType":"image/jpeg"}' }
 function Format-Texte([string]$texte) { '{"type":"text","text":' + (ConvertTo-Texte $texte) + '}' }
 
+# Program and title of the window that has the keyboard, or '' if it cannot be read.
+function Get-FenetreActive {
+    try { $f = [ClaudeScreen.Natif]::FenetreActive(); "$($f[0]) - `"$($f[1])`"" } catch { '' }
+}
+
 # "clic 10 20" -> action + arguments, for Invoke-ActionPc.
 function Split-Action([string]$ligne) {
     $ligne = $ligne.Trim()
@@ -61,12 +66,18 @@ function Invoke-Outil($arguments) {
     elseif ($actions.Count -gt $MaxActions) { $erreur = $true; $lignes.Add("ERROR: $($actions.Count) actions, $MaxActions at most per call. Nothing was run.") }
     else {
         $n = 0
+        $fenetre = Get-FenetreActive
         foreach ($ligne in $actions) {
             $n++
             $a = Split-Action "$ligne"
             try {
                 $resultat = Invoke-ActionPc $a.Nom $a.Valeurs
                 $derniere = $a.Nom.ToLower()
+                # Another window came to the front during this action: said on its line, so that Claude sees at
+                # which step it happened (the actions after it may have landed in the wrong window).
+                $maintenant = Get-FenetreActive
+                if ($maintenant -and $fenetre -and $maintenant -ne $fenetre) { $resultat = "$resultat (the active window is now: $maintenant)" }
+                if ($maintenant) { $fenetre = $maintenant }
                 if ($script:ActionsImage) {
                     # The image itself follows: the path is of no use to Claude.
                     $lignes.Add("$n. $($a.Nom): image below" + $(if ($derniere -eq 'zoom') { ' (read-only, do not use its coordinates to click)' } else { '' }))
@@ -88,7 +99,8 @@ function Invoke-Outil($arguments) {
             } catch { $lignes.Add("Screenshot failed: $($_.Exception.Message)") }
         }
         # The window that has the keyboard now: lets Claude notice that another one came to the front.
-        try { $f = [ClaudeScreen.Natif]::FenetreActive(); $lignes.Add("Active window: $($f[0]) - `"$($f[1])`"") } catch { }
+        $f = Get-FenetreActive
+        if ($f) { $lignes.Add("Active window: $f") }
     }
     '{"content":[' + ((@(Format-Texte ($lignes -join "`n")) + $contenu) -join ',') + '],"isError":' + $(if ($erreur) { 'true' } else { 'false' }) + '}'
 }

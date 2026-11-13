@@ -38,10 +38,10 @@ OUTILS = os.path.join(RACINE, 'outils')
 # Everything generated goes to data/, never next to the program (same layout as the Windows version):
 #   data/runs/<date>/  one folder per task: images/, prompts/, responses/ + screen.json
 #   data/context-cache/, data/log.txt, data/settings.json, data/model.txt, data/smooth.txt, data/memory.txt
-#   + here: data/last-result.txt, data/pc, data/icon.png, data/.venv/, data/cache/
+#   + here: data/last-result.txt, data/memory-previous.md, data/icon.png, data/.venv/, data/cache/
 DONNEES = os.path.join(RACINE, 'data')
 os.makedirs(DONNEES, exist_ok=True)
-os.environ['PYTHONPYCACHEPREFIX'] = os.path.join(DONNEES, 'cache')  # for the processes we start (pc, windows...)
+os.environ['PYTHONPYCACHEPREFIX'] = os.path.join(DONNEES, 'cache')  # for the processes we start (mcp, windows...)
 sys.pycache_prefix = os.environ['PYTHONPYCACHEPREFIX']               # and for this one
 sys.path.insert(0, OUTILS)
 
@@ -61,7 +61,8 @@ FICHIER_CONTEXTE = os.path.join(DONNEES, 'context.txt')  # name of the active co
 CONTEXTES_FOURNIS = os.path.join(os.path.dirname(RACINE), 'contexts')
 REGLAGES = os.path.join(DONNEES, 'settings.json')
 DERNIER = os.path.join(DONNEES, 'last-result.txt')
-PC_COMMANDE = os.path.join(DONNEES, 'pc')
+FICHIER_NOTES_AVANT = os.path.join(DONNEES, 'memory-previous.md')  # the notes cleared by the last unchecking of Persistent memory
+MCP_SCRIPT = os.path.join(OUTILS, 'mcp.py')  # the MCP server Claude controls the computer through
 GARDE = os.path.join(OUTILS, 'garde.py')
 FENETRES = os.path.join(OUTILS, 'fenetres.py')
 # Name shown by the icon (tooltip, menu, result window) and name of the work folder in Documents.
@@ -97,9 +98,9 @@ VERROU = SOCKET + '.lock'
 # Options for every Claude call: no MCP server and no skill from the user's account. A task needs neither,
 # and loading them makes each call slower and heavier.
 OPTIONS_CLAUDE = ['--strict-mcp-config', '--disable-slash-commands']
-# Triage only reads the screenshot. The task gets the file tools and Bash (for data/pc).
+# Triage only reads the screenshot. The task gets the file tools, plus the pc tool of outils/mcp.py (see lancer_travail).
 OPTIONS_TRI = ['--tools', 'Read', '--effort', 'low']
-OPTIONS_TACHE = ['--tools', 'Read,Write,Edit,Glob,Grep,Bash']
+OPTIONS_TACHE = ['--tools', 'Read,Write,Edit,Glob,Grep']
 # Apps where triage is pointless: go straight to Opus (networking, maths).
 APPS_OPUS = re.compile(r'packet ?tracer|gns3|putty|mobaxterm|securecrt|wireshark|winbox|matlab|mathematica'
                        r'|geogebra|minicom|termius|zoc|royal ?tsx', re.IGNORECASE)
@@ -211,11 +212,10 @@ Active window: {fenetre[0]} - "{fenetre[1]}"
    - If another window comes to the front or the user takes back control, stop so you don't type into their window, and say how far you got.
 3. Your final answer: plain text, short, in the language of this computer (language code: {LANGUE}) unless the user's instructions ask for another language. What you did and/or the answer, and the path of any files created. It is shown when the user clicks the icon.
 
-Computer control tool: run EXACTLY this command in the terminal (no quotes around the path, nothing before or after, one action per command):
-  {PC_COMMANDE} <action> [arguments]
-Any other terminal command is refused.
+Computer control tool: the "pc" tool (mcp__pc__pc). Give it "actions": the list of actions to run in order (it stops at the first error), for example ["clic 412 300", "remplacer Paris", "touche enter"], 40 actions at most. Each call takes time: put in one call all the actions that need no look at the screen in between (several answers to tick, a field to click then fill, a text then enter). Chain only clicks on things you have already seen at that place: when a click opens a menu, a list or a window that you have not seen yet, end the call there and read the screenshot instead of guessing where its items will be. A click on a guessed position that is a little off lands on something else, which can open or close a window, and every action after it then goes wrong. The result ends with a new screenshot taken after the last action: look at it instead of asking for another one, and pass "capture": false only when you do not need it. The result also names the active window when it can be read, and says at which action another window came to the front: if that was not expected, the actions after it may have gone to the wrong place, so check the screenshot before going on. If the active window is not one of the task, stop.
+There is no terminal.
 Actions:
-  capture                 new screenshot of the same screen; prints the path of the PNG to read with Read
+  capture                 new screenshot of the same screen; the image comes back in the result
   zoom X Y W H            enlarged image of an area (to read small text; do not click using its coordinates)
   clic X Y | doubleclic X Y | clicdroit X Y | survol X Y      (click | double-click | right-click | hover)
   glisser X1 Y1 X2 Y2     drag: press on point 1, move, release on point 2 (to move an item, or to link two items where links are drawn by dragging)
@@ -227,7 +227,7 @@ Actions:
   touche COMBO            key combo, e.g. enter, tab, ctrl+a, cmd+s, pagedown, f5
 {note_touches}  attendre MS             wait
   corbeille PATH          sends a file or folder to the trash
-  page-pdf PATH N         image of page N of a PDF (diagrams, scanned pages); prints the path of the PNG to read with Read
+  page-pdf PATH N         image of page N of a PDF (diagrams, scanned pages); the image comes back in the result
 X Y coordinates are in screenshot pixels (not real screen pixels); the conversion is automatic. {zone_interdite}
 
 Strict rules:
@@ -422,20 +422,15 @@ def _lister_documents():
 
 
 def preparer_outils():
-    """Writes the small data/pc launcher and data/settings.json (limited permissions + anti-deletion hook).
+    """Writes data/settings.json (limited permissions + guard hook).
 
-    Claude can only read, write files in the work folder (acceptEdits) and run data/pc.
+    Claude can only read, write files in the work folder (acceptEdits) and use the pc tool (outils/mcp.py).
     """
-    ecrire_texte(PC_COMMANDE, '#!/bin/sh\n# Generated when ClaudeScreen starts: control tool used by Claude.\n'
-                              'PYTHONPYCACHEPREFIX=%s exec %s %s "$@"\n' % (
-                                  shlex.quote(os.environ['PYTHONPYCACHEPREFIX']), shlex.quote(sys.executable),
-                                  shlex.quote(os.path.join(OUTILS, 'pc.py'))))
-    os.chmod(PC_COMMANDE, 0o755)
     garde = {'type': 'command', 'command': '%s %s' % (shlex.quote(sys.executable), shlex.quote(GARDE))}
     reglages = {
         'permissions': {
             'defaultMode': 'acceptEdits',
-            'allow': ['Read', 'Glob', 'Grep', 'Bash(%s *)' % PC_COMMANDE],
+            'allow': ['Read', 'Glob', 'Grep', 'mcp__pc'],
             # System-Context is read-only (Edit also covers Write and NotebookEdit). "//" = absolute path.
             'deny': ['WebFetch', 'WebSearch', 'Edit(/%s/**)' % CONTEXTE],
         },
@@ -448,9 +443,6 @@ def preparer_outils():
         },
     }
     ecrire_texte(REGLAGES, json.dumps(reglages, indent=2, ensure_ascii=False))
-    if ' ' in PC_COMMANDE:
-        noter('Warning: the app path contains spaces (%s); Claude may not be able to '
-              'run the control tool. Move the folder to a path without spaces.' % RACINE)
 
 
 # ------------------------------------------------------------------ app
@@ -528,7 +520,7 @@ class Appli:
         run = self.run
         env = {k: v for k, v in os.environ.items() if not k.startswith('CLAUDE')}
         env['ECRAN_RUN'] = run
-        env['ECRAN_CONTEXTE'] = CONTEXTE  # pc.py and garde.py refuse to touch it
+        env['ECRAN_CONTEXTE'] = CONTEXTE  # garde.py refuses to touch it (pc.py gets it through mcp.json)
         chemins = [os.path.dirname(claude), os.path.expanduser('~/.local/bin'), '/opt/homebrew/bin', '/usr/local/bin']
         env['PATH'] = os.pathsep.join(chemins + [env.get('PATH', '/usr/bin:/bin')])
         commande = ([claude, '-p', '--model', modele] + OPTIONS_CLAUDE + options
@@ -627,7 +619,15 @@ class Appli:
         try:
             self.modele = modele
             self.etape = 'tache'
-            self.demarrer_claude(modele, 'task', OPTIONS_TACHE)
+            # One MCP server for this task: Claude Code starts outils/mcp.py and stops it at the end.
+            config = os.path.join(self.run, 'mcp.json')
+            ecrire_texte(config, json.dumps({'mcpServers': {'pc': {
+                'command': sys.executable,
+                'args': [MCP_SCRIPT],
+                'env': {'ECRAN_RUN': self.run, 'ECRAN_CONTEXTE': CONTEXTE,
+                        'PYTHONPYCACHEPREFIX': os.environ['PYTHONPYCACHEPREFIX']},
+            }}}, indent=2))
+            self.demarrer_claude(modele, 'task', OPTIONS_TACHE + ['--mcp-config', config])
             self.infobulle('working (%s)...' % modele)
             noter('Model: %s' % modele)
         except Exception as ex:
@@ -731,6 +731,11 @@ class Appli:
                           + (', %d oldest removed to make room' % retirees if retirees else ''))
                 except OSError as ex:
                     noter('Persistent memory: %s' % ex)
+        if code == 0 and reponse and not os.path.exists(os.path.join(self.run, 'mcp-started.txt')):
+            # outils/mcp.py writes this file when Claude Code connects to it: without it, Claude had no way to act.
+            reponse += ('\n\n(Warning: the computer control tool did not start, so Claude could not act on the screen. '
+                        'Try again; if it happens every time, run: claude update.)')
+            noter('The computer control tool (MCP) did not start')
         if code == 0 and reponse:
             self.dernier = '[%s, %d s] %s' % (self.modele, duree, reponse)
             self.mettre_icone(ICONE_FINI)
@@ -878,7 +883,7 @@ class Appli:
 
         def basculer_memoire(icone, _item):
             # On: Claude's notes are kept in System-Context/memory.md, a mini session that lasts across tasks.
-            # Off: memory.md goes to the trash. instructions.md is never touched.
+            # Off: memory.md is emptied (previous notes kept once in data/memory-previous.md). instructions.md is never touched.
             self.memoire = not self.memoire
             ecrire_texte(FICHIER_MEMOIRE, 'on' if self.memoire else 'off')
             try:
@@ -887,7 +892,8 @@ class Appli:
                     noter('Persistent memory: on')
                 else:
                     noter('Persistent memory: off (%s)' % (
-                        'memory.md sent to the trash' if memoire.retirer(FICHIER_NOTES, natif.corbeille) else 'no notes'))
+                        'notes cleared; the previous ones are in data/memory-previous.md'
+                        if memoire.vider(FICHIER_NOTES, FICHIER_NOTES_AVANT) else 'no notes'))
             except Exception as ex:
                 noter('Persistent memory: %s' % ex)
             icone.update_menu()

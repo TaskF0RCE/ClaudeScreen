@@ -57,7 +57,7 @@ Same as on Windows: with **Smooth mode** checked in the menu, the mouse glides t
 
 ### Persistent memory
 
-Same as on Windows ([details](../README.md#persistent-memory)): with **Persistent memory** checked in the menu (it is by default), Claude ends each task with short notes (what it learned about you and your work, how far it got) and gets them back at the next tasks, a kind of mini session. The notes go into `System-Context/memory.md`, one per line; `instructions.md` is never touched. **Unchecking the mode sends `memory.md` to the trash.** Claude cannot write in the folder: it ends its answer with `MEMORY: ...` lines, and the app saves them and hides them from the result (300 characters per note, 4000 in all; past that, the oldest notes make room). The choice is remembered (`data/memory.txt`). The code is in `outils/memoire.py`.
+Same as on Windows ([details](../README.md#persistent-memory)): with **Persistent memory** checked in the menu (it is by default), Claude ends each task with short notes (what it learned about you and your work, how far it got) and gets them back at the next tasks, a kind of mini session. The notes go into `System-Context/memory.md`, one per line; `instructions.md` is never touched. **Unchecking the mode empties `memory.md`** (the notes it just cleared are kept once in `data/memory-previous.md`). Claude cannot write in the folder: it ends its answer with `MEMORY: ...` lines, and the app saves them and hides them from the result (300 characters per note, 4000 in all; past that, the oldest notes make room). The choice is remembered (`data/memory.txt`). The code is in `outils/memoire.py`.
 
 On Wayland, the mouse position cannot be read: the first move of a task jumps to its target, the next ones glide from the last known position.
 
@@ -144,16 +144,16 @@ Wayland deliberately prevents apps from listening to the keyboard, reading the s
 As on Windows, Claude is started with limited permissions (`data/settings.json`, generated at startup). It can only:
 
 - read the screenshots;
-- click, type and scroll, through `data/pc` (no other command is allowed);
+- click, type and scroll, through the `pc` tool of `outils/mcp.py` (there is no terminal: no command can be run);
 - create or edit files in `~/Documents/Claude-Work` (except in `System-Context`, which is read-only).
 
 On top of that:
 
-- **`System-Context` is read-only**, locked three times: a `deny` rule in `data/settings.json` (`Edit(//...)`, which also covers Write), the hook `outils/garde.py` that refuses any file write in that folder (including through a symbolic link or `..`), and `pc corbeille` that refuses to touch it (or `Claude-Work`, which contains it). Claude has no way to write there: its [Persistent memory](#persistent-memory) notes are saved by the app itself.
-- **No command can delete permanently.** The hook `outils/garde.py` blocks `rm`, `rmdir`, `unlink`, `shred`, `find -delete`, `dd`, `mkfs`, `diskutil erase`, `git clean`, `shutdown`, etc. To remove a file, Claude sends it to the trash (`pc corbeille`).
+- **`System-Context` is read-only**, locked three times: a `deny` rule in `data/settings.json` (`Edit(//...)`, which also covers Write), the hook `outils/garde.py` that refuses any file write in that folder (including through a symbolic link or `..`), and the `corbeille` action that refuses to touch it (or `Claude-Work`, which contains it). Claude has no way to write there: its [Persistent memory](#persistent-memory) notes are saved by the app itself.
+- **Nothing is deleted permanently.** Claude has no terminal, and to remove a file it sends it to the trash (the `corbeille` action). The hook `outils/garde.py` stays as a second lock: if a command tool were ever given to Claude, it blocks `rm`, `rmdir`, `unlink`, `shred`, `find -delete`, `dd`, `mkfs`, `diskutil erase`, `git clean`, `shutdown`, etc.
 - Its instructions forbid buying, paying, sending messages, entering passwords or bank details, changing system settings and deleting anything for good. Text displayed on screen cannot override these rules. This part relies on Claude: what it does with the mouse and keyboard is not filtered by the program.
 - No web access (WebFetch and WebSearch are denied).
-- Claude is started with only the tools a task needs (`Read`, `Write`, `Edit`, `Glob`, `Grep` and `Bash` for `data/pc`), without the MCP servers, connectors and skills of your account. This needs a recent Claude Code: the app runs `claude update` in the background at startup and then once a day, never during a task.
+- Claude is started with only the tools a task needs (`Read`, `Write`, `Edit`, `Glob`, `Grep` and the `pc` tool), without the MCP servers, connectors and skills of your account. This needs a recent Claude Code: the app runs `claude update` in the background at startup and then once a day, never during a task.
 
 ## Subscription and usage
 
@@ -169,7 +169,8 @@ requirements.txt    Python dependencies
 outils/natif.py     system calls: screens, screenshot, mouse, keyboard (XTest on X11), active window, trash
 outils/raccourcis.py global shortcuts (Carbon on macOS, X11 listener on Linux)
 outils/fenetres.py  "last result" window and instruction bar (Tk, separate process)
-outils/pc.py        computer control tool used by Claude
+outils/pc.py        the computer control actions (click, type, screenshot, trash...)
+outils/mcp.py       MCP server that gives these actions to Claude: several actions per call, screenshot in the answer
 outils/humain.py    smooth mode: mouse path and typing pace that look human
 outils/garde.py     hook that blocks permanent deletions and writes to System-Context
 outils/pdf.py       PDF reading: text extracted in advance, page as an image (pypdfium2)
@@ -188,7 +189,7 @@ data/               EVERYTHING the app generates, kept apart from the program (p
   smooth.txt          smooth mode: on or off (Smooth mode menu)
   memory.txt          persistent memory: on or off (Persistent memory menu)
   last-result.txt     text shown by "Last result"
-  pc                  launcher of outils/pc.py used by Claude (regenerated at each start)
+  memory-previous.md  the notes cleared the last time Persistent memory was unchecked
   icon.png            applications menu icon (Linux)
   .venv/              Python environment created by installer.sh
   cache/              compiled Python files
@@ -196,11 +197,11 @@ data/               EVERYTHING the app generates, kept apart from the program (p
 
 Same `data/` layout as the Windows version. Coming from an older version (`donnees/` folder): run `./installer.sh` again, it moves your history into `data/` and rebuilds the Python environment.
 
-Mapping to the Windows version: `ClaudeScreen.ps1` → `claude_screen.py`, `Lancer.vbs` → `lancer.sh` / `ClaudeScreen.app`, `natif.cs` + `natif.ps1` → `natif.py` + `raccourcis.py`, `actions.ps1` + `mcp.ps1` → `pc.py`, smooth mode of `natif.cs` → `humain.py`, `garde.ps1` → `garde.py`, `pdf.ps1` + `poppler.ps1` → `pdf.py` (pypdfium2, no external program), `memoire.ps1` → `memoire.py`.
+Mapping to the Windows version: `ClaudeScreen.ps1` → `claude_screen.py`, `Lancer.vbs` → `lancer.sh` / `ClaudeScreen.app`, `natif.cs` + `natif.ps1` → `natif.py` + `raccourcis.py`, `actions.ps1` → `pc.py`, `mcp.ps1` → `mcp.py`, smooth mode of `natif.cs` → `humain.py`, `garde.ps1` → `garde.py`, `pdf.ps1` + `poppler.ps1` → `pdf.py` (pypdfium2, no external program), `memoire.ps1` → `memoire.py`.
 
 ## Limitations
 
 - Same limitations as the Windows version: Claude runs no program other than the control tool; precise mouse work (cabling in Packet Tracer, drag and drop) is slow; only one screen is captured (the one with the mouse).
 - Wayland: see the table above.
-- The Windows MCP server for PC control and **Terminal access** are not ported yet: here Claude runs one action per call through `data/pc`, and no other command. The result and the log show how long each task took.
+- **Terminal access** is not ported: Claude has the mouse, the keyboard and its files, and runs no command. The MCP server (`outils/mcp.py`) is new here and has been tested with the protocol only, not yet on many real machines: if a result says that the control tool did not start, run `claude update` and try again. The result and the log show how long each task took.
 - macOS: if you move the folder after installing, run `./installer.sh` again (the app and the autostart contain the path). On macOS 15 and later, the system may periodically ask again for the screen recording permission.

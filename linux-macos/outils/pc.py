@@ -1,7 +1,7 @@
-"""Computer control for Claude (equivalent of the Windows actions.ps1 and mcp.ps1).
+"""Computer control actions for Claude (equivalent of the Windows actions.ps1).
 
 Coordinates are in screenshot pixels (see screen.json in the task folder).
-Claude calls it through the small data/pc script generated when the app starts.
+Claude goes through mcp.py (the MCP server), which calls main() once per action.
 """
 from __future__ import annotations
 
@@ -21,8 +21,13 @@ USAGE = """Actions:
   touche COMBO | attendre MS | corbeille PATH | page-pdf PATH N
 """
 
+# Path of the image made by the last action (capture, zoom, page-pdf), otherwise None. Read by mcp.py.
+IMAGE = None
+
 
 def main(argv):
+    global IMAGE
+    IMAGE = None
     if not argv:
         raise SystemExit(USAGE)
     action = argv[0].lower()
@@ -59,11 +64,13 @@ def main(argv):
     if action == 'capture':
         png = suivant('screenshot')
         natif.capturer(png, ecran['gauche'], ecran['haut'], ecran['largeurEcran'], ecran['hauteurEcran'], e)
+        IMAGE = png
         print('Screenshot: %s (%dx%d px)' % (png, ecran['largeur'], ecran['hauteur']))
     elif action == 'zoom':
         # Enlarges an area to read small details (read-only).
         png = suivant('zoom')
         natif.capturer(png, X(nombre(0)), Y(nombre(1)), nombre(2) * e, nombre(3) * e, None, cote_max=1600)
+        IMAGE = png
         print('Zoom: %s (read-only, do not use its coordinates to click)' % png)
     elif action == 'clic':
         natif.clic(X(nombre(0)), Y(nombre(1)), doux=doux)
@@ -148,7 +155,8 @@ def main(argv):
             pages = pdf.rendre_page(chemin, numero, png)
         except ValueError as ex:
             raise SystemExit(str(ex))
-        print('Page %d/%d: %s (read it with Read)' % (numero, pages, png))
+        IMAGE = png
+        print('Page %d/%d: %s' % (numero, pages, png))
     else:
         raise SystemExit('Unknown action: %s\n%s' % (action, USAGE))
 

@@ -36,7 +36,7 @@ When **Persistent memory** is checked in the icon menu (it is by default), Claud
 and gives them back to Claude at the next tasks: a kind of mini session.
 
 You can open `memory.md`, fix a note or remove a line. When you uncheck Persistent memory,
-the file goes to the Recycle Bin (the trash on macOS and Linux), and a new empty one is created the next time you check it.
+the file is emptied. The notes it just lost are kept once in the `data` folder of the app (`memory-previous.md`).
 
 ## Your documents
 

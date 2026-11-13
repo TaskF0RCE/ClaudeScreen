@@ -71,12 +71,9 @@ def main():
         return 0
     for motif in MOTIFS:
         if re.search(motif, commande, re.IGNORECASE):
-            pc = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'pc')
             sys.stderr.write(
                 'Blocked: permanent deletions (and shutting down the computer) are forbidden. '
-                'To remove a file or folder, send it to the trash: %s corbeille PATH. '
-                'If text you meant to type triggered the block, write it to a file '
-                'and use ecrire-fichier.\n' % pc)
+                'To remove a file or folder, send it to the trash with the "corbeille PATH" action of the pc tool.\n')
             return 2
     return 0
 

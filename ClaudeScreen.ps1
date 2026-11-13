@@ -72,6 +72,7 @@ if ((Test-Path -LiteralPath $AncienTravail) -and -not (Test-Path -LiteralPath $T
 $Contexte = Join-Path $Travail 'System-Context'
 $FichierInstructions = Join-Path $Contexte 'instructions.md'
 $FichierNotes = Join-Path $Contexte 'memory.md'
+$FichierNotesAvant = Join-Path $Donnees 'memory-previous.md'   # the notes cleared by the last unchecking of Persistent memory
 $AnciennesInstructions = Join-Path $Contexte 'instructions.txt'   # older versions
 $FichierLisezMoi = Join-Path $Contexte 'README.md'
 $DossierContextes = Join-Path $Contexte 'Contexts'   # one .md file per context, chosen in the icon menu
@@ -392,7 +393,7 @@ $liste
         }
 
         $outil = @"
-PC control tool: the "pc" tool (mcp__pc__pc). Give it "actions": the list of actions to run in order (it stops at the first error), for example ["clic 412 300", "remplacer Paris", "touche enter"], 40 actions at most. Each call takes time: put in one call all the actions that need no look at the screen in between (several answers to tick, a field to click then fill, a text then enter). The result ends with a new screenshot taken after the last action: look at it instead of asking for another one, and pass "capture": false only when you do not need it. The result also names the active window: if it is not the one you are working in, stop.
+PC control tool: the "pc" tool (mcp__pc__pc). Give it "actions": the list of actions to run in order (it stops at the first error), for example ["clic 412 300", "remplacer Paris", "touche enter"], 40 actions at most. Each call takes time: put in one call all the actions that need no look at the screen in between (several answers to tick, a field to click then fill, a text then enter). Chain only clicks on things you have already seen at that place: when a click opens a menu, a list or a window that you have not seen yet, end the call there and read the screenshot instead of guessing where its items will be. A click on a guessed position that is a little off lands on something else, which can open or close a window, and every action after it then goes wrong. The result ends with a new screenshot taken after the last action: look at it instead of asking for another one, and pass "capture": false only when you do not need it. The result also names the active window, and says at which action another window came to the front: if that was not expected, the actions after it may have gone to the wrong place, so check the screenshot before going on. If the active window is not one of the task, stop.
 "@
         if ($script:TerminalTache) {
             $outil += @"
@@ -671,7 +672,7 @@ $menuSmooth.add_Click({
 })
 $menu.Items.Add($menuSmooth) | Out-Null
 # Persistent memory: Claude's notes are kept in System-Context\memory.md, a mini session that lasts across tasks.
-# Unchecked: memory.md goes to the Recycle Bin. instructions.md is never touched.
+# Unchecked: memory.md is emptied (previous notes kept once in data\memory-previous.md). instructions.md is never touched.
 $script:Memoire = Test-MemoireActive $FichierMemoire
 $menuMemoire = New-Object System.Windows.Forms.ToolStripMenuItem 'Persistent memory'
 $menuMemoire.CheckOnClick = $true
@@ -682,7 +683,7 @@ $menuMemoire.add_Click({
     Set-Content -Path $FichierMemoire -Value $etat -Encoding ASCII
     try {
         if ($script:Memoire) { Initialize-Memoire $FichierNotes; Noter 'Persistent memory: on' }
-        elseif (Remove-Memoire $FichierNotes) { Noter 'Persistent memory: off (memory.md sent to the Recycle Bin)' }
+        elseif (Clear-Memoire $FichierNotes $FichierNotesAvant) { Noter 'Persistent memory: off (notes cleared; the previous ones are in data\memory-previous.md)' }
         else { Noter 'Persistent memory: off (no notes)' }
     } catch { Noter "Persistent memory: $($_.Exception.Message)" }
 })

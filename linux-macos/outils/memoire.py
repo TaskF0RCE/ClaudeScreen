@@ -4,7 +4,7 @@
     neither the app nor Claude ever changes it.
   memory.md: Claude's notes (persistent memory). While "Persistent memory" is checked in the icon
     menu, the app saves there the "MEMORY: ..." lines found at the end of Claude's final answer.
-    Unchecking the mode sends the file to the trash.
+    Unchecking the mode empties the file (the notes it held are kept once in data/memory-previous.md).
 Comments (<!-- ... -->) are ignored in both files.
 """
 from __future__ import annotations
@@ -30,7 +30,7 @@ MAX_MEMOIRE = 4000
 ENTETE = """<!--
 Claude's notes (persistent memory), one per line. The app adds them after each task
 while "Persistent memory" is checked in the icon menu. You can edit or remove lines.
-Unchecking the mode sends this file to the trash.
+Unchecking the mode empties this file.
 -->
 """
 
@@ -91,16 +91,18 @@ def preparer(chemin):
         ecrire(chemin, ENTETE)
 
 
-def retirer(chemin, corbeille):
-    """Persistent memory turned off: memory.md goes to the trash (corbeille = function that does it).
+def vider(chemin, sauvegarde=None):
+    """Persistent memory turned off: memory.md is emptied (its comment stays). True if it held notes.
 
-    True if it held notes.
+    The notes it held are copied first to sauvegarde, one file that is replaced each time: a click by
+    mistake can be undone, and the trash does not fill up with one memory.md per click.
     """
-    if not os.path.exists(chemin):
+    if not os.path.exists(chemin) or not notes(chemin):
         return False
-    avait = bool(notes(chemin))
-    corbeille(chemin)
-    return avait
+    if sauvegarde:
+        ecrire(sauvegarde, lire(chemin))
+    ecrire(chemin, ENTETE)
+    return True
 
 
 def extraire(reponse):

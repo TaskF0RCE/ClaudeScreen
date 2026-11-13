@@ -31,6 +31,7 @@ $cap = Fausse-Capture
 Lancer-Tache $cap 'connect R0 and R1'
 Verifier 'triage started with the light options' ($global:Appels[-1] -eq 'haiku|triage|--tools Read --effort low') ($global:Appels[-1])
 $p = Lire-Prompt $cap
+Verifier 'prompt: chained clicks only on what was already seen' ($p -match 'Chain only clicks on things you have already seen' -and $p -match 'says at which action another window came to the front')
 Verifier 'prompt: pc tool (MCP)' ($p -match 'the "pc" tool \(mcp__pc__pc\)' -and $p -match '(?m)^  relier X1 Y1 X2 Y2 ')
 $appTxt = $p.Substring($p.IndexOf('1. Find what is being asked'))
 Verifier 'prompt: nothing specific to a software, a field or a profile' ($appTxt -notmatch 'Packet Tracer|GNS3|OSPF|subnetting|VLAN|Cisco|BTS|student|course') ([regex]::Matches($appTxt, '.{0,30}(Packet Tracer|GNS3|OSPF|subnetting|VLAN|Cisco|BTS|student|course).{0,20}') -join ' | ')
@@ -82,8 +83,8 @@ $libelles = @($menu.Items | ForEach-Object { $_.Text })
 Verifier 'menu: Open the Claude-Work folder' ($libelles -contains 'Open the Claude-Work folder') ($libelles -join ' | ')
 Verifier 'menu: memory checked at start' ($menuMemoire.Checked)
 $menuMemoire.PerformClick()
-Verifier 'unchecked: memory.md gone, state off' (-not (Test-Path $FichierNotes) -and -not $script:Memoire -and (Get-Content $FichierMemoire -Raw).Trim() -eq 'off')
-Verifier 'unchecked: memory.md is in the bin, not destroyed' (@(Get-ChildItem $global:FauxBac -Filter 'memory.md.*').Count -eq 1)
+Verifier 'unchecked: memory.md emptied (comment kept), state off' ((Get-NoteMemoire $FichierNotes) -eq '' -and [IO.File]::ReadAllText($FichierNotes, [Text.Encoding]::UTF8).StartsWith('<!--') -and -not $script:Memoire -and (Get-Content $FichierMemoire -Raw).Trim() -eq 'off')
+Verifier 'unchecked: the cleared notes are kept once in data, nothing goes to the bin' ((Get-NoteMemoire $FichierNotesAvant) -match 'the newest note y+' -and $FichierNotesAvant -like '*\data\memory-previous.md' -and @(Get-ChildItem $global:FauxBac -Filter 'memory*').Count -eq 0 -and [bool]((Get-Content $Journal -Encoding UTF8) -match 'Persistent memory: off \(notes cleared'))
 Verifier 'unchecked: instructions.md untouched' ([IO.File]::ReadAllText($FichierInstructions, [Text.Encoding]::UTF8) -eq $ins)
 $cap3 = Fausse-Capture
 Lancer-Tache $cap3 ''
@@ -91,9 +92,12 @@ Verifier 'memory off: nothing about memory in the prompt' ((Lire-Prompt $cap3) -
 Ecrire-Reponse $cap3 "Done.`nMEMORY: must not be read"
 $script:Proc = Faux-Proc 0
 Processus-Fini
-Verifier 'memory off: answer shown as is, nothing saved' ($script:Dernier -match 'MEMORY: must not' -and -not (Test-Path $FichierNotes)) $script:Dernier
+Verifier 'memory off: answer shown as is, nothing saved' ($script:Dernier -match 'MEMORY: must not' -and (Get-NoteMemoire $FichierNotes) -eq '') $script:Dernier
 $menuMemoire.PerformClick()
-Verifier 'checked again: empty memory.md created' ((Test-Path $FichierNotes) -and (Get-NoteMemoire $FichierNotes) -eq '' -and $script:Memoire)
+Verifier 'checked again: memory.md is there and empty' ((Test-Path $FichierNotes) -and (Get-NoteMemoire $FichierNotes) -eq '' -and $script:Memoire)
+$menuMemoire.PerformClick()
+Verifier 'unchecked with no notes: the kept notes are not replaced by an empty file' ((Get-NoteMemoire $FichierNotesAvant) -match 'the newest note y+' -and [bool]((Get-Content $Journal -Encoding UTF8) -match 'Persistent memory: off \(no notes\)'))
+$menuMemoire.PerformClick()
 Ecrire-Reponse $cap3 ''
 $script:Proc = Faux-Proc 1
 Processus-Fini
