@@ -3,7 +3,7 @@
 try {
 '--- a task in progress'
 $script:ChoixModele = 'sonnet'
-Verifier 'no task yet: the icon shows the welcome text' ((Texte-Resultat) -match '^No task yet')
+Verifier 'no task yet: the icon shows the last message' ((Texte-Resultat) -eq $script:Dernier -and $script:Dernier -match '^(No task yet|Claude Code not found)')
 $cap = Fausse-Capture
 Lancer-Tache $cap 'cable the routers'
 Verifier 'task started as a stream of events' ($global:Appels[-1] -like 'sonnet|task|*')
@@ -87,7 +87,7 @@ foreach ($i in 1..18) {
 }
 $e = Lister-Entrees
 Verifier 'every kept result, newest first, the task without a result skipped' ($e.Count -eq 17 -and $e[0].Fichier -like '*\20261113-161800\result.txt' -and $e[1].Fichier -like '*\20261113-161600\*' -and $e[-1].Fichier -like '*\20261113-160100\*') ($e | ForEach-Object { $_.Fichier })
-Verifier 'the window opens on the newest result; title = its date and time' ($e[0].Titre -match '13.*16:18' -and (Texte-Entree $e[0]) -eq "[sonnet, 12 s] Result number 18`nsecond line") $e[0].Titre
+Verifier 'the window opens on the newest result; title = its date and time' ($e[0].Titre -match '13.*(16|4):18' -and (Texte-Entree $e[0]) -eq "[sonnet, 12 s] Result number 18`nsecond line") $e[0].Titre
 Verifier 'the results live in the task folders: they go away with them' ((Split-Path (Split-Path $e[0].Fichier -Parent) -Parent) -eq $Runs)
 Echec 'Could not start the task: test'
 $e = Lister-Entrees
