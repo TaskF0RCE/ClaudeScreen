@@ -36,7 +36,7 @@ import time
 RACINE = os.path.dirname(os.path.abspath(__file__))
 OUTILS = os.path.join(RACINE, 'outils')
 # Everything generated goes to data/, never next to the program (same layout as the Windows version):
-#   data/runs/<date>/  one folder per task: images/, prompts/, responses/ + screen.json
+#   data/runs/<date>/  one folder per task: images/, prompts/, responses/ + screen.json, result.txt (History menu)
 #   data/context-cache/, data/log.txt, data/settings.json, data/model.txt, data/smooth.txt, data/memory.txt
 #   + here: data/last-result.txt, data/memory-previous.md, data/icon.png, data/.venv/, data/cache/
 DONNEES = os.path.join(RACINE, 'data')
@@ -45,6 +45,7 @@ os.environ['PYTHONPYCACHEPREFIX'] = os.path.join(DONNEES, 'cache')  # for the pr
 sys.pycache_prefix = os.environ['PYTHONPYCACHEPREFIX']               # and for this one
 sys.path.insert(0, OUTILS)
 
+import deroule  # noqa: E402
 import memoire  # noqa: E402
 import natif  # noqa: E402
 import pdf  # noqa: E402
@@ -92,6 +93,7 @@ definir_dossiers(os.path.join(natif.dossier_documents(), NOM))
 CACHE_CONTEXTE = os.path.join(DONNEES, 'context-cache')  # text extracted from the context PDFs
 DUREE_MAX = 20 * 60
 JOURS_CONSERVES = 30
+HISTORIQUE_MAX = 15  # tasks listed in the History menu
 ANTI_REBOND = 0.7  # two presses less than 0.7 s apart = one (desktop shortcut + X11 listener)
 SOCKET = os.path.join(tempfile.gettempdir(), 'claude-screen-%d.sock' % os.getuid())
 VERROU = SOCKET + '.lock'
@@ -421,6 +423,24 @@ def _lister_documents():
             "%s\n\n" % '\n'.join(lignes))
 
 
+def historique():
+    """The last tasks that left a result (result.txt in their folder), newest first: (date, start of the result, file)."""
+    liste = []
+    try:
+        noms = sorted((n for n in os.listdir(RUNS) if os.path.isfile(os.path.join(RUNS, n, 'result.txt'))), reverse=True)
+    except OSError:
+        return liste
+    for nom in noms[:HISTORIQUE_MAX]:
+        fichier = os.path.join(RUNS, nom, 'result.txt')
+        try:
+            quand = datetime.datetime.strptime(nom[:15], '%Y%m%d-%H%M%S')
+        except ValueError:
+            quand = datetime.datetime.fromtimestamp(os.path.getmtime(fichier))
+        debut = ' '.join(lire_texte(fichier).split())
+        liste.append((quand.strftime('%d/%m %H:%M'), debut[:67] + '...' if len(debut) > 70 else debut, fichier))
+    return liste
+
+
 def preparer_outils():
     """Writes data/settings.json (limited permissions + guard hook).
 
@@ -496,11 +516,26 @@ class Appli:
 
     # -------------------------------------------------- last result
 
-    def montrer_resultat(self):
-        ecrire_texte(DERNIER, self.dernier)
+    def texte_resultat(self):
+        """What a click on the icon shows: the last result, or the steps so far while a task is running
+        (no need to stop it to see where it is)."""
+        if not self.proc:
+            return self.dernier
+        if self.etape != 'tache':
+            return 'Looking at the screen...'
+        etapes = deroule.texte(*deroule.lire(os.path.join(self.run, 'responses', 'task.jsonl'))[::2])
+        return 'Working (%s, %d s so far). Press the shortcut again to stop.\n\n%s' % (
+            self.modele, int(round(time.monotonic() - self.debut)),
+            'What Claude did so far:\n' + etapes if etapes else 'Nothing to show yet.')
+
+    def montrer_resultat(self, fichier=None):
+        """Without a file: the last result or the task in progress. With one: that result (History menu)."""
+        if not fichier:
+            fichier = DERNIER
+            ecrire_texte(DERNIER, self.texte_resultat())
         if self.fenetre_resultat and self.fenetre_resultat.poll() is None:
             self.fenetre_resultat.terminate()
-        self.fenetre_resultat = subprocess.Popen([sys.executable, FENETRES, 'resultat', DERNIER],
+        self.fenetre_resultat = subprocess.Popen([sys.executable, FENETRES, 'resultat', fichier],
                                                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                                  stderr=subprocess.DEVNULL, start_new_session=True)
         if self.proc is None:
@@ -523,10 +558,14 @@ class Appli:
         env['ECRAN_CONTEXTE'] = CONTEXTE  # garde.py refuses to touch it (pc.py gets it through mcp.json)
         chemins = [os.path.dirname(claude), os.path.expanduser('~/.local/bin'), '/opt/homebrew/bin', '/usr/local/bin']
         env['PATH'] = os.pathsep.join(chemins + [env.get('PATH', '/usr/bin:/bin')])
+        # The task writes a stream of events (what Claude says and does, as it goes): the app reads its steps
+        # there, even when the task is stopped before the end. The triage only gives one word.
+        flux = nom == 'task'
         commande = ([claude, '-p', '--model', modele] + OPTIONS_CLAUDE + options
-                    + ['--settings', REGLAGES, '--add-dir', run, '--output-format', 'text'])
+                    + ['--settings', REGLAGES, '--add-dir', run, '--output-format']
+                    + (['stream-json', '--verbose'] if flux else ['text']))
         with open(os.path.join(run, 'prompts', nom + '.txt'), 'rb') as entree, \
-                open(os.path.join(run, 'responses', nom + '.txt'), 'wb') as sortie, \
+                open(os.path.join(run, 'responses', nom + ('.jsonl' if flux else '.txt')), 'wb') as sortie, \
                 open(os.path.join(run, 'responses', nom + '-errors.txt'), 'wb') as erreurs:
             self.proc = subprocess.Popen(commande, stdin=entree, stdout=sortie, stderr=erreurs, cwd=TRAVAIL, env=env,
                                          start_new_session=True)  # separate group: stop the whole tree
@@ -702,13 +741,28 @@ class Appli:
         except OSError:
             pass
 
+    def enregistrer_resultat(self, texte, etapes=''):
+        """Keeps what the user is shown at the end of a task, with the steps, in the task folder: the History
+        menu lists these files. They go away with the task folder, after a month."""
+        try:
+            ecrire_texte(os.path.join(self.run, 'result.txt'),
+                         texte + ('\n\n----- What Claude did -----\n' + etapes if etapes else ''))
+        except OSError as ex:
+            noter('History: %s' % ex)
+
     def processus_fini(self):
         code = self.proc.returncode
         self.proc = None
         duree = int(round(time.monotonic() - self.debut))  # triage included
+        flux = os.path.join(self.run, 'responses', 'task.jsonl')
 
         if self.arret:
-            self.dernier = 'Task stopped (%s).\n\n%s' % (self.arret, self.lire_run(os.path.join('responses', 'task.txt')))
+            # What Claude had said and done when it was stopped: nothing is lost.
+            etapes = deroule.texte(*deroule.lire(flux)[::2])
+            self.dernier = 'Task stopped (%s) after %d s.\n\n%s' % (
+                self.arret, duree, 'What Claude did before the stop:\n' + etapes if etapes else 'Claude had not done anything yet.')
+            self.enregistrer_resultat(self.dernier)
+            deroule.compresser(flux)
             self.mettre_icone(ICONE_REPOS)
             self.infobulle('stopped')
             noter('Task stopped: %s' % self.run)
@@ -719,7 +773,8 @@ class Appli:
             self.lancer_travail('opus' if 'OPUS' in self.lire_run(os.path.join('responses', 'triage.txt')).upper() else 'sonnet')
             return
 
-        reponse = self.lire_run(os.path.join('responses', 'task.txt'))
+        etapes, reponse, omises = deroule.lire(flux)
+        reponse = reponse or ''
         if code == 0 and reponse and self.memoire_tache:
             # Persistent memory: the "MEMORY: ..." lines go to memory.md, not to the user.
             reponse, nouvelles = memoire.extraire(reponse)
@@ -745,6 +800,8 @@ class Appli:
                 code, self.modele, duree, self.lire_run(os.path.join('responses', 'task-errors.txt')), reponse)).strip()
             self.mettre_icone(ICONE_ERREUR)
             self.infobulle('error (click to see)')
+        self.enregistrer_resultat(self.dernier, deroule.texte(etapes, omises))
+        deroule.compresser(flux)
         noter('Task finished (code %s, %d s): %s' % (code, duree, self.run))
         self.nettoyer_runs()
 
@@ -768,7 +825,7 @@ class Appli:
             else:
                 self.lancer_tache()
         elif genre == 'resultat':
-            self.montrer_resultat()
+            self.montrer_resultat(ev[1] if len(ev) > 1 else None)
         elif genre == 'arreter':
             self.arreter_tache(ev[1] if len(ev) > 1 else 'menu')
         elif genre == 'consigne':
@@ -913,8 +970,17 @@ class Appli:
             yield pystray.Menu.SEPARATOR
             yield M('Open the Contexts folder', lambda: natif.ouvrir(DOSSIER_CONTEXTES))
 
+        def menu_historique():
+            # Read again each time the menu is built: the result and the steps of the last tasks.
+            liste = historique()
+            for quand, debut, fichier in liste:
+                yield M('%s   %s' % (quand, debut), lambda _icone, _item, f=fichier: self.poster('resultat', f))
+            if not liste:
+                yield M('(no task yet)', None, enabled=False)
+
         return pystray.Menu(
             M('Last result', lambda: self.poster('resultat'), default=True),
+            M('History', pystray.Menu(menu_historique)),
             M('Model', pystray.Menu(
                 M('Auto (Haiku picks Sonnet or Opus)', choisir('auto'), checked=coche('auto'), radio=True),
                 M('Always Sonnet', choisir('sonnet'), checked=coche('sonnet'), radio=True),

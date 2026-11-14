@@ -20,7 +20,7 @@ Same as the Windows version:
 
 **⌃⌥⇧C** / **Ctrl+Alt+Shift+C** takes the screenshot, then opens a small bar in the bottom-left corner: type an instruction ("only do question 4", "configure OSPF on R1 and R2"), then **Enter**. **Esc** or clicking elsewhere cancels.
 
-Pressing the shortcut again during a task stops it (or use the **Stop the current task** menu). Automatic stop after 20 minutes. During a task, don't touch the mouse or keyboard.
+Pressing the shortcut again during a task stops it (or use the **Stop the current task** menu). Automatic stop after 20 minutes. Nothing is lost when a task stops: **Last result** then lists what Claude had done before the stop. During a task, don't touch the mouse or keyboard.
 
 ### Standing context (optional)
 
@@ -47,7 +47,7 @@ The folder is in your Documents, outside the repository: its contents never end 
 | Green dot | Done: open "Last result" |
 | Red dot | Error: open "Last result" for the message |
 
-Menu: **Last result**, **Model** (Auto, Always Sonnet, Always Opus; the choice is remembered), **Smooth mode**, **Persistent memory** (see below), **Open the Claude-Work folder**, **Stop the current task**, **Quit**. The icon's tooltip and the result window are named **Claude-Work** too.
+Menu: **Last result** (while a task is running: what Claude has said and done so far), **History** (the result and the steps of your last 15 tasks, kept for 30 days), **Model** (Auto, Always Sonnet, Always Opus; the choice is remembered), **Smooth mode**, **Persistent memory** (see below), **Open the Claude-Work folder**, **Stop the current task**, **Quit**. The icon's tooltip and the result window are named **Claude-Work** too.
 
 On macOS and with most Linux desktops (AppIndicator), clicking the icon opens the menu; "Last result" is the first entry.
 
@@ -175,12 +175,14 @@ outils/humain.py    smooth mode: mouse path and typing pace that look human
 outils/garde.py     hook that blocks permanent deletions and writes to System-Context
 outils/pdf.py       PDF reading: text extracted in advance, page as an image (pypdfium2)
 outils/memoire.py   instructions.md (yours, never changed) and memory.md (Claude's notes, persistent memory)
+outils/deroule.py   the steps of a task (what Claude said and did), read from the stream Claude Code writes
 outils/System-Context-README.md  user guide copied into ~/Documents/Claude-Work/System-Context (kept up to date at each start)
 data/               EVERYTHING the app generates, kept apart from the program (private, ignored by git):
   runs/<date>/        one folder per task, deleted after 30 days:
     images/             screenshot-01.png, zoom-01.png, pdf-01.png...
     prompts/            task.txt (instructions sent to Claude), triage.txt (model choice)
-    responses/          task.txt, task-errors.txt, triage.txt, triage-errors.txt
+    responses/          task.jsonl (what Claude said and did, step by step), task-errors.txt, triage.txt, triage-errors.txt
+    result.txt          what you were shown at the end, with the steps (History menu)
     screen.json         position and scale of the captured screen
   context-cache/      text extracted from the System-Context PDFs (rebuilt when needed)
   log.txt             app log

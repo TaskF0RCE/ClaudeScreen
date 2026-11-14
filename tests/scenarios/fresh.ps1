@@ -7,4 +7,4 @@ Verifier 'Terminal access off by default' (-not $menuTerminal.Checked -and -not 
 Verifier 'Contexts folder created' (Test-Path (Join-Path $DossierContextes 'Default.md'))
 Verifier 'nothing sent to the bin' (@(Get-ChildItem $global:FauxBac).Count -eq 0)
 $libelles = @($menu.Items | ForEach-Object { $_.Text })
-Verifier 'menu items' (($libelles -join '|') -eq 'Last result|Model|Smooth mode|Persistent memory|Terminal access|Context: Default|Open the Claude-Work folder|Stop the current task||Quit') ($libelles -join '|')
+Verifier 'menu items' (($libelles -join '|') -eq 'Last result|History|Model|Smooth mode|Persistent memory|Terminal access|Context: Default|Open the Claude-Work folder|Stop the current task||Quit') ($libelles -join '|')

@@ -123,7 +123,27 @@ def prompt(c, nom='task'):
     return lire(os.path.join(c['run'], 'prompts', nom + '.txt'))
 
 
+# Events as Claude Code writes them with --output-format stream-json, one JSON per line.
+def ev_texte(texte):
+    return {'type': 'assistant', 'message': {'role': 'assistant', 'content': [{'type': 'text', 'text': texte}]}}
+
+
+def ev_outil(outil, entree):
+    return {'type': 'assistant', 'message': {'role': 'assistant', 'content': [{'type': 'tool_use', 'name': outil, 'input': entree}]}}
+
+
+EV_RETOUR = {'type': 'user', 'message': {'role': 'user', 'content': [{'type': 'tool_result', 'content': 'x' * 2000}]}}
+
+
+def ecrire_flux(c, evenements, fin=''):
+    with open(os.path.join(c['run'], 'responses', 'task.jsonl'), 'w', encoding='utf-8') as f:
+        f.write(''.join(json.dumps(e, separators=(',', ':')) + '\n' for e in evenements) + fin)
+
+
 def repondre(c, texte, nom='task'):
+    """The answer of Claude: one word in a text file for the triage, a stream of events for the task."""
+    if nom == 'task':
+        return ecrire_flux(c, [ev_texte(texte), {'type': 'result', 'subtype': 'success', 'result': texte}] if texte else [])
     with open(os.path.join(c['run'], 'responses', nom + '.txt'), 'w', encoding='utf-8') as f:
         f.write(texte)
 
@@ -258,6 +278,69 @@ def garde(entree):
 
 verifier('a harmless command is allowed', garde('{"tool_input":{"command":"ls -la"}}') == 0)
 verifier('rm is blocked', garde('{"tool_input":{"command":"rm -rf build"}}') == 2)
+
+print('--- steps of a task and History')
+a.memoire = True
+a.choix_modele = 'sonnet'
+shutil.rmtree(cs.RUNS)
+os.makedirs(cs.RUNS)
+verifier('no task in the history yet', cs.historique() == [])
+c4 = capture()
+a.lancer_tache(c4, 'cable the routers')
+a.proc = types.SimpleNamespace(returncode=0)
+a.etape = 'tri'
+verifier('during the triage: nothing to show yet', a.texte_resultat() == 'Looking at the screen...')
+a.etape = 'tache'
+ecrire_flux(c4, [ev_texte('I cable the 8 routers.'), ev_outil('Read', {'file_path': '/x/screenshot-01.png'}), EV_RETOUR,
+                 ev_outil('mcp__pc__pc', {'actions': ['clic 352 655', 'clic 500 360']}), EV_RETOUR,
+                 ev_texte('Cabling done.\nMEMORY: must stay hidden'),
+                 ev_outil('Write', {'file_path': '/home/x/Documents/Claude-Work/exo7_R1.txt', 'content': 'enable'})],
+            fin='{"type":"assistant","message":{"content":[{"type":"text","text":"half wri')
+t = a.texte_resultat()
+verifier('while it works: what Claude said and did, in order',
+         re.match(r'Working \(sonnet, \d+ s so far\)', t) is not None and 0 < t.index('I cable the 8 routers.') < t.index('Cabling done.')
+         and '\n  > clic 352 655, clic 500 360\n' in t and t.endswith('\n  > file written: exo7_R1.txt'), t)
+verifier('while it works: no file reading, no MEMORY line, no half-written line',
+         'screenshot-01' not in t and 'MEMORY' not in t and 'half wri' not in t, t)
+a.arret = 'raccourci'
+a.proc = types.SimpleNamespace(returncode=-15)
+a.processus_fini()
+verifier('stopped: the steps are in the result', re.match(r'Task stopped \(raccourci\) after \d+ s\.\n\nWhat Claude did before the stop:\n', a.dernier) is not None
+         and 'Cabling done.' in a.dernier and '  > clic 352 655' in a.dernier, a.dernier)
+verifier('stopped: kept in the task folder', lire(os.path.join(c4['run'], 'result.txt')) == a.dernier)
+reste = lire(os.path.join(c4['run'], 'responses', 'task.jsonl'))
+verifier('the stream is kept without the tool results (screenshots)', 'tool_result' not in reste and 'Cabling done' in reste)
+verifier('after the task: the icon shows the result again', a.texte_resultat() == a.dernier)
+c5 = capture()
+a.lancer_tache(c5, '')
+a.proc = types.SimpleNamespace(returncode=0)
+open(os.path.join(c5['run'], 'mcp-started.txt'), 'w').close()
+ecrire_flux(c5, [ev_texte('I fill in the form.'), ev_outil('mcp__pc__pc', {'actions': ['clic 10 20', 'remplacer Paris']}), EV_RETOUR,
+                 ev_texte('The form is filled in.\nMEMORY: form done'),
+                 {'type': 'result', 'subtype': 'success', 'result': 'The form is filled in.\nMEMORY: form done'}])
+a.processus_fini()
+verifier('finished: the result is the final answer only', re.fullmatch(r'\[sonnet, \d+ s\] The form is filled in\.', a.dernier) is not None, a.dernier)
+t = lire(os.path.join(c5['run'], 'result.txt'))
+verifier('finished: result.txt = the answer, then the steps, the answer not repeated',
+         t == a.dernier + '\n\n----- What Claude did -----\nI fill in the form.\n  > clic 10 20, remplacer Paris', t)
+verifier('the note still went to memory.md', 'form done' in memoire.notes(cs.FICHIER_NOTES))
+h = cs.historique()
+verifier('history: the 2 tasks, newest first, one line each', len(h) == 2 and h[0][2] == os.path.join(c5['run'], 'result.txt')
+         and h[0][1].startswith('[sonnet, ') and '\n' not in h[1][1] and len(h[1][1]) <= 70 and h[1][1].startswith('Task stopped (raccourci)'), h)
+for i in range(20):
+    d = os.path.join(cs.RUNS, '20261113-16%02d00' % i)
+    os.makedirs(d)
+    with open(os.path.join(d, 'result.txt'), 'w', encoding='utf-8') as f:
+        f.write('Result number %d' % i)
+h = cs.historique()
+verifier('history: 15 at most, date read from the folder name', len(h) == cs.HISTORIQUE_MAX and any(x[0] == '13/11 16:19' and x[1] == 'Result number 19' for x in h), h[:3])
+long = os.path.join(bac, 'long.jsonl')
+with open(long, 'w', encoding='utf-8') as f:
+    f.write(''.join(json.dumps(ev_texte('step %d %s' % (i, 'y' * 600))) + '\n' for i in range(1, 101)))
+etapes, fin, omises = cs.deroule.lire(long)
+verifier('only the last 80 steps, 400 characters each', len(etapes) == 80 and omises == 20 and etapes[0].startswith('step 21 ')
+         and len(etapes[0]) == 400 and fin is None and cs.deroule.texte(etapes, omises).startswith('(... 20 earlier steps not shown)'))
+verifier('no stream: no step, no result', cs.deroule.lire(os.path.join(bac, 'none.jsonl')) == ([], None, 0))
 
 print('--- MCP server (outils/mcp.py), driven as Claude Code drives it')
 # The only actions run are waits and refused ones: nothing is clicked, typed or captured.

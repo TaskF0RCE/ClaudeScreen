@@ -72,7 +72,7 @@ function Lancer([string]$titre, [string]$fichier, [string[]]$arguments) {
 $harnais = Join-Path $PSScriptRoot 'harness.ps1'
 $scenarios = @(
     @('upgrade', 'ancien', $null), @('fresh', 'vide', $null), @('old-txt', 'txt', $null),
-    @('locked', 'ancien', 'locked-before.ps1'), @('contexts-terminal', 'vide', $null), @('update', 'vide', $null)
+    @('locked', 'ancien', 'locked-before.ps1'), @('contexts-terminal', 'vide', $null), @('update', 'vide', $null), @('history', 'vide', $null)
 )
 try {
     foreach ($s in $scenarios) {

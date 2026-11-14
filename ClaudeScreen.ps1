@@ -8,8 +8,9 @@ if (-not $mutex.WaitOne(0)) { exit }
 $Racine = $PSScriptRoot
 $Outils = Join-Path $Racine 'outils'
 . (Join-Path $Outils 'memoire.ps1')
+. (Join-Path $Outils 'deroule.ps1')
 # Everything the app generates goes to data/ (same layout as the macOS/Linux version):
-#   data/runs/<date>/  one folder per task: images/, prompts/, responses/ + screen.json
+#   data/runs/<date>/  one folder per task: images/, prompts/, responses/ + screen.json, result.txt (History menu)
 #   data/context-cache/, data/log.txt, data/settings.json, data/model.txt, data/smooth.txt, data/memory.txt,
 #   data/context.txt, data/terminal.txt
 $Donnees = Join-Path $Racine 'data'
@@ -186,7 +187,19 @@ function Infobulle([string]$texte) {
 # --- "Last result" window (only when the icon is clicked) ---
 $script:Dernier = 'No task yet. Press Ctrl+Alt+C when the task is on screen.'
 $script:Fenetre = $null
-function Montrer-Resultat {
+# What a click on the icon shows: the last result, or the steps so far while a task is running
+# (no need to stop it to see where it is).
+function Texte-Resultat {
+    if (-not $script:Proc) { return $script:Dernier }
+    if ($script:Etape -ne 'tache') { return 'Looking at the screen...' }
+    $secondes = [int][math]::Round(((Get-Date) - $script:Debut).TotalSeconds)
+    $etapes = Format-Deroule (Read-Deroule (Join-Path $script:Run 'responses\task.jsonl'))
+    "Working ($script:Modele, $secondes s so far). Press the shortcut again to stop.`n`n" + $(if ($etapes) { "What Claude did so far:`n$etapes" } else { 'Nothing to show yet.' })
+}
+
+# Without a text: the last result or the task in progress. With one: that text (History menu).
+function Montrer-Resultat([string]$texte) {
+    if (-not $texte) { $texte = Texte-Resultat }
     if (-not $script:Fenetre -or $script:Fenetre.IsDisposed) {
         $f = New-Object System.Windows.Forms.Form
         $f.Text = $Nom; $f.Icon = $IconeRepos; $f.TopMost = $true; $f.ShowInTaskbar = $false
@@ -202,7 +215,7 @@ function Montrer-Resultat {
         $f.add_Deactivate({ $this.Hide() })
         $script:Fenetre = $f
     }
-    $script:Fenetre.Controls[0].Text = $script:Dernier -replace "`r?`n", "`r`n"
+    $script:Fenetre.Controls[0].Text = $texte -replace "`r?`n", "`r`n"
     $script:Fenetre.Controls[0].Select(0, 0)
     $script:Fenetre.Show(); $script:Fenetre.Activate()
     if ($script:Proc -eq $null) { $icone.Icon = $IconeRepos }
@@ -272,7 +285,11 @@ function Demarrer-Claude([string]$modele, [string]$nom, [string]$options) {
     # An update still running: let it finish first (at most 1 min), claude.exe may be being replaced.
     if ($script:Maj -and -not $script:Maj.HasExited) { [void]$script:Maj.WaitForExit(60000) }
     $run = $script:Run
-    $ligne = "`"`"$Claude`" -p --model $modele $OptionsClaude $options --settings `"$Reglages`" --add-dir `"$run`" --output-format text < `"$run\prompts\$nom.txt`" > `"$run\responses\$nom.txt`" 2> `"$run\responses\$nom-errors.txt`"`""
+    # The task writes a stream of events (what Claude says and does, as it goes): the app reads its steps
+    # there, even when the task is stopped before the end. The triage only gives one word.
+    $sortie = if ($nom -eq 'task') { "--output-format stream-json --verbose < `"$run\prompts\$nom.txt`" > `"$run\responses\$nom.jsonl`"" }
+              else { "--output-format text < `"$run\prompts\$nom.txt`" > `"$run\responses\$nom.txt`"" }
+    $ligne = "`"`"$Claude`" -p --model $modele $OptionsClaude $options --settings `"$Reglages`" --add-dir `"$run`" $sortie 2> `"$run\responses\$nom-errors.txt`"`""
     $psi = New-Object System.Diagnostics.ProcessStartInfo 'cmd.exe', "/d /s /c $ligne"
     $psi.UseShellExecute = $false
     $psi.CreateNoWindow = $true
@@ -566,14 +583,28 @@ function Nettoyer-Runs {
     }
 }
 
+# Keeps what the user is shown at the end of a task, with the steps, in the task folder: the History menu
+# lists these files. They go away with the task folder, after a month.
+function Enregistrer-Resultat([string]$texte, [string]$etapes) {
+    try {
+        if ($etapes) { $texte = "$texte`n`n----- What Claude did -----`n$etapes" }
+        [IO.File]::WriteAllText((Join-Path $script:Run 'result.txt'), $texte, (New-Object System.Text.UTF8Encoding $false))
+    } catch { Noter "History: $($_.Exception.Message)" }
+}
+
 function Processus-Fini {
     $code = $script:Proc.ExitCode
     $script:Proc.Dispose()
     $script:Proc = $null
     $duree = [int][math]::Round(((Get-Date) - $script:Debut).TotalSeconds)   # triage included
 
+    $flux = Join-Path $script:Run 'responses\task.jsonl'
     if ($script:Arret) {
-        $script:Dernier = "Task stopped ($script:Arret).`n`n" + (Lire-Run 'responses\task.txt')
+        # What Claude had said and done when it was stopped: nothing is lost.
+        $etapes = Format-Deroule (Read-Deroule $flux)
+        $script:Dernier = "Task stopped ($script:Arret) after $duree s.`n`n" + $(if ($etapes) { "What Claude did before the stop:`n$etapes" } else { 'Claude had not done anything yet.' })
+        Enregistrer-Resultat $script:Dernier ''
+        try { Compress-Deroule $flux } catch { }
         $icone.Icon = $IconeRepos; Infobulle 'stopped'
         Noter "Task stopped: $script:Run"
         Nettoyer-Runs
@@ -593,7 +624,8 @@ function Processus-Fini {
         return
     }
 
-    $reponse = Lire-Run 'responses\task.txt'
+    $deroule = Read-Deroule $flux
+    $reponse = "$($deroule.Resultat)".Trim()
     if ($code -eq 0 -and $reponse -and $script:MemoireTache) {
         # Persistent memory: the "MEMORY: ..." lines go to memory.md, not to the user.
         $trouve = Find-NoteReponse $reponse
@@ -618,6 +650,8 @@ function Processus-Fini {
         $script:Dernier = "The task failed (code $code, $script:Modele, $duree s).`n$(Lire-Run 'responses\task-errors.txt')`n$reponse".Trim()
         $icone.Icon = $IconeErreur; Infobulle 'error (click to see)'
     }
+    Enregistrer-Resultat $script:Dernier (Format-Deroule $deroule)
+    try { Compress-Deroule $flux } catch { }
     Noter "Task finished (code $code, $duree s): $script:Run"
     Nettoyer-Runs
 }
@@ -648,6 +682,36 @@ $minuteur.Start()
 # --- Menu ---
 $menu = New-Object System.Windows.Forms.ContextMenuStrip
 $menu.Items.Add('Last result', $null, { Montrer-Resultat }) | Out-Null
+# History: the result and the steps of the last tasks (result.txt of each task folder, kept a month).
+# Rebuilt each time the menu opens.
+$HistoriqueMax = 15
+$menuHistorique = New-Object System.Windows.Forms.ToolStripMenuItem 'History'
+function Lister-Historique {
+    @(Get-ChildItem $Runs -Directory | Sort-Object Name -Descending | Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'result.txt') } | Select-Object -First $HistoriqueMax)
+}
+function Remplir-MenuHistorique {
+    $menuHistorique.DropDownItems.Clear()
+    foreach ($dossier in (Lister-Historique)) {
+        $fichier = Join-Path $dossier.FullName 'result.txt'
+        $quand = $dossier.LastWriteTime
+        $d = [datetime]::MinValue
+        if ([datetime]::TryParseExact($dossier.Name, 'yyyyMMdd-HHmmss', [Globalization.CultureInfo]::InvariantCulture, 'None', [ref]$d)) { $quand = $d }
+        $debut = ([IO.File]::ReadAllText($fichier, [Text.Encoding]::UTF8) -replace '\s+', ' ').Trim()
+        if ($debut.Length -gt 70) { $debut = $debut.Substring(0, 67) + '...' }
+        $item = New-Object System.Windows.Forms.ToolStripMenuItem (('{0:g}   {1}' -f $quand, $debut) -replace '&', '&&')
+        $item.Tag = $fichier
+        $item.add_Click({ if (Test-Path -LiteralPath $this.Tag) { Montrer-Resultat ([IO.File]::ReadAllText($this.Tag, [Text.Encoding]::UTF8)) } })
+        $menuHistorique.DropDownItems.Add($item) | Out-Null
+    }
+    if (-not $menuHistorique.DropDownItems.Count) {
+        $vide = New-Object System.Windows.Forms.ToolStripMenuItem '(no task yet)'
+        $vide.Enabled = $false
+        $menuHistorique.DropDownItems.Add($vide) | Out-Null
+    }
+}
+Remplir-MenuHistorique
+$menu.add_Opening({ try { Remplir-MenuHistorique } catch { Noter "History menu: $($_.Exception.Message)" } })
+$menu.Items.Add($menuHistorique) | Out-Null
 $menuModele = New-Object System.Windows.Forms.ToolStripMenuItem 'Model'
 foreach ($choix in @(@('auto', 'Auto (Haiku picks Sonnet or Opus)'), @('sonnet', 'Always Sonnet'), @('opus', 'Always Opus'))) {
     $item = New-Object System.Windows.Forms.ToolStripMenuItem $choix[1]

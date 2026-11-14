@@ -83,7 +83,8 @@ The folder is in your Documents, outside the repository: your documents and inst
 | Red dot | Error: click to see the message |
 
 Right-click the icon (every choice is remembered):
-- **Last result**
+- **Last result**: the answer of the last task. While a task is running, it shows what Claude has said and done so far (a click on the icon does the same)
+- **History**: the result and the steps of your last 15 tasks, kept for 30 days
 - **Model**: Auto, Always Sonnet or Always Opus
 - **Smooth mode**: the mouse glides and the text is typed at a human pace
 - **Persistent memory**: Claude keeps notes from one task to the next
@@ -129,6 +130,8 @@ Checked by default. It works like a mini session: Claude ends each task with sho
 ### Stopping a task
 
 Press **Ctrl+Alt+C** again while the star is spinning, or use **Stop the current task** in the menu. A task is also stopped automatically after 20 minutes.
+
+Nothing is lost when a task stops: **Last result** then lists what Claude had said and done before the stop, and the task stays in **History**. To see where a task is without stopping it, click the icon.
 
 During a task, don't touch the mouse or keyboard: Claude uses the real ones. If another window comes to the front, Claude is told to stop, and every result it gets names the active window so that it can notice. This relies on Claude: nothing in the app blocks a click in the wrong window, so keep an eye on a task that matters.
 
@@ -236,6 +239,7 @@ outils/mcp.ps1      MCP server that gives these actions to Claude: several actio
 outils/garde.ps1    guard: checks every command and every file write of Claude before it runs
 outils/pdf.ps1      PDF reading: text extracted in advance, page as an image (with Poppler)
 outils/memoire.ps1  instructions.md (yours, never changed) and memory.md (Claude's notes, persistent memory)
+outils/deroule.ps1  the steps of a task (what Claude said and did), read from the stream Claude Code writes
 outils/poppler.ps1  downloads Poppler (pinned version, verified hash) into outils/poppler (ignored by git)
 outils/System-Context-README.md  user guide copied into Documents\Claude-Work\System-Context (kept up to date at each start)
 contexts/           the contexts, copied once into System-Context\Contexts (then they belong to the user)
@@ -246,7 +250,8 @@ data/               EVERYTHING the app generates, kept apart from the program (p
   runs/<date>/        one folder per task, deleted after 30 days:
     images/             screenshot-01.png, zoom-01.png, pdf-01.png...
     prompts/            task.txt (instructions sent to Claude), triage.txt (model choice)
-    responses/          task.txt, task-errors.txt, triage.txt, triage-errors.txt
+    responses/          task.jsonl (what Claude said and did, step by step), task-errors.txt, triage.txt, triage-errors.txt
+    result.txt          what you were shown at the end, with the steps (History menu)
     screen.json         position and scale of the captured screen
     mcp.json            tells Claude Code how to start outils/mcp.ps1 for this task
     mcp-started.txt     left by outils/mcp.ps1 when Claude Code reached it
