@@ -16,11 +16,11 @@ Same as the Windows version:
 2. The app takes a screenshot of the screen your mouse is on.
 3. **Haiku** looks at the screenshot and picks **Sonnet** (quiz, course question, simple form) or **Opus** (calculations, programming, networking, infrastructure). If the active window is Packet Tracer, GNS3, PuTTY, Wireshark, MATLAB, etc., Opus is picked directly.
 4. Claude does the task with the mouse and keyboard, takes a new screenshot after each action to check, then writes a short summary.
-5. Click the icon → **Last result** to read it.
+5. Click the icon → **History** to read it.
 
 **⌃⌥⇧C** / **Ctrl+Alt+Shift+C** takes the screenshot, then opens a small bar in the bottom-left corner: type an instruction ("only do question 4", "configure OSPF on R1 and R2"), then **Enter**. **Esc** or clicking elsewhere cancels.
 
-Pressing the shortcut again during a task stops it (or use the **Stop the current task** menu). Automatic stop after 20 minutes. During a task, don't touch the mouse or keyboard.
+Pressing the shortcut again during a task stops it (or use the **Stop the current task** menu). Automatic stop after 20 minutes. Nothing is lost when a task stops: **History** then lists what Claude had done before the stop. During a task, don't touch the mouse or keyboard.
 
 ### Standing context (optional)
 
@@ -44,12 +44,12 @@ The folder is in your Documents, outside the repository: its contents never end 
 |---|---|
 | Still star | Ready |
 | Spinning star | Working |
-| Green dot | Done: open "Last result" |
-| Red dot | Error: open "Last result" for the message |
+| Green dot | Done: open "History" |
+| Red dot | Error: open "History" for the message |
 
-Menu: **Last result**, **Model** (Auto, Always Sonnet, Always Opus; the choice is remembered), **Smooth mode**, **Persistent memory** (see below), **Open the Claude-Work folder**, **Stop the current task**, **Quit**. The icon's tooltip and the result window are named **Claude-Work** too.
+Menu: **History** (the answer of the last task, or what Claude has said and done so far while a task is running; its two arrows go through your earlier tasks, kept for 30 days), **Model** (Auto, Always Sonnet, Always Opus; the choice is remembered), **Smooth mode**, **Persistent memory** (see below), **Open the Claude-Work folder**, **Stop the current task**, **Quit**. The icon's tooltip and the result window are named **Claude-Work** too.
 
-On macOS and with most Linux desktops (AppIndicator), clicking the icon opens the menu; "Last result" is the first entry.
+On macOS and with most Linux desktops (AppIndicator), clicking the icon opens the menu; "History" is the first entry.
 
 ### Smooth mode
 
@@ -168,19 +168,21 @@ lancer.sh           starts the app in the background, or sends it a command (dec
 requirements.txt    Python dependencies
 outils/natif.py     system calls: screens, screenshot, mouse, keyboard (XTest on X11), active window, trash
 outils/raccourcis.py global shortcuts (Carbon on macOS, X11 listener on Linux)
-outils/fenetres.py  "last result" window and instruction bar (Tk, separate process)
+outils/fenetres.py  History window and instruction bar (Tk, separate process)
 outils/pc.py        the computer control actions (click, type, screenshot, trash...)
 outils/mcp.py       MCP server that gives these actions to Claude: several actions per call, screenshot in the answer
 outils/humain.py    smooth mode: mouse path and typing pace that look human
 outils/garde.py     hook that blocks permanent deletions and writes to System-Context
 outils/pdf.py       PDF reading: text extracted in advance, page as an image (pypdfium2)
 outils/memoire.py   instructions.md (yours, never changed) and memory.md (Claude's notes, persistent memory)
+outils/deroule.py   the steps of a task (what Claude said and did), read from the stream Claude Code writes
 outils/System-Context-README.md  user guide copied into ~/Documents/Claude-Work/System-Context (kept up to date at each start)
 data/               EVERYTHING the app generates, kept apart from the program (private, ignored by git):
   runs/<date>/        one folder per task, deleted after 30 days:
     images/             screenshot-01.png, zoom-01.png, pdf-01.png...
     prompts/            task.txt (instructions sent to Claude), triage.txt (model choice)
-    responses/          task.txt, task-errors.txt, triage.txt, triage-errors.txt
+    responses/          task.jsonl (what Claude said and did, step by step), task-errors.txt, triage.txt, triage-errors.txt
+    result.txt          what you were shown at the end, with the steps (History window)
     screen.json         position and scale of the captured screen
   context-cache/      text extracted from the System-Context PDFs (rebuilt when needed)
   log.txt             app log
@@ -188,7 +190,7 @@ data/               EVERYTHING the app generates, kept apart from the program (p
   model.txt           model choice (Model menu)
   smooth.txt          smooth mode: on or off (Smooth mode menu)
   memory.txt          persistent memory: on or off (Persistent memory menu)
-  last-result.txt     text shown by "Last result"
+  last-result.txt     what the History window shows first when it is not the result of a kept task
   memory-previous.md  the notes cleared the last time Persistent memory was unchecked
   icon.png            applications menu icon (Linux)
   .venv/              Python environment created by installer.sh

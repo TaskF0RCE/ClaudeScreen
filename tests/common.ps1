@@ -14,6 +14,17 @@ function Fausse-Capture([switch]$SansMcp) {
        Rect = (New-Object System.Drawing.Rectangle 0, 0, 1920, 1080); Largeur = 1398; Hauteur = 787 }
 }
 function Lire-Prompt($capture, [string]$nom = 'task') { [IO.File]::ReadAllText((Join-Path $capture.Run "prompts\$nom.txt"), [Text.Encoding]::UTF8) }
+# Events as Claude Code writes them with --output-format stream-json, one JSON per line.
+function Evenement-Texte([string]$texte) { @{ type = 'assistant'; message = @{ role = 'assistant'; content = @(@{ type = 'text'; text = $texte }) } } | ConvertTo-Json -Depth 6 -Compress }
+function Evenement-Outil([string]$outil, $entree) { @{ type = 'assistant'; message = @{ role = 'assistant'; content = @(@{ type = 'tool_use'; id = 'toolu_1'; name = $outil; input = $entree }) } } | ConvertTo-Json -Depth 6 -Compress }
+# The result of a tool: in a real task, this line holds a screenshot (hundreds of KB).
+function Evenement-Retour { '{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_1","type":"tool_result","content":"' + ('x' * 2000) + '"}]}}' }
+function Evenement-Fin([string]$texte) { @{ type = 'result'; subtype = 'success'; is_error = $false; result = $texte } | ConvertTo-Json -Compress }
+function Ecrire-Flux($capture, [string[]]$lignes) {
+    [IO.File]::WriteAllLines((Join-Path $capture.Run 'responses\task.jsonl'), $lignes, (New-Object System.Text.UTF8Encoding $false))
+}
+# The answer of Claude: one word in a text file for the triage, a stream of events for the task.
 function Ecrire-Reponse($capture, [string]$texte, [string]$nom = 'task') {
-    [IO.File]::WriteAllText((Join-Path $capture.Run "responses\$nom.txt"), $texte, (New-Object System.Text.UTF8Encoding $false))
+    if ($nom -ne 'task') { [IO.File]::WriteAllText((Join-Path $capture.Run "responses\$nom.txt"), $texte, (New-Object System.Text.UTF8Encoding $false)); return }
+    if ($texte) { Ecrire-Flux $capture @((Evenement-Texte $texte), (Evenement-Fin $texte)) } else { Ecrire-Flux $capture @() }
 }
