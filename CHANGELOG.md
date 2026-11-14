@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/TaskF0RCE/ClaudeScreen/compare/v0.5.2...v0.6.0) (2026-11-14)
+
+
+### ✨ Features
+
+* steps of a task kept when it is stopped, and a History window to go back through the results ([#23](https://github.com/TaskF0RCE/ClaudeScreen/issues/23)) ([92888a4](https://github.com/TaskF0RCE/ClaudeScreen/commit/92888a42743ba0e664c7c46d1dcfcceee90dc1d8))
+
 ## [0.5.2](https://github.com/TaskF0RCE/ClaudeScreen/compare/v0.5.1...v0.5.2) (2026-11-13)
 
 
