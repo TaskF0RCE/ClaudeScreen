@@ -9,7 +9,7 @@ Commands (for desktop shortcuts on Wayland, or scripts):
   claude_screen.py declencher      same as Ctrl+Alt+C
   claude_screen.py consigne        same as Ctrl+Alt+Shift+C
   claude_screen.py arreter         stops the current task
-  claude_screen.py resultat        shows the last result
+  claude_screen.py resultat        shows the History window (the last result first)
   claude_screen.py quitter         closes the app
   claude_screen.py diagnostic      checks the installation (screenshot, permissions, Claude Code...)
 """
@@ -36,7 +36,7 @@ import time
 RACINE = os.path.dirname(os.path.abspath(__file__))
 OUTILS = os.path.join(RACINE, 'outils')
 # Everything generated goes to data/, never next to the program (same layout as the Windows version):
-#   data/runs/<date>/  one folder per task: images/, prompts/, responses/ + screen.json, result.txt (History menu)
+#   data/runs/<date>/  one folder per task: images/, prompts/, responses/ + screen.json, result.txt (History window)
 #   data/context-cache/, data/log.txt, data/settings.json, data/model.txt, data/smooth.txt, data/memory.txt
 #   + here: data/last-result.txt, data/memory-previous.md, data/icon.png, data/.venv/, data/cache/
 DONNEES = os.path.join(RACINE, 'data')
@@ -93,7 +93,6 @@ definir_dossiers(os.path.join(natif.dossier_documents(), NOM))
 CACHE_CONTEXTE = os.path.join(DONNEES, 'context-cache')  # text extracted from the context PDFs
 DUREE_MAX = 20 * 60
 JOURS_CONSERVES = 30
-HISTORIQUE_MAX = 15  # tasks listed in the History menu
 ANTI_REBOND = 0.7  # two presses less than 0.7 s apart = one (desktop shortcut + X11 listener)
 SOCKET = os.path.join(tempfile.gettempdir(), 'claude-screen-%d.sock' % os.getuid())
 VERROU = SOCKET + '.lock'
@@ -424,21 +423,12 @@ def _lister_documents():
 
 
 def historique():
-    """The last tasks that left a result (result.txt in their folder), newest first: (date, start of the result, file)."""
-    liste = []
+    """The results of the earlier tasks (result.txt of each task folder), newest first."""
     try:
-        noms = sorted((n for n in os.listdir(RUNS) if os.path.isfile(os.path.join(RUNS, n, 'result.txt'))), reverse=True)
+        return [os.path.join(RUNS, n, 'result.txt') for n in sorted(os.listdir(RUNS), reverse=True)
+                if os.path.isfile(os.path.join(RUNS, n, 'result.txt'))]
     except OSError:
-        return liste
-    for nom in noms[:HISTORIQUE_MAX]:
-        fichier = os.path.join(RUNS, nom, 'result.txt')
-        try:
-            quand = datetime.datetime.strptime(nom[:15], '%Y%m%d-%H%M%S')
-        except ValueError:
-            quand = datetime.datetime.fromtimestamp(os.path.getmtime(fichier))
-        debut = ' '.join(lire_texte(fichier).split())
-        liste.append((quand.strftime('%d/%m %H:%M'), debut[:67] + '...' if len(debut) > 70 else debut, fichier))
-    return liste
+        return []
 
 
 def preparer_outils():
@@ -492,6 +482,7 @@ class Appli:
         self.smooth = lire_texte(FICHIER_SMOOTH).lower() == 'on'
         self.memoire = lire_texte(FICHIER_MEMOIRE).lower() == 'on'
         self.dernier = 'No task yet. Press %s when the task is on screen.' % NOMS_RACCOURCIS[1]
+        self.dernier_hors_historique = False  # self.dernier is a message that no task folder holds
 
     # -------------------------------------------------- interface (main thread on macOS)
 
@@ -514,7 +505,7 @@ class Appli:
     def poster(self, *evenement):
         self.evenements.put(evenement)
 
-    # -------------------------------------------------- last result
+    # -------------------------------------------------- History window
 
     def texte_resultat(self):
         """What a click on the icon shows: the last result, or the steps so far while a task is running
@@ -528,14 +519,20 @@ class Appli:
             self.modele, int(round(time.monotonic() - self.debut)),
             'What Claude did so far:\n' + etapes if etapes else 'Nothing to show yet.')
 
-    def montrer_resultat(self, fichier=None):
-        """Without a file: the last result or the task in progress. With one: that result (History menu)."""
-        if not fichier:
-            fichier = DERNIER
+    def fichiers_resultat(self):
+        """What the History window can show, newest first: what is going on now (when it is not a result
+        kept in a task folder), then the results of the earlier tasks."""
+        anciens = historique()
+        if self.proc or self.dernier_hors_historique or not anciens:
             ecrire_texte(DERNIER, self.texte_resultat())
+            return [DERNIER] + anciens
+        return anciens
+
+    def montrer_resultat(self):
+        """The History window: the newest result or the task in progress, with arrows to the earlier ones."""
         if self.fenetre_resultat and self.fenetre_resultat.poll() is None:
             self.fenetre_resultat.terminate()
-        self.fenetre_resultat = subprocess.Popen([sys.executable, FENETRES, 'resultat', fichier],
+        self.fenetre_resultat = subprocess.Popen([sys.executable, FENETRES, 'resultat'] + self.fichiers_resultat(),
                                                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                                  stderr=subprocess.DEVNULL, start_new_session=True)
         if self.proc is None:
@@ -594,6 +591,7 @@ class Appli:
     def echec(self, message):
         self.proc = None
         self.dernier = message
+        self.dernier_hors_historique = True
         self.mettre_icone(ICONE_ERREUR)
         self.infobulle('error (click to see)')
         noter(message)
@@ -743,10 +741,11 @@ class Appli:
 
     def enregistrer_resultat(self, texte, etapes=''):
         """Keeps what the user is shown at the end of a task, with the steps, in the task folder: the History
-        menu lists these files. They go away with the task folder, after a month."""
+        window goes through these files. They go away with the task folder, after a month."""
         try:
             ecrire_texte(os.path.join(self.run, 'result.txt'),
                          texte + ('\n\n----- What Claude did -----\n' + etapes if etapes else ''))
+            self.dernier_hors_historique = False
         except OSError as ex:
             noter('History: %s' % ex)
 
@@ -825,7 +824,7 @@ class Appli:
             else:
                 self.lancer_tache()
         elif genre == 'resultat':
-            self.montrer_resultat(ev[1] if len(ev) > 1 else None)
+            self.montrer_resultat()
         elif genre == 'arreter':
             self.arreter_tache(ev[1] if len(ev) > 1 else 'menu')
         elif genre == 'consigne':
@@ -970,17 +969,8 @@ class Appli:
             yield pystray.Menu.SEPARATOR
             yield M('Open the Contexts folder', lambda: natif.ouvrir(DOSSIER_CONTEXTES))
 
-        def menu_historique():
-            # Read again each time the menu is built: the result and the steps of the last tasks.
-            liste = historique()
-            for quand, debut, fichier in liste:
-                yield M('%s   %s' % (quand, debut), lambda _icone, _item, f=fichier: self.poster('resultat', f))
-            if not liste:
-                yield M('(no task yet)', None, enabled=False)
-
         return pystray.Menu(
-            M('Last result', lambda: self.poster('resultat'), default=True),
-            M('History', pystray.Menu(menu_historique)),
+            M('History', lambda: self.poster('resultat'), default=True),
             M('Model', pystray.Menu(
                 M('Auto (Haiku picks Sonnet or Opus)', choisir('auto'), checked=coche('auto'), radio=True),
                 M('Always Sonnet', choisir('sonnet'), checked=coche('sonnet'), radio=True),
@@ -1037,6 +1027,7 @@ class Appli:
         if not pdf.disponible():
             noter('Missing pypdfium2 module: PDFs in the context will not be read. Run ./installer.sh again.')
         if not trouver_claude():
+            self.dernier_hors_historique = True
             self.dernier = ('Claude Code not found. Install it: curl -fsSL https://claude.ai/install.sh | bash, '
                             'then run "claude" once to log in.')
             self.icone.icon = ICONE_ERREUR
@@ -1045,6 +1036,7 @@ class Appli:
             manque = [n for n, ok in (('Screen Recording', droits.get('ecran')),
                                       ('Accessibility', droits.get('accessibilite'))) if ok is False]
             if manque:
+                self.dernier_hors_historique = True
                 self.dernier = ('Permissions to grant in System Settings > Privacy & Security: %s. '
                                 'Then quit and relaunch ClaudeScreen.' % ', '.join(manque))
                 self.icone.icon = ICONE_ERREUR

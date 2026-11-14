@@ -1,7 +1,8 @@
 """Small windows of the app, started in a separate process (Tk and the menu bar icon
 cannot share the main thread on macOS).
 
-  fenetres.py resultat FILE         "last result" window (closes when you click elsewhere)
+  fenetres.py resultat FILE...      History window: the first file is shown, two arrows go through the others
+                                    (newest first; closes when you click elsewhere)
   fenetres.py consigne X Y          instruction bar; X Y = bottom-left corner of the captured screen.
                                     Enter: prints the text on stdout, exit code 0.
                                     Esc / click elsewhere: exit code 1.
@@ -10,6 +11,7 @@ Without Tk: falls back to osascript (macOS), zenity or kdialog (Linux).
 """
 from __future__ import annotations
 
+import datetime
 import os
 import shutil
 import subprocess
@@ -55,19 +57,44 @@ def _fermer_si_quitte(root, action):
 
 # ------------------------------------------------------------------ result
 
-def resultat(fichier):
-    with open(fichier, encoding='utf-8') as f:
-        texte = f.read()
+def _titre(fichier):
+    """Date of a task, read from the name of its folder (20261113-161334); 'now' for anything else."""
+    nom = os.path.basename(os.path.dirname(os.path.abspath(fichier)))
+    try:
+        return datetime.datetime.strptime(nom[:15], '%Y%m%d-%H%M%S').strftime('%d/%m/%Y %H:%M')
+    except ValueError:
+        return 'now'
+
+
+def _lire(fichier):
+    try:
+        with open(fichier, encoding='utf-8', errors='replace') as f:
+            return f.read()
+    except OSError:
+        return 'This result is no longer kept.'
+
+
+def resultat(fichiers):
     try:
         import tkinter as tk
     except ImportError:
-        return _resultat_sans_tk(fichier)
+        return _resultat_sans_tk(fichiers[0])
+    etat = {'position': 0}
 
     root = tk.Tk()
     root.title('Claude-Work')
     l, h = 520, 360
     marge_bas = 90 if MAC else 60
     root.geometry('%dx%d+%d+%d' % (l, h, root.winfo_screenwidth() - l - 12, root.winfo_screenheight() - h - marge_bas))
+    # The bar with the two arrows: older result on the left, newer on the right.
+    haut = tk.Frame(root)
+    haut.pack(fill='x')
+    ancien = tk.Button(haut, text='<', width=3, command=lambda: aller(1))
+    ancien.pack(side='left')
+    recent = tk.Button(haut, text='>', width=3, command=lambda: aller(-1))
+    recent.pack(side='right')
+    titre = tk.Label(haut)
+    titre.pack(side='left', fill='x', expand=True)
     cadre = tk.Frame(root, bg='white')
     cadre.pack(fill='both', expand=True)
     barre = tk.Scrollbar(cadre)
@@ -77,8 +104,20 @@ def resultat(fichier):
                    yscrollcommand=barre.set, highlightthickness=0)
     zone.pack(side='left', fill='both', expand=True)
     barre.config(command=zone.yview)
-    zone.insert('1.0', texte)
-    zone.config(state='disabled')  # read-only (selecting and copying still work)
+
+    def aller(pas):
+        # +1 = one task further back, -1 = one task closer to now.
+        etat['position'] = max(0, min(len(fichiers) - 1, etat['position'] + pas))
+        n = etat['position']
+        zone.config(state='normal')
+        zone.delete('1.0', 'end')
+        zone.insert('1.0', _lire(fichiers[n]))
+        zone.config(state='disabled')  # read-only (selecting and copying still work)
+        titre.config(text='%d / %d   %s' % (n + 1, len(fichiers), _titre(fichiers[n])))
+        ancien.config(state='normal' if n < len(fichiers) - 1 else 'disabled')
+        recent.config(state='normal' if n > 0 else 'disabled')
+
+    aller(0)
     root.bind('<Escape>', lambda _e: root.destroy())
     _fermer_si_quitte(root, root.destroy)
     root.after(50, lambda: _premier_plan(root))
@@ -195,7 +234,7 @@ def _consigne_sans_tk():
 
 def main(argv):
     if len(argv) >= 2 and argv[0] == 'resultat':
-        return resultat(argv[1])
+        return resultat(argv[1:])
     if len(argv) >= 3 and argv[0] == 'consigne':
         return consigne(float(argv[1]), float(argv[2]))
     sys.stderr.write(__doc__)

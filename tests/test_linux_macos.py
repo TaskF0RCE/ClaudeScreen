@@ -325,15 +325,27 @@ verifier('finished: result.txt = the answer, then the steps, the answer not repe
          t == a.dernier + '\n\n----- What Claude did -----\nI fill in the form.\n  > clic 10 20, remplacer Paris', t)
 verifier('the note still went to memory.md', 'form done' in memoire.notes(cs.FICHIER_NOTES))
 h = cs.historique()
-verifier('history: the 2 tasks, newest first, one line each', len(h) == 2 and h[0][2] == os.path.join(c5['run'], 'result.txt')
-         and h[0][1].startswith('[sonnet, ') and '\n' not in h[1][1] and len(h[1][1]) <= 70 and h[1][1].startswith('Task stopped (raccourci)'), h)
+verifier('history: the result files of the 2 tasks, newest first', h == [os.path.join(c5['run'], 'result.txt'), os.path.join(c4['run'], 'result.txt')], h)
+verifier('History window: opens on the newest result, no separate last message', a.fichiers_resultat() == h)
+a.echec('Could not start the task: test')
+f = a.fichiers_resultat()
+verifier('a task that could not start: its message first, then the kept results', f == [cs.DERNIER] + h and lire(cs.DERNIER) == 'Could not start the task: test')
+a.proc = types.SimpleNamespace(returncode=0)
+a.etape = 'tri'
+verifier('a task in progress: shown first', a.fichiers_resultat() == [cs.DERNIER] + h and lire(cs.DERNIER) == 'Looking at the screen...')
+a.proc = None
 for i in range(20):
     d = os.path.join(cs.RUNS, '20261113-16%02d00' % i)
     os.makedirs(d)
-    with open(os.path.join(d, 'result.txt'), 'w', encoding='utf-8') as f:
-        f.write('Result number %d' % i)
+    if i != 7:
+        with open(os.path.join(d, 'result.txt'), 'w', encoding='utf-8') as f:
+            f.write('Result number %d' % i)
 h = cs.historique()
-verifier('history: 15 at most, date read from the folder name', len(h) == cs.HISTORIQUE_MAX and any(x[0] == '13/11 16:19' and x[1] == 'Result number 19' for x in h), h[:3])
+verifier('history: every kept result, the task without a result skipped', len(h) == 21 and h[2].endswith(os.path.join('20261113-161900', 'result.txt'))
+         and os.path.dirname(os.path.dirname(h[2])) == cs.RUNS, h[:3])
+sys.path.insert(0, os.path.join(app, 'outils'))
+import fenetres  # noqa: E402
+verifier('window title: the date of the task, read from its folder', fenetres._titre(h[2]) == '13/11/2026 16:19' and fenetres._titre(cs.DERNIER) == 'now')
 long = os.path.join(bac, 'long.jsonl')
 with open(long, 'w', encoding='utf-8') as f:
     f.write(''.join(json.dumps(ev_texte('step %d %s' % (i, 'y' * 600))) + '\n' for i in range(1, 101)))

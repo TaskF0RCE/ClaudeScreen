@@ -1,5 +1,5 @@
 # The steps of a task (what Claude said and did): shown while it runs, kept when it is stopped,
-# saved with the result, and listed in the History menu.
+# saved with the result, and browsed in the History window.
 try {
 '--- a task in progress'
 $script:ChoixModele = 'sonnet'
@@ -75,19 +75,37 @@ $long = Join-Path $cap.Run 'long.jsonl'
 $d = Read-Deroule $long
 Verifier 'only the last 80 steps, 400 characters each' ($d.Etapes.Count -eq 80 -and $d.Omises -eq 20 -and $d.Etapes[0] -match '^step 21 ' -and $d.Etapes[0].Length -eq 400 -and (Format-Deroule $d).StartsWith('(... 20 earlier steps not shown)'))
 
-'--- History menu'
+'--- History window'
 Get-ChildItem $Runs -Directory | Remove-Item -Recurse -Force
-Remplir-MenuHistorique
-Verifier 'no task: one greyed line' ($menuHistorique.DropDownItems.Count -eq 1 -and -not $menuHistorique.DropDownItems[0].Enabled)
+$script:Proc = $null
+$e = Lister-Entrees
+Verifier 'no task kept: one entry, the last message' ($e.Count -eq 1 -and -not $e[0].Fichier -and (Texte-Entree $e[0]) -eq $script:Dernier)
 foreach ($i in 1..18) {
     $dossier = Join-Path $Runs ('20261113-16{0:D2}00' -f $i)
     New-Item -ItemType Directory -Force $dossier | Out-Null
-    if ($i -ne 17) { [IO.File]::WriteAllText((Join-Path $dossier 'result.txt'), "[sonnet, 12 s] Result & number $i`nsecond line $('z' * 100)") }
+    if ($i -ne 17) { [IO.File]::WriteAllText((Join-Path $dossier 'result.txt'), "[sonnet, 12 s] Result number $i`nsecond line") }
 }
-Remplir-MenuHistorique
-$libelles = @($menuHistorique.DropDownItems | ForEach-Object { $_.Text })
-Verifier 'the 15 last tasks, newest first, the one without a result skipped' ($libelles.Count -eq 15 -and $libelles[0] -match 'number 18' -and $libelles[1] -match 'number 16' -and $libelles[-1] -match 'number 3 ') ($libelles -join ' | ')
-Verifier 'label: date and time, start of the result on one line' ($libelles[0] -match '13.*16:18' -and $libelles[0] -match 'Result && number 18 second line z+\.\.\.$' -and $libelles[0].Length -lt 110) $libelles[0]
-Verifier 'the item opens the whole result of that task' ((Test-Path $menuHistorique.DropDownItems[0].Tag) -and $menuHistorique.DropDownItems[0].Tag -like '*20261113-161800\result.txt')
-Verifier 'History is in the menu, after Last result' (@($menu.Items | ForEach-Object { $_.Text })[0..1] -join '|' -eq 'Last result|History')
+$e = Lister-Entrees
+Verifier 'every kept result, newest first, the task without a result skipped' ($e.Count -eq 17 -and $e[0].Fichier -like '*\20261113-161800\result.txt' -and $e[1].Fichier -like '*\20261113-161600\*' -and $e[-1].Fichier -like '*\20261113-160100\*') ($e | ForEach-Object { $_.Fichier })
+Verifier 'the window opens on the newest result; title = its date and time' ($e[0].Titre -match '13.*16:18' -and (Texte-Entree $e[0]) -eq "[sonnet, 12 s] Result number 18`nsecond line") $e[0].Titre
+Verifier 'the results live in the task folders: they go away with them' ((Split-Path (Split-Path $e[0].Fichier -Parent) -Parent) -eq $Runs)
+Echec 'Could not start the task: test'
+$e = Lister-Entrees
+Verifier 'a task that could not start: its message first, then the kept results' ($e.Count -eq 18 -and -not $e[0].Fichier -and (Texte-Entree $e[0]) -eq 'Could not start the task: test' -and $e[1].Fichier -like '*161800*')
+$script:Etape = 'tri'
+$script:Proc = Faux-Proc 0
+$e = Lister-Entrees
+Verifier 'a task in progress: shown first' ($e.Count -eq 18 -and $e[0].Titre -eq 'in progress' -and (Texte-Entree $e[0]) -eq 'Looking at the screen...')
+$script:Proc = $null
+$cap6 = Fausse-Capture
+Lancer-Tache $cap6 ''
+Ecrire-Reponse $cap6 'Done.'
+$script:Proc = Faux-Proc 0
+Processus-Fini
+$e = Lister-Entrees
+Verifier 'after a finished task: no separate last message any more' (@($e | Where-Object { -not $_.Fichier }).Count -eq 0 -and $e.Count -eq 18)
+Remove-Item $e[3].Fichier
+Verifier 'a result removed while the window is open' ((Texte-Entree $e[3]) -eq 'This result is no longer kept.')
+$libelles = @($menu.Items | ForEach-Object { $_.Text })
+Verifier 'menu: History first, no Last result' ($libelles[0] -eq 'History' -and $libelles -notcontains 'Last result') ($libelles -join '|')
 } catch { Verifier 'scenario ran to the end' $false ($_.Exception.Message + ' ' + $_.InvocationInfo.PositionMessage) }

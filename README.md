@@ -83,8 +83,7 @@ The folder is in your Documents, outside the repository: your documents and inst
 | Red dot | Error: click to see the message |
 
 Right-click the icon (every choice is remembered):
-- **Last result**: the answer of the last task. While a task is running, it shows what Claude has said and done so far (a click on the icon does the same)
-- **History**: the result and the steps of your last 15 tasks, kept for 30 days
+- **History**: opens on the answer of the last task (a click on the icon does the same). While a task is running, it shows what Claude has said and done so far. The two arrows, `<` and `>`, go through the results and the steps of your earlier tasks
 - **Model**: Auto, Always Sonnet or Always Opus
 - **Smooth mode**: the mouse glides and the text is typed at a human pace
 - **Persistent memory**: Claude keeps notes from one task to the next
@@ -131,7 +130,9 @@ Checked by default. It works like a mini session: Claude ends each task with sho
 
 Press **Ctrl+Alt+C** again while the star is spinning, or use **Stop the current task** in the menu. A task is also stopped automatically after 20 minutes.
 
-Nothing is lost when a task stops: **Last result** then lists what Claude had said and done before the stop, and the task stays in **History**. To see where a task is without stopping it, click the icon.
+Nothing is lost when a task stops: **History** then lists what Claude had said and done before the stop. To see where a task is without stopping it, click the icon.
+
+Each result is kept in the folder of its task (`data\runs\<date>\result.txt`), next to its screenshots, and goes away with it after 30 days.
 
 During a task, don't touch the mouse or keyboard: Claude uses the real ones. If another window comes to the front, Claude is told to stop, and every result it gets names the active window so that it can notice. This relies on Claude: nothing in the app blocks a click in the wrong window, so keep an eye on a task that matters.
 
@@ -251,7 +252,7 @@ data/               EVERYTHING the app generates, kept apart from the program (p
     images/             screenshot-01.png, zoom-01.png, pdf-01.png...
     prompts/            task.txt (instructions sent to Claude), triage.txt (model choice)
     responses/          task.jsonl (what Claude said and did, step by step), task-errors.txt, triage.txt, triage-errors.txt
-    result.txt          what you were shown at the end, with the steps (History menu)
+    result.txt          what you were shown at the end, with the steps (History window)
     screen.json         position and scale of the captured screen
     mcp.json            tells Claude Code how to start outils/mcp.ps1 for this task
     mcp-started.txt     left by outils/mcp.ps1 when Claude Code reached it
