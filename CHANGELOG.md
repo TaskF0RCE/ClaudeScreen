@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/TaskF0RCE/ClaudeScreen/compare/v0.8.0...v0.9.0) (2026-11-16)
+
+
+### ✨ Features
+
+* Sessions window with Persisted Memory and Ghost Mode, new roles for the two shortcuts ([#32](https://github.com/TaskF0RCE/ClaudeScreen/issues/32)) ([8819636](https://github.com/TaskF0RCE/ClaudeScreen/commit/8819636d57dc886e82b1b51de2a79d869066e788))
+
 ## [0.8.0](https://github.com/TaskF0RCE/ClaudeScreen/compare/v0.7.1...v0.8.0) (2026-11-16)
 
 
