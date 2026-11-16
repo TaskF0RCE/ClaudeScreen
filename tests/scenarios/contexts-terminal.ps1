@@ -45,10 +45,10 @@ Verifier 'off: no terminal in the prompt' ($p -match 'There is no terminal\.' -a
 Verifier 'off: no PowerShell among the tools' ($global:Appels[-1] -like 'opus|task|--tools Read,Write,Edit,Glob,Grep --mcp-config *') $global:Appels[-1]
 $global:ReponseTerminal = $false
 $menuTerminal.PerformClick()
-Verifier 'checked, then No to the question: stays off' ($global:QuestionsTerminal -eq 1 -and -not $script:Terminal -and -not $menuTerminal.Checked -and (Get-Content $FichierTerminal -Raw).Trim() -eq 'off' -and [bool]((Get-Content $Journal -Encoding UTF8) -match 'Terminal access: not allowed'))
+Verifier 'checked, then No to the question: stays off, the No is not remembered' ($global:QuestionsTerminal -eq 1 -and -not (Test-Path $FichierTerminalAccepte) -and -not $script:Terminal -and -not $menuTerminal.Checked -and (Get-Content $FichierTerminal -Raw).Trim() -eq 'off' -and [bool]((Get-Content $Journal -Encoding UTF8) -match 'Terminal access: not allowed'))
 $global:ReponseTerminal = $true
 $menuTerminal.PerformClick()
-Verifier 'checked, then Yes: on saved' ($global:QuestionsTerminal -eq 2 -and $script:Terminal -and (Get-Content $FichierTerminal -Raw).Trim() -eq 'on')
+Verifier 'checked, then Yes: on saved, and the Yes is remembered' ($global:QuestionsTerminal -eq 2 -and $script:Terminal -and (Get-Content $FichierTerminal -Raw).Trim() -eq 'on' -and (Test-Path $FichierTerminalAccepte))
 $c = Fausse-Capture; Lancer-Tache $c ''
 $p = Lire-Prompt $c
 Verifier 'on: prompt gives the PowerShell tool and its limits' ($p -match 'you also have the PowerShell tool' -and $p -match 'The screen comes first' -and $p -match 'No administrator rights' -and $p -notmatch 'There is no terminal')
@@ -56,6 +56,11 @@ Verifier 'on: PowerShell among the tools' ($global:Appels[-1] -like 'opus|task|-
 Verifier 'on: said in the log' ([bool]((Get-Content $Journal -Encoding UTF8) -match 'Model: opus, terminal$'))
 $menuTerminal.PerformClick()
 Verifier 'unchecked again: off saved, no question to turn it off' ($global:QuestionsTerminal -eq 2 -and -not $script:Terminal -and (Get-Content $FichierTerminal -Raw).Trim() -eq 'off')
+$global:ReponseTerminal = $false
+$menuTerminal.PerformClick()
+Verifier 'checked a second time: on at once, the question is not asked again' ($global:QuestionsTerminal -eq 2 -and $script:Terminal -and $menuTerminal.Checked)
+$menuTerminal.PerformClick()
+$global:ReponseTerminal = $true
 
 '--- texts longer than 4000 characters'
 $c = Fausse-Capture; Lancer-Tache $c ''
