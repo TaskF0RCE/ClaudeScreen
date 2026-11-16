@@ -8,7 +8,7 @@
     declared in the desktop settings (installer.sh does it for GNOME) and calls
     "lancer.sh declencher" / "lancer.sh consigne".
 
-Ids (same as the Windows version): 1 = normal task, 4 = with the instruction bar.
+Ids (same as the Windows version): 1 = the simple shortcut (instruction bar), 4 = the longer one (automatic task).
 """
 from __future__ import annotations
 
