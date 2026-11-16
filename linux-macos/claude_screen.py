@@ -59,6 +59,7 @@ FICHIER_SMOOTH = os.path.join(DONNEES, 'smooth.txt')  # smooth mode: "on" or "of
 FICHIER_MEMOIRE = os.path.join(DONNEES, 'memory.txt')  # Claude's notes are always kept, unless this file says "never"
 FICHIER_SESSION = os.path.join(DONNEES, 'session.txt')  # id of the current session (see New session)
 FICHIER_FANTOME = os.path.join(DONNEES, 'ghost.txt')    # ghost mode: "on" or "off" (default)
+DOSSIER_SESSIONS = os.path.join(DONNEES, 'sessions')   # the notes of the persisted sessions that ended
 FICHIER_CONTEXTE = os.path.join(DONNEES, 'context.txt')  # name of the active context (Context menu); none = Default
 # Contexts shipped with the app (at the root of the repository), copied once into System-Context/Contexts.
 CONTEXTES_FOURNIS = os.path.join(os.path.dirname(RACINE), 'contexts')
@@ -207,7 +208,7 @@ def texte_consigne(png, largeur, hauteur, fenetre, precision, instructions='', d
 Screenshot: {png} ({largeur} x {hauteur} px). Start by reading it with the Read tool.
 Active window: {fenetre[0]} - "{fenetre[1]}"
 {contexte}{instructions}{bloc_memoire}{documents}{precision}
-1. Find what is being asked. If an instruction or instructions from the user are given above, follow them rather than guessing. Otherwise, the active context above says how to find the task. Otherwise, the main thing on screen that calls for an action.
+1. Find what is being asked before you act: never act at random. Work it out from everything you were given, in this order: the user's instruction for this task, if there is one; their standing instructions; the active context; your notes of this session; the documents and the recent files listed above (read the ones that relate to what is on screen); then the screen itself. Together they tell you who the user is, what they are working on and how they want it done: the task is what the screen calls for in that light, most often the next step of that work. If all of this still does not tell you what to do, do not guess an action: change nothing, and say in your final answer what you see and what you would need to know.
 2. Do the whole task, from start to finish.
    - If the answer must go on the screen (ticking boxes, filling in fields, clicking, writing in an open document, typing commands in a console), control the computer with the tool below. After each important action, take a new screenshot to check. One clic is enough for a button, a tab, a link or an item of a tool; keep doubleclic for what only opens with a double-click (a file or a desktop icon). If a click seems to have done nothing, look at a new screenshot before clicking again: a second click on the same spot often closes what the first one opened. If there is more further down (other questions), scroll and continue. You may click Next or Submit on a form, quiz or exercise once everything asked is filled in.
    - If the task asks you to produce something (diagram, document, code, summary, HTML page, SVG...), create the files with the Write tool in the current folder: {TRAVAIL}
@@ -368,6 +369,30 @@ def texte_memoire():
 
 
 _verrou_documents = threading.Lock()
+
+
+def fichiers_recents():
+    """What was worked on lately in the work folder: it often tells what the screen is about."""
+    trouves = []
+    for dossier, sous_dossiers, noms in os.walk(TRAVAIL):
+        if os.path.abspath(dossier) == os.path.abspath(CONTEXTE):
+            sous_dossiers[:] = []
+            continue
+        sous_dossiers[:] = [d for d in sous_dossiers if not d.startswith('.')]
+        for nom in noms:
+            if nom.startswith(('.', '~$')) or nom.lower() in ('desktop.ini', 'thumbs.db'):
+                continue
+            chemin = os.path.join(dossier, nom)
+            try:
+                trouves.append((os.path.getmtime(chemin), chemin))
+            except OSError:
+                pass
+    if not trouves:
+        return ''
+    recents = sorted(trouves, reverse=True)[:8]
+    return ('\nMost recent files of the work folder (what was worked on lately; read one only if it relates to the '
+            'task):\n%s\n' % '\n'.join('  %s  (%s)' % (c, datetime.datetime.fromtimestamp(m).strftime('%Y-%m-%d %H:%M'))
+                                       for m, c in recents))
 
 
 def lister_documents():
@@ -547,22 +572,37 @@ class Appli:
         return anciens
 
     def nouvelle_session(self):
-        """Claude's notes are emptied (the previous ones are kept once in data/memory-previous.md) and the next
-        tasks start a new history. Not during a task."""
+        """New session, in the mode that is selected. Not during a task.
+
+        Persisted Memory: the notes of the session that ends are put away in data/sessions/<id>.md (they go away
+        with its last task), and the next tasks start a new history with no notes.
+        Ghost Mode: the last ghost answer is forgotten; the mode stays on.
+        """
         if self.proc:
             noter('New session: not during a task')
             return False
+        self.dernier_hors_historique = False
+        if self.fantome:
+            self.dernier = 'Ghost session: nothing is kept. Press %s when the task is on screen.' % NOMS_RACCOURCIS[1]
+            try:
+                os.remove(DERNIER)
+            except OSError:
+                pass
+            noter('New ghost session')
+            return True
+        ancienne = lire_session()
         try:
-            memoire.vider(FICHIER_NOTES, FICHIER_NOTES_AVANT)
-            memoire.preparer(FICHIER_NOTES)
+            if memoire.notes(FICHIER_NOTES):
+                os.makedirs(DOSSIER_SESSIONS, exist_ok=True)
+                shutil.copyfile(FICHIER_NOTES, os.path.join(DOSSIER_SESSIONS, ancienne + '.md'))
+            memoire.ecrire(FICHIER_NOTES, memoire.ENTETE)
         except OSError as ex:
             noter('memory.md: %s' % ex)
         ident = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
-        if ident == lire_session():
+        if ident == ancienne:
             ident += '-2'
         ecrire_texte(FICHIER_SESSION, ident)
         self.dernier = 'New session. Press %s when the task is on screen.' % NOMS_RACCOURCIS[1]
-        self.dernier_hors_historique = False
         noter('New session: %s' % ident)
         return True
 
@@ -573,14 +613,18 @@ class Appli:
             return False
         self.fantome = actif
         ecrire_texte(FICHIER_FANTOME, 'on' if actif else 'off')
-        if not actif and self.dernier_hors_historique:
+        if actif:
+            self.dernier = 'Ghost session: nothing is kept. Press %s when the task is on screen.' % NOMS_RACCOURCIS[1]
+            self.dernier_hors_historique = False
+        else:
+            # Back to Persisted Memory: the ghost answer is forgotten.
             self.dernier = 'No task yet. Press %s when the task is on screen.' % NOMS_RACCOURCIS[1]
             self.dernier_hors_historique = False
             try:
                 os.remove(DERNIER)
             except OSError:
                 pass
-        noter('Ghost mode: %s' % ('on' if actif else 'off'))
+        noter('Mode: %s' % ('Ghost Mode' if actif else 'Persisted Memory'))
         return True
 
     def montrer_resultat(self):
@@ -701,7 +745,7 @@ class Appli:
             nom_contexte, contenu_contexte = contexte_actif()
             ecrire_texte(os.path.join(run, 'prompts', 'task.txt'),
                          texte_consigne(png, capture['largeur'], capture['hauteur'], fenetre, precision,
-                                        instructions, lister_documents(), self.memoire_tache,
+                                        instructions, lister_documents() + fichiers_recents(), self.memoire_tache,
                                         texte_contexte(nom_contexte, contenu_contexte)))
 
             modele = self.choix_modele
@@ -1040,7 +1084,7 @@ class Appli:
             yield M('Open the Contexts folder', lambda: natif.ouvrir(DOSSIER_CONTEXTES))
 
         return pystray.Menu(
-            M('History', lambda: self.poster('resultat'), default=True),
+            M('Sessions', lambda: self.poster('resultat'), default=True),
             M('Model', pystray.Menu(
                 M('Auto (Haiku picks Sonnet or Opus)', choisir('auto'), checked=coche('auto'), radio=True),
                 M('Always Sonnet', choisir('sonnet'), checked=coche('sonnet'), radio=True),

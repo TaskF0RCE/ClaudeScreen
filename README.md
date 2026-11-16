@@ -31,7 +31,7 @@ In the notification area the app is called **Claude-Work** (tooltip, menu, resul
 - **Enter** on an empty bar starts a normal task.
 - If the bar closes before you press Enter (Esc, a click elsewhere, by accident), what you typed is not lost: it is back in the bar the next time you open it.
 
-Without an instruction, Claude does what the screen is asking for. When the screen asks for nothing in particular, give an instruction.
+Without an instruction, Claude does not act at random: it works out what is expected from your standing instructions, the active context, its notes of the session, your documents and the most recent files of `Claude-Work`, then from the screen. If all of that still does not say what to do, it changes nothing and tells you what it would need. When the screen asks for nothing in particular, give an instruction.
 
 ### Contexts
 
@@ -61,7 +61,7 @@ Each context is a small Markdown file in `Documents\Claude-Work\System-Context\C
 The `Documents\Claude-Work\System-Context` folder is created on first launch, with a `README.md` that explains how to use it.
 
 - **`instructions.md`**: your standing instructions, one per line, added to every task whatever the context. For example: "always answer in English", "never click Finish exam", "my name is Sam". Comments are ignored: as long as you write nothing else, the file does nothing. It is re-read for every task. **This file is yours: neither the app nor Claude ever changes it.** At most 4000 characters are sent: past that, the result of the task tells you that the end was left out. Put long texts in another file of the folder instead.
-- **`memory.md`**: Claude's notes for the current session (see [Sessions and memory](#sessions-and-memory)).
+- **`memory.md`**: Claude's notes for the current session (see [Sessions and memory](#sessions)).
 - **`Contexts`**: the contexts above.
 - **The other files in the folder**, subfolders included (courses, notes, procedures, technical documentation, templates...): Claude gets their list with every task. It treats them as more reliable than its general knowledge: it reads the ones related to the task and relies on them first. Best-read formats: `.pdf`, `.txt`, `.md`, images, code, `.csv`, `.html` (for a Word or PowerPoint file, also save it as PDF).
 - **PDFs**: the app extracts their text in advance, page by page, into `data\context-cache\` (redone only when the PDF changes). For a diagram or a scanned PDF, Claude looks at the page as an image. This uses [Poppler](https://poppler.freedesktop.org/) (see [Installation](#installation)).
@@ -83,8 +83,7 @@ The folder is in your Documents, outside the repository: your documents and inst
 | Red dot | Error: click to see the message |
 
 Right-click the icon (every choice is remembered):
-- **History**: the answer of the last task (a click on the icon does the same), or what Claude has said and done so far while a task is running. It also holds your earlier tasks, grouped by session, and [Ghost mode](#ghost-mode)
-- **New session**: start again from nothing (see [Sessions and memory](#sessions-and-memory))
+- **Sessions**: the answer of the last task (a click on the icon does the same), or what Claude has said and done so far while a task is running; your earlier sessions; a new session; and the choice between Persisted Memory and Ghost Mode (see [Sessions](#sessions))
 - **Model**: Auto, Always Sonnet or Always Opus
 - **Smooth mode**: the mouse glides and the text is typed at a human pace
 - **Terminal access**: Claude may also run commands when the screen is not enough
@@ -107,33 +106,43 @@ By default, the mouse jumps straight to its target and text appears in a flash. 
 
 It applies at once, even in the middle of a task. Tasks take a bit longer in this mode.
 
-### Sessions and memory
+### Sessions
 
 A **session** is a run of tasks that belong together, like the exercises of one assignment. Inside a session, Claude ends each task with short notes (what it learned about you and your work, how far it got) and gets them back at the next task, so it does not start from scratch or read the same document again.
 
-- **New session** (icon menu, or the button in the History window) starts again from nothing: Claude's notes are emptied and the next tasks form a new history. Use it when you move on to something unrelated.
-- **History** shows a session as a whole: the drop-down list at the top picks a session (the current one first), and the `<` `>` arrows go through its tasks, with the instruction you typed, the answer and the steps. The newest task is the last one (3 / 3).
-- The notes are in `System-Context\memory.md`, one per line. You can read them, fix one or delete one by hand. `instructions.md` is never touched.
-- The notes that **New session** cleared are kept once in `data\memory-previous.md` (one file, replaced each time), so a click by mistake can be undone by copying them back.
+Everything about sessions is in one window: **Sessions** in the icon menu, or a click on the icon.
+
+- **The drop-down list** holds your sessions: the one in use first, then the earlier ones (Session 3, Session 2, Session 1...), each with its date and its number of tasks. Pick one to read it.
+- **The `<` `>` arrows** go through the tasks of the chosen session, with the instruction you typed, the answer and the steps. The newest task is the last one (3 / 3). While a task is running, the last entry shows what Claude has said and done so far.
+- **New session** starts again from nothing, in the mode that is selected. Use it when you move on to something unrelated.
+- **Resume** goes back to an earlier session: it becomes the current one again, Claude gets the notes it had, and the next tasks are added to it.
+
+A session is in one of two modes, chosen right under the list:
+
+- **Persisted Memory** (the default): the session is kept. Its tasks stay in the list for 30 days, and you can resume it.
+- **Ghost Mode**: nothing is kept, like a private window in a browser. The session only lives in the memory of the app: its notes and its results are never written anywhere, and the folder of each task (screenshots, instruction, answer, steps) is deleted for good when the task ends. You can still read the tasks of the ghost session in the window while it lasts.
+
+Going from one mode to the other:
+
+- **Ghost Mode stays on** as long as it is selected, even after a restart. **New session** then starts another ghost session and forgets the previous one.
+- **Selecting Persisted Memory** forgets the ghost session and puts you back in the session you had before, as it was. **New session** then creates a kept session.
+- **Resume** on a session of the list always selects Persisted Memory.
+- None of this can be done while a task is running.
+
+Ghost Mode does not hide the files that Claude creates for you in `Claude-Work`, and the task still goes through your Claude account like any other.
+
+About the notes:
+
+- The notes of the current session are in `System-Context\memory.md`, one per line. You can read them, fix one or delete one by hand. `instructions.md` is never touched. The notes of the other sessions wait in `data\sessions\`, and go away with the last task of their session.
 - Claude cannot write in the folder: it ends its answer with `MEMORY: ...` lines, and the app saves them (and hides them from the result you see). One note is at most 300 characters, and all notes together at most 4000: past that, the oldest notes are removed to make room for the new ones.
 - A task you stop saves no note.
 - To never keep any note, write `never` in `data\memory.txt` and restart the app.
-
-### Ghost mode
-
-Tick **Ghost** in the History window for tasks that must leave nothing behind, like a private window in a browser:
-
-- Claude gets none of the notes of the session and saves none.
-- When the task ends, its folder is deleted for good: screenshots, the instruction, the answer, the steps.
-- The answer stays in the History window only until the next task, or until you untick **Ghost**.
-
-Untick it and you are back in your session, as it was. Ghost mode does not hide the files that Claude creates for you in `Claude-Work`, and the task still goes through your Claude account like any other.
 
 ### Stopping a task
 
 Press **Ctrl+Alt+C** again while the star is spinning. A task is also stopped automatically after 20 minutes, and when you quit the app.
 
-Nothing is lost when a task stops: **History** then lists what Claude had said and done before the stop. To see where a task is without stopping it, click the icon.
+Nothing is lost when a task stops: **Sessions** then lists what Claude had said and done before the stop. To see where a task is without stopping it, click the icon.
 
 Each result is kept in the folder of its task (`data\runs\<date>\result.txt`), next to its screenshots, and goes away with it after 30 days.
 
@@ -161,7 +170,7 @@ Read this before giving the app to someone: it says what is enforced by the prog
   - changing Windows: registry, services, scheduled tasks, accounts, permissions, firewall, antivirus;
   - stopping other programs;
   - reading stored passwords or keys.
-- **`System-Context` and the ClaudeScreen folder are read-only** for Claude: a `deny` rule, the guard (for file tools and for commands) and the `corbeille` action all refuse to touch them. Claude's [notes](#sessions-and-memory) notes are saved by the app itself.
+- **`System-Context` and the ClaudeScreen folder are read-only** for Claude: a `deny` rule, the guard (for file tools and for commands) and the `corbeille` action all refuse to touch them. Claude's [notes](#sessions) notes are saved by the app itself.
 - **The Recycle Bin action** (`corbeille`) can send any file or folder to the Recycle Bin, from where you can restore it. It refuses Windows and the installed programs, a whole drive, your whole profile, and `System-Context`.
 
 **Relying on Claude's instructions only:**
@@ -264,7 +273,7 @@ data/               EVERYTHING the app generates, kept apart from the program (p
     images/             screenshot-01.png, zoom-01.png, pdf-01.png...
     prompts/            task.txt (instructions sent to Claude), triage.txt (model choice)
     responses/          task.jsonl (what Claude said and did, step by step), task-errors.txt, triage.txt, triage-errors.txt
-    result.txt          what you were shown at the end, with the steps (History window)
+    result.txt          what you were shown at the end, with the steps (Sessions window)
     session.txt, instruction.txt    the session of the task, and the instruction typed for it
     screen.json         position and scale of the captured screen
     mcp.json            tells Claude Code how to start outils/mcp.ps1 for this task
@@ -272,8 +281,9 @@ data/               EVERYTHING the app generates, kept apart from the program (p
   context-cache/      text extracted from the System-Context PDFs (rebuilt when needed)
   log.txt             app log
   settings.json       permissions given to Claude (regenerated at each start)
-  model.txt, smooth.txt, terminal.txt, context.txt, ghost.txt    the choices made in the icon menu and in the History window
+  model.txt, smooth.txt, terminal.txt, context.txt, ghost.txt    the choices made in the icon menu and in the Sessions window
   session.txt             the id of the current session (each task folder holds the id of its own)
+  sessions/               the notes of the kept sessions that are not the current one
   terminal-accepted.txt   you answered Yes to the Terminal access question (delete it to be asked again)
 ```
 

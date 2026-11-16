@@ -80,12 +80,12 @@ Verifier 'a task on a full memory: note saved, nothing said to the user' ((Sans-
 
 '--- New session'
 $libelles = @($menu.Items | ForEach-Object { $_.Text })
-Verifier 'menu: New session, no Persistent memory, no Stop' ($libelles -contains 'New session' -and $libelles -contains 'Open the Claude-Work folder' -and $libelles -notcontains 'Persistent memory' -and $libelles -notcontains 'Stop the current task') ($libelles -join ' | ')
+Verifier 'menu: Sessions; no History, New session, Persistent memory or Stop' ($libelles[0] -eq 'Sessions' -and $libelles -contains 'Open the Claude-Work folder' -and -not ($libelles | Where-Object { $_ -in 'History', 'New session', 'Persistent memory', 'Stop the current task' })) ($libelles -join ' | ')
 Verifier 'an old memory.txt (on or off) no longer turns the notes off' ($script:Memoire -and (Get-Content $FichierMemoire -Raw).Trim() -eq 'on')
 $sessionAvant = Lire-Session
-($menu.Items | Where-Object { $_.Text -eq 'New session' }).PerformClick()
+Verifier 'New session: done' (Nouvelle-Session)
 Verifier 'New session: memory.md emptied (comment kept), a new session id' ((Get-NoteMemoire $FichierNotes) -eq '' -and [IO.File]::ReadAllText($FichierNotes, [Text.Encoding]::UTF8).StartsWith('<!--') -and (Lire-Session) -ne $sessionAvant -and (Lire-Session) -match '^\d{8}-\d{6}')
-Verifier 'New session: the cleared notes are kept once in data, nothing goes to the bin' ((Get-NoteMemoire $FichierNotesAvant) -match 'the newest note y+' -and $FichierNotesAvant -like '*\data\memory-previous.md' -and @(Get-ChildItem $global:FauxBac -Filter 'memory*').Count -eq 0 -and [bool]((Get-Content $Journal -Encoding UTF8) -match 'New session: \d{8}'))
+Verifier 'New session: the notes of the session that ended are put away with it, nothing goes to the bin' ((Get-NoteMemoire (Fichier-NotesSession $sessionAvant)) -match 'the newest note y+' -and (Fichier-NotesSession $sessionAvant) -like "*\data\sessions\$sessionAvant.md" -and @(Get-ChildItem $global:FauxBac -Filter 'memory*').Count -eq 0 -and [bool]((Get-Content $Journal -Encoding UTF8) -match 'New session: \d{8}'))
 Verifier 'New session: instructions.md untouched' ([IO.File]::ReadAllText($FichierInstructions, [Text.Encoding]::UTF8) -eq $ins)
 $cap3 = Fausse-Capture
 Lancer-Tache $cap3 ''
@@ -95,8 +95,6 @@ Ecrire-Reponse $cap3 "Done.`nMEMORY: first note of the new session"
 $script:Proc = Faux-Proc 0
 Processus-Fini
 Verifier 'new session: its first note is saved' ((Get-NoteMemoire $FichierNotes) -eq '- first note of the new session') (Get-NoteMemoire $FichierNotes)
-[void](Nouvelle-Session); [void](Nouvelle-Session)
-Verifier 'New session on an empty memory: the kept notes are replaced only by notes' ((Get-NoteMemoire $FichierNotesAvant) -match 'first note of the new session')
 [IO.File]::WriteAllText($FichierMemoire, 'never')
 Verifier 'memory.txt = never: the one way to keep no notes at all' (-not (Test-MemoireActive $FichierMemoire))
 [IO.File]::WriteAllText($FichierMemoire, 'on')
@@ -104,4 +102,13 @@ Ecrire-Reponse $cap3 ''
 $script:Proc = Faux-Proc 1
 Processus-Fini
 Verifier 'failed task: error shown' ((Sans-Duree $script:Dernier) -match '^The task failed \(code 1, sonnet\)') $script:Dernier
+
+'--- the task is worked out from the context'
+[IO.File]::WriteAllText((Join-Path $Travail 'exo7_notes.txt'), 'work in progress')
+$cap4 = Fausse-Capture
+Lancer-Tache $cap4 ''
+$p4 = Lire-Prompt $cap4
+Verifier 'prompt: never act at random, the order of what to rely on' ($p4 -match '1\. Find what is being asked before you act: never act at random' -and $p4 -match 'their standing instructions; the active context; your notes of this session; the documents and the recent files' -and $p4 -match 'do not guess an action: change nothing')
+Verifier 'prompt: the recent files of the work folder, not those of System-Context' ($p4 -match 'Most recent files of the work folder' -and $p4 -match [regex]::Escape((Join-Path $Travail 'exo7_notes.txt') + '  (') -and ($p4.Substring($p4.IndexOf('Most recent files'))) -notmatch 'System-Context\\instructions\.md')
+Ecrire-Reponse $cap4 'Done.'; $script:Proc = Faux-Proc 0; Processus-Fini
 } catch { Verifier 'scenario ran to the end' $false ($_.Exception.Message + ' ' + $_.InvocationInfo.PositionMessage) }

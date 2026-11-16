@@ -11,7 +11,7 @@ $MemoireMax = 4000
 $MemoireEntete = @"
 <!--
 Claude's notes for the current session, one per line. The app adds them after each task.
-You can edit or remove lines. "New session" in the icon menu empties this file.
+You can edit or remove lines. A new session starts with this file empty.
 -->
 "@
 
