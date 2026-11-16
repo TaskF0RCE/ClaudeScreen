@@ -2,6 +2,10 @@
 # Claude Code is never started: Demarrer-Claude only records how it would have been called.
 $Claude = Join-Path $env:WINDIR 'System32\whoami.exe'   # any existing program: the app only checks that it exists
 $global:Appels = @()
+# The question asked when Terminal access is checked: answered here, no dialog box.
+$global:ReponseTerminal = $true
+$global:QuestionsTerminal = 0
+function Confirmer-Terminal { $global:QuestionsTerminal++; $global:ReponseTerminal }
 function Demarrer-Claude([string]$modele, [string]$nom, [string]$options) { $global:Appels += "$modele|$nom|$options"; $script:Proc = $null }
 function Sans-Duree([string]$t) { ($t -replace '^(\[\w+), \d+ s\]', '$1]') -replace '(\(code \d+, \w+), \d+ s\)', '$1)' }
 function Faux-Proc([int]$code) { [pscustomobject]@{ ExitCode = $code; HasExited = $true } | Add-Member ScriptMethod Dispose { } -PassThru }

@@ -71,6 +71,11 @@ function Get-InstructionUtilisateur([string]$chemin) {
     $texte
 }
 
+# $true when the file holds more than Get-InstructionUtilisateur sends: its end is left out.
+function Test-InstructionCoupee([string]$chemin) {
+    (Format-Instruction (Read-FichierMemoire $chemin)).Length -gt $MemoireMaxInstructions
+}
+
 # Claude's notes (memory.md), cleaned, 4000 characters at most.
 function Get-NoteMemoire([string]$chemin) {
     $texte = Format-Instruction (Read-FichierMemoire $chemin)

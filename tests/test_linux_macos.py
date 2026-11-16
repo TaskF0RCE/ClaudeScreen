@@ -279,6 +279,30 @@ def garde(entree):
 verifier('a harmless command is allowed', garde('{"tool_input":{"command":"ls -la"}}') == 0)
 verifier('rm is blocked', garde('{"tool_input":{"command":"rm -rf build"}}') == 2)
 
+print('--- texts longer than 4000 characters')
+a.proc = None
+a.memoire = False
+avant_ins = lire(cs.FICHIER_INSTRUCTIONS)
+with open(cs.FICHIER_INSTRUCTIONS, 'w', encoding='utf-8') as f:
+    f.write('<!-- %s -->\n%s' % ('c' * 5000, 'Always answer briefly. ' * 200))
+c7 = capture()
+a.lancer_tache(c7, '')
+open(os.path.join(c7['run'], 'mcp-started.txt'), 'w').close()
+repondre(c7, 'Done.')
+a.proc = types.SimpleNamespace(returncode=0)
+a.processus_fini()
+verifier('long instructions.md: said in the result', a.coupes == ['instructions.md']
+         and re.search(r'Done\.\n\n\(Warning: instructions\.md is longer than 4000 characters, so its end was not sent', a.dernier) is not None, a.dernier)
+with open(cs.FICHIER_INSTRUCTIONS, 'w', encoding='utf-8') as f:
+    f.write(avant_ins)
+c8 = capture()
+a.lancer_tache(c8, '')
+open(os.path.join(c8['run'], 'mcp-started.txt'), 'w').close()
+repondre(c8, 'Done.')
+a.proc = types.SimpleNamespace(returncode=0)
+a.processus_fini()
+verifier('shortened again: no warning any more', a.coupes == [] and 'Warning' not in a.dernier, a.dernier)
+
 print('--- steps of a task and History')
 a.memoire = True
 a.choix_modele = 'sonnet'

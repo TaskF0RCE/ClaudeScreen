@@ -15,3 +15,6 @@ cache-contexte/
 # Personal context (instructions, course notes...) lives in Documents\Claude-Work\System-Context.
 # If someone puts a copy in the repo, it is never pushed to GitHub.
 System-Context/
+
+# The installer built by installer/Build-Setup.ps1
+dist/

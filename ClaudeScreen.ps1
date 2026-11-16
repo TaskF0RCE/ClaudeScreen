@@ -288,6 +288,7 @@ $script:Modele = $null
 $script:Arret = $null       # reason for the requested stop, otherwise $null
 $script:MemoireTache = $false   # persistent memory was on when the current task started
 $script:TerminalTache = $false  # terminal access was on when the current task started
+$script:Coupes = @()           # files of System-Context whose end was left out of the current task (too long)
 $script:Image = 0
 $script:ChoixModele = 'auto'
 if (Test-Path $FichierModele) { $script:ChoixModele = (Get-Content $FichierModele -Raw).Trim() }
@@ -313,7 +314,7 @@ function Lire-ContexteActif {
     $nom = if (Test-Path -LiteralPath $FichierContexte) { "$(Get-Content -LiteralPath $FichierContexte -Raw -Encoding UTF8)".Trim() } else { '' }
     if (-not $nom -or -not (Test-Path -LiteralPath (Join-Path $DossierContextes "$nom.md"))) { $nom = 'Default' }
     $texte = Get-InstructionUtilisateur (Join-Path $DossierContextes "$nom.md")
-    [pscustomobject]@{ Nom = $nom; Texte = $texte }
+    [pscustomobject]@{ Nom = $nom; Texte = $texte; Coupe = (Test-InstructionCoupee (Join-Path $DossierContextes "$nom.md")) }
 }
 
 # Claude Code update: at startup, then once a day. The app only runs "claude -p", which may never update it,
@@ -404,6 +405,11 @@ function Lancer-Tache($capture, [string]$instruction) {
         if (-not (Test-Path -LiteralPath $Claude)) { throw "Claude Code not found ($Claude). Install it, log in once, then try again: see the README." }
         $script:TerminalTache = $script:Terminal
         $actif = Lire-ContexteActif
+        # Texts cut at 4000 characters: said in the result, so that the user does not think Claude ignored the end.
+        $script:Coupes = @()
+        if ($actif.Coupe) { $script:Coupes += "Contexts\$($actif.Nom).md" }
+        if (Test-InstructionCoupee $FichierInstructions) { $script:Coupes += 'instructions.md' }
+        foreach ($coupe in $script:Coupes) { Noter "$coupe is longer than 4000 characters: its end was not sent to Claude" }
         $contexteActif = "`nActive context: $($actif.Nom) (chosen by the user in the icon menu)."
         if ($actif.Texte) { $contexteActif += " It says who the user is and how to work for them:`n$($actif.Texte)" }
         $contexteActif += "`n"
@@ -702,6 +708,9 @@ function Processus-Fini {
         $reponse += "`n`n(Warning: the PC control tool did not start, so Claude could not act on the screen. Try again; if it happens every time, run: claude update.)"
         Noter 'The PC control tool (MCP) did not start'
     }
+    if ($code -eq 0 -and $reponse -and $script:Coupes) {
+        $reponse += "`n`n(Warning: $($script:Coupes -join ' and ') is longer than 4000 characters, so its end was not sent to Claude. Keep the essential there and put the rest in another file of System-Context: Claude reads those when needed.)"
+    }
     if ($code -eq 0 -and $reponse) {
         $script:Dernier = "[$script:Modele, $duree s] $reponse"
         $icone.Icon = $IconeFini; Infobulle ('done: ' + $reponse)
@@ -788,7 +797,19 @@ $script:Terminal = (Test-Path $FichierTerminal) -and ("$(Get-Content $FichierTer
 $menuTerminal = New-Object System.Windows.Forms.ToolStripMenuItem 'Terminal access'
 $menuTerminal.CheckOnClick = $true
 $menuTerminal.Checked = $script:Terminal
+# Checking it asks first: it is the one setting that lets Claude do more than a person at the keyboard sees.
+function Confirmer-Terminal {
+    $message = "Terminal access lets Claude run PowerShell commands on this PC during a task, on top of the mouse and keyboard.`n`n" +
+        "Every command goes through a guard first: no deletion, no administrator rights, no installation or download, no change to Windows. " +
+        "The guard is a list of forbidden things, not a sandbox: a command it does not know can still run.`n`n" +
+        "Turn it on only when a task needs it (many files, data to process). Allow Claude to run commands?"
+    [System.Windows.Forms.MessageBox]::Show($message, "$Nom - Terminal access", 'YesNo', 'Warning', 'Button2') -eq 'Yes'
+}
 $menuTerminal.add_Click({
+    if ($menuTerminal.Checked -and -not (Confirmer-Terminal)) {
+        $menuTerminal.Checked = $false
+        Noter 'Terminal access: not allowed (the user answered No)'
+    }
     $script:Terminal = $menuTerminal.Checked
     $etat = if ($script:Terminal) { 'on' } else { 'off' }
     Set-Content -Path $FichierTerminal -Value $etat -Encoding ASCII
