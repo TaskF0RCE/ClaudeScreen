@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/TaskF0RCE/ClaudeScreen/compare/v0.7.1...v0.8.0) (2026-11-16)
+
+
+### ✨ Features
+
+* sessions with their whole history, ghost mode, and a lighter menu ([#30](https://github.com/TaskF0RCE/ClaudeScreen/issues/30)) ([08d9c7f](https://github.com/TaskF0RCE/ClaudeScreen/commit/08d9c7fab9053d7358bd03f8df35065ed5736e6a))
+
 ## [0.7.1](https://github.com/TaskF0RCE/ClaudeScreen/compare/v0.7.0...v0.7.1) (2026-11-16)
 
 
