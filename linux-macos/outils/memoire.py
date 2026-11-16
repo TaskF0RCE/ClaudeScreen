@@ -28,9 +28,8 @@ MAX_NOTE = 300
 MAX_MEMOIRE = 4000
 
 ENTETE = """<!--
-Claude's notes (persistent memory), one per line. The app adds them after each task
-while "Persistent memory" is checked in the icon menu. You can edit or remove lines.
-Unchecking the mode empties this file.
+Claude's notes for the current session, one per line. The app adds them after each task.
+You can edit or remove lines. "New session" in the icon menu empties this file.
 -->
 """
 
@@ -52,8 +51,11 @@ Always answer in English.
 
 
 def active(fichier_etat):
-    """True unless the user switched persistent memory off (data/memory.txt contains "off")."""
-    return lire(fichier_etat).strip().lower() != 'off'
+    """Claude's notes are always kept, unless the user wrote "never" in data/memory.txt.
+
+    (The file used to hold on/off, set by a menu item that no longer exists: both now mean kept.)
+    """
+    return lire(fichier_etat).strip().lower() != 'never'
 
 
 def lire(chemin):

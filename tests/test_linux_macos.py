@@ -234,7 +234,7 @@ c3 = capture()
 a.lancer_tache(c3, '')
 verifier('memory off: nothing about memory in the prompt', 'MEMORY' not in prompt(c3) and 'Persistent memory' not in prompt(c3))
 
-verifier('memory is on unless switched off', memoire.active(os.path.join(bac, 'nothing.txt')) and not os.path.exists(os.path.join(bac, 'nothing.txt')))
+verifier('notes are kept when memory.txt does not exist', memoire.active(os.path.join(bac, 'nothing.txt')) and not os.path.exists(os.path.join(bac, 'nothing.txt')))
 
 print('--- instructions.txt from an old version')
 vieux = os.path.join(bac, 'old')
@@ -349,14 +349,17 @@ verifier('finished: result.txt = the answer, then the steps, the answer not repe
          t == a.dernier + '\n\n----- What Claude did -----\nI fill in the form.\n  > clic 10 20, remplacer Paris', t)
 verifier('the note still went to memory.md', 'form done' in memoire.notes(cs.FICHIER_NOTES))
 h = cs.historique()
-verifier('history: the result files of the 2 tasks, newest first', h == [os.path.join(c5['run'], 'result.txt'), os.path.join(c4['run'], 'result.txt')], h)
-verifier('History window: opens on the newest result, no separate last message', a.fichiers_resultat() == h)
+verifier('history: the result files of the 2 tasks, oldest first', h == [os.path.join(c4['run'], 'result.txt'), os.path.join(c5['run'], 'result.txt')], h)
+verifier('History window: the newest result is the last one, no separate last message', a.fichiers_resultat() == h)
+verifier('a task keeps the id of its session, and its instruction', lire(os.path.join(c4['run'], 'session.txt')) == cs.lire_session()
+         and lire(os.path.join(c4['run'], 'instruction.txt')) == 'cable the routers' and not os.path.exists(os.path.join(c5['run'], 'instruction.txt')))
 a.echec('Could not start the task: test')
 f = a.fichiers_resultat()
-verifier('a task that could not start: its message first, then the kept results', f == [cs.DERNIER] + h and lire(cs.DERNIER) == 'Could not start the task: test')
+verifier('a task that could not start: the kept results, then its message', f == h + [cs.DERNIER] and lire(cs.DERNIER) == 'Could not start the task: test')
 a.proc = types.SimpleNamespace(returncode=0)
 a.etape = 'tri'
-verifier('a task in progress: shown first', a.fichiers_resultat() == [cs.DERNIER] + h and lire(cs.DERNIER) == 'Looking at the screen...')
+verifier('a task in progress: shown last', a.fichiers_resultat() == h + [cs.DERNIER] and lire(cs.DERNIER) == 'Looking at the screen...')
+verifier('during a task: no new session, no ghost mode', not a.nouvelle_session() and not a.basculer_fantome(True) and not a.fantome)
 a.proc = None
 for i in range(20):
     d = os.path.join(cs.RUNS, '20261113-16%02d00' % i)
@@ -365,11 +368,54 @@ for i in range(20):
         with open(os.path.join(d, 'result.txt'), 'w', encoding='utf-8') as f:
             f.write('Result number %d' % i)
 h = cs.historique()
-verifier('history: every kept result, the task without a result skipped', len(h) == 21 and h[2].endswith(os.path.join('20261113-161900', 'result.txt'))
-         and os.path.dirname(os.path.dirname(h[2])) == cs.RUNS, h[:3])
+verifier('history: every kept result, the task without a result skipped', len(h) == 21 and h[18].endswith(os.path.join('20261113-161900', 'result.txt'))
+         and os.path.dirname(os.path.dirname(h[18])) == cs.RUNS, h[:3])
 sys.path.insert(0, os.path.join(app, 'outils'))
 import fenetres  # noqa: E402
-verifier('window title: the date of the task, read from its folder', fenetres._titre(h[2]) == '13/11/2026 16:19' and fenetres._titre(cs.DERNIER) == 'now')
+verifier('window title: the date of the task, and its session when it has one', fenetres._titre(h[18]) == '13/11/2026 16:19'
+         and fenetres._titre(cs.DERNIER) == 'now' and re.fullmatch(r'.+   \(session of \d\d/\d\d/\d{4} \d\d:\d\d\)', fenetres._titre(os.path.join(c4['run'], 'result.txt'))) is None)
+with open(os.path.join(cs.RUNS, '20261113-161900', 'session.txt'), 'w') as f:
+    f.write('20261113-160000')
+with open(os.path.join(cs.RUNS, '20261113-161900', 'instruction.txt'), 'w') as f:
+    f.write('only question 4')
+verifier('window: session in the title, instruction before the result', fenetres._titre(h[18]) == '13/11/2026 16:19   (session of 13/11/2026 16:00)'
+         and fenetres._texte(h[18]) == 'Instruction: only question 4\n\nResult number 19' and fenetres._texte(h[17]) == 'Result number 18')
+
+print('--- New session and ghost mode')
+with open(cs.FICHIER_NOTES, 'w', encoding='utf-8') as f:
+    f.write(memoire.ENTETE + '- a note of the session\n')
+avant = cs.lire_session()
+verifier('New session: notes emptied and kept once, a new session id', a.nouvelle_session() and memoire.notes(cs.FICHIER_NOTES) == ''
+         and 'a note of the session' in memoire.notes(cs.FICHIER_NOTES_AVANT) and cs.lire_session() != avant
+         and re.match(r'^\d{8}-\d{6}', cs.lire_session()) is not None)
+with open(cs.FICHIER_NOTES, 'w', encoding='utf-8') as f:
+    f.write(memoire.ENTETE + '- a note of the new session\n')
+verifier('notes are always kept: an old memory.txt (on or off) does not turn them off, only "never" does',
+         memoire.active(cs.FICHIER_MEMOIRE) and memoire.active(os.path.join(bac, 'nothing.txt')))
+with open(os.path.join(bac, 'never.txt'), 'w') as f:
+    f.write('never')
+verifier('memory.txt = never: no notes at all', not memoire.active(os.path.join(bac, 'never.txt')))
+verifier('ghost mode: off by default, turned on', not a.fantome and a.basculer_fantome(True) and a.fantome and lire(cs.FICHIER_FANTOME) == 'on')
+nb = len(os.listdir(cs.RUNS))
+g = capture()
+a.lancer_tache(g, 'a secret instruction')
+pg = prompt(g)
+verifier('ghost: the notes of the session are not sent, none is asked for', 'MEMORY' not in pg and 'a note of the new session' not in pg and 'a secret instruction' in pg)
+verifier('ghost: no session id, no instruction file', not os.path.exists(os.path.join(g['run'], 'session.txt')) and not os.path.exists(os.path.join(g['run'], 'instruction.txt')))
+open(os.path.join(g['run'], 'mcp-started.txt'), 'w').close()
+repondre(g, 'Secret answer.\nMEMORY: must not be saved')
+a.proc = types.SimpleNamespace(returncode=0)
+a.processus_fini()
+verifier('ghost: the answer is shown, the task folder is gone, no note saved', 'Secret answer.' in a.dernier and not os.path.exists(g['run'])
+         and len(os.listdir(cs.RUNS)) == nb and memoire.notes(cs.FICHIER_NOTES) == '- a note of the new session', a.dernier)
+verifier('ghost: the answer is the last entry of the window', a.fichiers_resultat()[-1] == cs.DERNIER and 'Secret answer.' in lire(cs.DERNIER))
+verifier('ghost off: the ghost answer is forgotten', a.basculer_fantome(False) and a.dernier.startswith('No task yet') and not os.path.exists(cs.DERNIER)
+         and a.fichiers_resultat() == cs.historique() and lire(cs.FICHIER_FANTOME) == 'off')
+k = capture()
+a.lancer_tache(k, '')
+verifier('after ghost mode: the notes of the session are sent again', 'a note of the new session' in prompt(k))
+a.proc = None
+
 long = os.path.join(bac, 'long.jsonl')
 with open(long, 'w', encoding='utf-8') as f:
     f.write(''.join(json.dumps(ev_texte('step %d %s' % (i, 'y' * 600))) + '\n' for i in range(1, 101)))

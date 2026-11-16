@@ -1,9 +1,8 @@
 # instructions.md and memory.md (System-Context). Dot-sourced by ClaudeScreen.ps1.
 #   instructions.md: the user's standing instructions. It is the user's file: once it exists,
 #     neither the app nor Claude ever changes it.
-#   memory.md: Claude's notes (persistent memory). While "Persistent memory" is checked in the icon
-#     menu, the app saves there the "MEMORY: ..." lines found at the end of Claude's final answer.
-#     Unchecking the mode empties the file (the notes it held are kept once in data\memory-previous.md).
+#   memory.md: Claude's notes for the current session. After each task, the app saves there the "MEMORY: ..." lines found at the end of Claude's final answer.
+#     "New session" empties the file (the notes it held are kept once in data\memory-previous.md).
 # Comments (<!-- ... -->) are ignored in both files. Same logic as linux-macos/outils/memoire.py.
 
 $MemoireMaxInstructions = 4000
@@ -11,9 +10,8 @@ $MemoireMaxNote = 300
 $MemoireMax = 4000
 $MemoireEntete = @"
 <!--
-Claude's notes (persistent memory), one per line. The app adds them after each task
-while "Persistent memory" is checked in the icon menu. You can edit or remove lines.
-Unchecking the mode empties this file.
+Claude's notes for the current session, one per line. The app adds them after each task.
+You can edit or remove lines. "New session" in the icon menu empties this file.
 -->
 "@
 
@@ -52,9 +50,10 @@ function Send-Corbeille([string]$chemin) {
         [Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs, [Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin)
 }
 
-# Persistent memory is on unless the user unchecked it (data/memory.txt = off).
+# Claude's notes are always kept, unless the user wrote "never" in data/memory.txt.
+# (The file used to hold on/off, set by a menu item that no longer exists: both now mean kept.)
 function Test-MemoireActive([string]$fichierEtat) {
-    -not ((Test-Path -LiteralPath $fichierEtat) -and ("$(Get-Content -LiteralPath $fichierEtat -Raw)".Trim() -eq 'off'))
+    -not ((Test-Path -LiteralPath $fichierEtat) -and ("$(Get-Content -LiteralPath $fichierEtat -Raw)".Trim() -eq 'never'))
 }
 
 # Text without comments or empty lines.
@@ -88,7 +87,7 @@ function Initialize-Memoire([string]$chemin) {
     if (-not (Test-Path -LiteralPath $chemin)) { Write-FichierMemoire $chemin ($MemoireEntete + "`n") }
 }
 
-# Persistent memory turned off: memory.md is emptied (its comment stays). $true if it held notes.
+# New session: memory.md is emptied (its comment stays). $true if it held notes.
 # The notes it held are copied first to $sauvegarde, one file that is replaced each time: a click by
 # mistake can be undone, and the Recycle Bin does not fill up with one memory.md per click.
 function Clear-Memoire([string]$chemin, [string]$sauvegarde) {

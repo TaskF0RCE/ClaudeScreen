@@ -1,8 +1,8 @@
 """Small windows of the app, started in a separate process (Tk and the menu bar icon
 cannot share the main thread on macOS).
 
-  fenetres.py resultat FILE...      History window: the first file is shown, two arrows go through the others
-                                    (newest first; closes when you click elsewhere)
+  fenetres.py resultat FILE...      History window: the last file is shown, two arrows go through the others
+                                    (oldest first; closes when you click elsewhere)
   fenetres.py consigne X Y          instruction bar; X Y = bottom-left corner of the captured screen.
                                     Enter: prints the text on stdout, exit code 0.
                                     Esc / click elsewhere: exit code 1.
@@ -57,13 +57,34 @@ def _fermer_si_quitte(root, action):
 
 # ------------------------------------------------------------------ result
 
+def _date(nom):
+    return datetime.datetime.strptime(nom[:15], '%Y%m%d-%H%M%S').strftime('%d/%m/%Y %H:%M')
+
+
 def _titre(fichier):
-    """Date of a task, read from the name of its folder (20261113-161334); 'now' for anything else."""
-    nom = os.path.basename(os.path.dirname(os.path.abspath(fichier)))
+    """Date of a task, read from the name of its folder (20261113-161334), and the session it belongs to
+    (session.txt next to it); 'now' for anything else."""
+    dossier = os.path.dirname(os.path.abspath(fichier))
     try:
-        return datetime.datetime.strptime(nom[:15], '%Y%m%d-%H%M%S').strftime('%d/%m/%Y %H:%M')
+        titre = _date(os.path.basename(dossier))
     except ValueError:
         return 'now'
+    try:
+        with open(os.path.join(dossier, 'session.txt'), encoding='utf-8') as f:
+            titre += '   (session of %s)' % _date(f.read().strip())
+    except (OSError, ValueError):
+        pass
+    return titre
+
+
+def _texte(fichier):
+    """The result of a task, after the instruction typed for it when there was one."""
+    texte = _lire(fichier)
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(fichier)), 'instruction.txt'), encoding='utf-8') as f:
+            return 'Instruction: %s\n\n%s' % (f.read().strip(), texte)
+    except OSError:
+        return texte
 
 
 def _lire(fichier):
@@ -78,8 +99,8 @@ def resultat(fichiers):
     try:
         import tkinter as tk
     except ImportError:
-        return _resultat_sans_tk(fichiers[0])
-    etat = {'position': 0}
+        return _resultat_sans_tk(fichiers[-1])
+    etat = {'position': len(fichiers) - 1}  # opens on the newest task, the last one (3 / 3)
 
     root = tk.Tk()
     root.title('Claude-Work')
@@ -89,9 +110,9 @@ def resultat(fichiers):
     # The bar with the two arrows: older result on the left, newer on the right.
     haut = tk.Frame(root)
     haut.pack(fill='x')
-    ancien = tk.Button(haut, text='<', width=3, command=lambda: aller(1))
+    ancien = tk.Button(haut, text='<', width=3, command=lambda: aller(-1))
     ancien.pack(side='left')
-    recent = tk.Button(haut, text='>', width=3, command=lambda: aller(-1))
+    recent = tk.Button(haut, text='>', width=3, command=lambda: aller(1))
     recent.pack(side='right')
     titre = tk.Label(haut)
     titre.pack(side='left', fill='x', expand=True)
@@ -106,16 +127,16 @@ def resultat(fichiers):
     barre.config(command=zone.yview)
 
     def aller(pas):
-        # +1 = one task further back, -1 = one task closer to now.
+        # -1 = one task further back, +1 = one task closer to now.
         etat['position'] = max(0, min(len(fichiers) - 1, etat['position'] + pas))
         n = etat['position']
         zone.config(state='normal')
         zone.delete('1.0', 'end')
-        zone.insert('1.0', _lire(fichiers[n]))
+        zone.insert('1.0', _texte(fichiers[n]))
         zone.config(state='disabled')  # read-only (selecting and copying still work)
         titre.config(text='%d / %d   %s' % (n + 1, len(fichiers), _titre(fichiers[n])))
-        ancien.config(state='normal' if n < len(fichiers) - 1 else 'disabled')
-        recent.config(state='normal' if n > 0 else 'disabled')
+        ancien.config(state='normal' if n > 0 else 'disabled')
+        recent.config(state='normal' if n < len(fichiers) - 1 else 'disabled')
 
     aller(0)
     root.bind('<Escape>', lambda _e: root.destroy())

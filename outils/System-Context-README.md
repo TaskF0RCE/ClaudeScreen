@@ -29,13 +29,13 @@ Default is used when you choose nothing.
   screen, what to do when you give no instruction, what never to do). It appears in the menu.
 - Remove the ones you don't need.
 
-## memory.md: Claude's notes (Persistent memory)
+## memory.md: Claude's notes for the current session
 
-When **Persistent memory** is checked in the icon menu (it is by default), Claude ends each task with short notes
+Claude ends each task with short notes
 (what it learned about you and your work, how far it got). ClaudeScreen saves them in `memory.md`
-and gives them back to Claude at the next tasks: a kind of mini session.
+and gives them back to Claude at the next tasks of the same session.
 
-You can open `memory.md`, fix a note or remove a line. When you uncheck Persistent memory,
+You can open `memory.md`, fix a note or remove a line. When you choose **New session** in the icon menu,
 the file is emptied. The notes it just lost are kept once in the `data` folder of the app (`memory-previous.md`).
 
 ## Your documents
@@ -56,7 +56,7 @@ Formats read best: `.pdf`, `.txt`, `.md`, images (`.png`, `.jpg`), code, `.csv`,
 ## Priorities
 
 1. The instruction typed in the small bar (Ctrl+Alt+Shift+C, or ⌃⌥⇧C on a Mac), for a single task.
-2. `instructions.md`, for every task (then Claude's notes in `memory.md`, if Persistent memory is on).
+2. `instructions.md`, for every task (then Claude's notes in `memory.md`).
 3. The active context.
 4. What Claude guesses from the screen.
 

@@ -56,13 +56,15 @@ RUNS = os.path.join(DONNEES, 'runs')
 JOURNAL = os.path.join(DONNEES, 'log.txt')
 FICHIER_MODELE = os.path.join(DONNEES, 'model.txt')
 FICHIER_SMOOTH = os.path.join(DONNEES, 'smooth.txt')  # smooth mode: "on" or "off", read by pc.py at every action
-FICHIER_MEMOIRE = os.path.join(DONNEES, 'memory.txt')  # persistent memory: "on" or "off"
+FICHIER_MEMOIRE = os.path.join(DONNEES, 'memory.txt')  # Claude's notes are always kept, unless this file says "never"
+FICHIER_SESSION = os.path.join(DONNEES, 'session.txt')  # id of the current session (see New session)
+FICHIER_FANTOME = os.path.join(DONNEES, 'ghost.txt')    # ghost mode: "on" or "off" (default)
 FICHIER_CONTEXTE = os.path.join(DONNEES, 'context.txt')  # name of the active context (Context menu); none = Default
 # Contexts shipped with the app (at the root of the repository), copied once into System-Context/Contexts.
 CONTEXTES_FOURNIS = os.path.join(os.path.dirname(RACINE), 'contexts')
 REGLAGES = os.path.join(DONNEES, 'settings.json')
 DERNIER = os.path.join(DONNEES, 'last-result.txt')
-FICHIER_NOTES_AVANT = os.path.join(DONNEES, 'memory-previous.md')  # the notes cleared by the last unchecking of Persistent memory
+FICHIER_NOTES_AVANT = os.path.join(DONNEES, 'memory-previous.md')  # the notes cleared by the last New session
 MCP_SCRIPT = os.path.join(OUTILS, 'mcp.py')  # the MCP server Claude controls the computer through
 GARDE = os.path.join(OUTILS, 'garde.py')
 FENETRES = os.path.join(OUTILS, 'fenetres.py')
@@ -355,7 +357,7 @@ def texte_memoire():
     (see processus_fini): no tool call, and Claude never writes in System-Context.
     """
     notes = memoire.notes(FICHIER_NOTES) or '(no notes yet)'
-    return ("\nPersistent memory is ON (the user turned it on in the icon menu). Your notes from the previous tasks:\n"
+    return ("\nPersistent memory is ON: the tasks of one session follow each other. Your notes from the previous tasks of this session:\n"
             "%s\n"
             "They may be outdated: the screen and the user's instructions take priority. To save what will help "
             "with the next tasks (what you learned about the user, their work, how far you got), "
@@ -423,12 +425,25 @@ def _lister_documents():
 
 
 def historique():
-    """The results of the earlier tasks (result.txt of each task folder), newest first."""
+    """The results of the earlier tasks (result.txt of each task folder), oldest first."""
     try:
-        return [os.path.join(RUNS, n, 'result.txt') for n in sorted(os.listdir(RUNS), reverse=True)
+        return [os.path.join(RUNS, n, 'result.txt') for n in sorted(os.listdir(RUNS))
                 if os.path.isfile(os.path.join(RUNS, n, 'result.txt'))]
     except OSError:
         return []
+
+
+def lire_session():
+    """Id of the current session (the date it started), created when there is none.
+
+    A session is a run of tasks that belong together: Claude keeps its notes (memory.md) from one task to the
+    next. "New session" starts again from nothing. Every task folder holds the id of its session (session.txt).
+    """
+    ident = lire_texte(FICHIER_SESSION)
+    if not re.match(r'^\d{8}-\d{6}(-\d+)?$', ident):
+        ident = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
+        ecrire_texte(FICHIER_SESSION, ident)
+    return ident
 
 
 def preparer_outils():
@@ -466,7 +481,8 @@ class Appli:
         self.debut = None
         self.modele = None
         self.arret = None        # reason for the requested stop, otherwise None
-        self.memoire_tache = False  # persistent memory was on when the current task started
+        self.memoire_tache = False  # Claude's notes are read and saved for the current task (not in ghost mode)
+        self.fantome_tache = False  # the current task was started in ghost mode: nothing of it is kept
         self.tuer_a = None       # time of the SIGKILL if SIGTERM is not enough
         self.image = 0
         self.boite = None        # pending screenshot while the instruction bar is open
@@ -480,7 +496,8 @@ class Appli:
         if self.choix_modele not in ('auto', 'sonnet', 'opus'):
             self.choix_modele = 'auto'
         self.smooth = lire_texte(FICHIER_SMOOTH).lower() == 'on'
-        self.memoire = lire_texte(FICHIER_MEMOIRE).lower() == 'on'
+        self.memoire = memoire.active(FICHIER_MEMOIRE)
+        self.fantome = lire_texte(FICHIER_FANTOME).lower() == 'on'
         self.dernier = 'No task yet. Press %s when the task is on screen.' % NOMS_RACCOURCIS[1]
         self.dernier_hors_historique = False  # self.dernier is a message that no task folder holds
         self.coupes = []  # files of System-Context whose end was left out of the current task (too long)
@@ -521,13 +538,50 @@ class Appli:
             'What Claude did so far:\n' + etapes if etapes else 'Nothing to show yet.')
 
     def fichiers_resultat(self):
-        """What the History window can show, newest first: what is going on now (when it is not a result
-        kept in a task folder), then the results of the earlier tasks."""
+        """What the History window can show, oldest first: the results of the kept tasks, then what is going on
+        now when no task folder holds it (a task in progress, a ghost answer, a task that could not start)."""
         anciens = historique()
         if self.proc or self.dernier_hors_historique or not anciens:
             ecrire_texte(DERNIER, self.texte_resultat())
-            return [DERNIER] + anciens
+            return anciens + [DERNIER]
         return anciens
+
+    def nouvelle_session(self):
+        """Claude's notes are emptied (the previous ones are kept once in data/memory-previous.md) and the next
+        tasks start a new history. Not during a task."""
+        if self.proc:
+            noter('New session: not during a task')
+            return False
+        try:
+            memoire.vider(FICHIER_NOTES, FICHIER_NOTES_AVANT)
+            memoire.preparer(FICHIER_NOTES)
+        except OSError as ex:
+            noter('memory.md: %s' % ex)
+        ident = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
+        if ident == lire_session():
+            ident += '-2'
+        ecrire_texte(FICHIER_SESSION, ident)
+        self.dernier = 'New session. Press %s when the task is on screen.' % NOMS_RACCOURCIS[1]
+        self.dernier_hors_historique = False
+        noter('New session: %s' % ident)
+        return True
+
+    def basculer_fantome(self, actif):
+        """Ghost mode on or off: no notes are read or written, and the task folder is deleted when the task ends.
+        Not during a task. Turning it off forgets the last ghost answer."""
+        if self.proc:
+            return False
+        self.fantome = actif
+        ecrire_texte(FICHIER_FANTOME, 'on' if actif else 'off')
+        if not actif and self.dernier_hors_historique:
+            self.dernier = 'No task yet. Press %s when the task is on screen.' % NOMS_RACCOURCIS[1]
+            self.dernier_hors_historique = False
+            try:
+                os.remove(DERNIER)
+            except OSError:
+                pass
+        noter('Ghost mode: %s' % ('on' if actif else 'off'))
+        return True
 
     def montrer_resultat(self):
         """The History window: the newest result or the task in progress, with arrows to the earlier ones."""
@@ -637,11 +691,17 @@ class Appli:
                 ('instructions.md', FICHIER_INSTRUCTIONS)) if memoire.coupe(chemin)]
             for nom in self.coupes:
                 noter('%s is longer than 4000 characters: its end was not sent to Claude' % nom)
-            self.memoire_tache = self.memoire
+            self.fantome_tache = self.fantome
+            self.memoire_tache = self.memoire and not self.fantome
+            if not self.fantome_tache:
+                # What the History window needs to put this task back in its session.
+                ecrire_texte(os.path.join(run, 'session.txt'), lire_session())
+                if instruction:
+                    ecrire_texte(os.path.join(run, 'instruction.txt'), instruction)
             nom_contexte, contenu_contexte = contexte_actif()
             ecrire_texte(os.path.join(run, 'prompts', 'task.txt'),
                          texte_consigne(png, capture['largeur'], capture['hauteur'], fenetre, precision,
-                                        instructions, lister_documents(), self.memoire,
+                                        instructions, lister_documents(), self.memoire_tache,
                                         texte_contexte(nom_contexte, contenu_contexte)))
 
             modele = self.choix_modele
@@ -756,6 +816,16 @@ class Appli:
         except OSError as ex:
             noter('History: %s' % ex)
 
+    def finir_run(self, etapes=''):
+        """End of a task. Ghost mode: its folder (screenshots, prompt, answer) is deleted, and the answer only
+        stays in memory. Otherwise the result is kept with its steps."""
+        if self.fantome_tache:
+            self.dernier_hors_historique = True
+            shutil.rmtree(self.run, ignore_errors=True)
+            return
+        self.enregistrer_resultat(self.dernier, etapes)
+        deroule.compresser(os.path.join(self.run, 'responses', 'task.jsonl'))
+
     def processus_fini(self):
         code = self.proc.returncode
         self.proc = None
@@ -767,8 +837,7 @@ class Appli:
             etapes = deroule.texte(*deroule.lire(flux)[::2])
             self.dernier = 'Task stopped (%s) after %d s.\n\n%s' % (
                 self.arret, duree, 'What Claude did before the stop:\n' + etapes if etapes else 'Claude had not done anything yet.')
-            self.enregistrer_resultat(self.dernier)
-            deroule.compresser(flux)
+            self.finir_run()
             self.mettre_icone(ICONE_REPOS)
             self.infobulle('stopped')
             noter('Task stopped: %s' % self.run)
@@ -785,7 +854,7 @@ class Appli:
             # Persistent memory: the "MEMORY: ..." lines go to memory.md, not to the user.
             reponse, nouvelles = memoire.extraire(reponse)
             reponse = reponse or '(done, no summary)'
-            if nouvelles and self.memoire:
+            if nouvelles:
                 try:
                     ajoutees, retirees = memoire.ajouter(FICHIER_NOTES, nouvelles)
                     noter('Persistent memory: %d note(s) saved' % ajoutees
@@ -810,8 +879,7 @@ class Appli:
                 code, self.modele, duree, self.lire_run(os.path.join('responses', 'task-errors.txt')), reponse)).strip()
             self.mettre_icone(ICONE_ERREUR)
             self.infobulle('error (click to see)')
-        self.enregistrer_resultat(self.dernier, deroule.texte(etapes, omises))
-        deroule.compresser(flux)
+        self.finir_run(deroule.texte(etapes, omises))
         noter('Task finished (code %s, %d s): %s' % (code, duree, self.run))
         self.nettoyer_runs()
 
@@ -948,21 +1016,12 @@ class Appli:
             noter('Smooth mode: %s' % ('on' if self.smooth else 'off'))
             icone.update_menu()
 
-        def basculer_memoire(icone, _item):
-            # On: Claude's notes are kept in System-Context/memory.md, a mini session that lasts across tasks.
-            # Off: memory.md is emptied (previous notes kept once in data/memory-previous.md). instructions.md is never touched.
-            self.memoire = not self.memoire
-            ecrire_texte(FICHIER_MEMOIRE, 'on' if self.memoire else 'off')
-            try:
-                if self.memoire:
-                    memoire.preparer(FICHIER_NOTES)
-                    noter('Persistent memory: on')
-                else:
-                    noter('Persistent memory: off (%s)' % (
-                        'notes cleared; the previous ones are in data/memory-previous.md'
-                        if memoire.vider(FICHIER_NOTES, FICHIER_NOTES_AVANT) else 'no notes'))
-            except Exception as ex:
-                noter('Persistent memory: %s' % ex)
+        def nouvelle_session(icone, _item):
+            self.nouvelle_session()
+            icone.update_menu()
+
+        def basculer_fantome(icone, _item):
+            self.basculer_fantome(not self.fantome)
             icone.update_menu()
 
         def choisir_contexte(nom):
@@ -987,10 +1046,10 @@ class Appli:
                 M('Always Sonnet', choisir('sonnet'), checked=coche('sonnet'), radio=True),
                 M('Always Opus', choisir('opus'), checked=coche('opus'), radio=True))),
             M('Smooth mode', basculer_smooth, checked=lambda _item: self.smooth),
-            M('Persistent memory', basculer_memoire, checked=lambda _item: self.memoire),
+            M('New session', nouvelle_session),
+            M('Ghost mode', basculer_fantome, checked=lambda _item: self.fantome),
             M(lambda _item: 'Context: %s' % contexte_actif()[0], pystray.Menu(menu_contextes)),
             M('Open the %s folder' % NOM, lambda: natif.ouvrir(TRAVAIL)),
-            M('Stop the current task', lambda: self.poster('arreter', 'menu')),
             pystray.Menu.SEPARATOR,
             M('Quit', lambda: self.quitter()),
         )

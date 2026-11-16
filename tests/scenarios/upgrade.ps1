@@ -1,5 +1,5 @@
 # A user coming from an old version: folder renamed, notes moved to memory.md, then a whole task
-# (prompt, triage, result, memory notes) and the Persistent memory menu.
+# (prompt, triage, result, memory notes) and New session.
 try {
 '--- startup'
 Verifier 'work folder is Claude-Work' ($Travail -eq (Join-Path $Documents 'Claude-Work')) $Travail
@@ -78,26 +78,28 @@ $script:Proc = Faux-Proc 0
 Processus-Fini
 Verifier 'a task on a full memory: note saved, nothing said to the user' ((Sans-Duree $script:Dernier) -eq '[sonnet] Done.' -and (Get-NoteMemoire $FichierNotes) -match '(?m)^- the newest note y+$' -and [bool]((Get-Content $Journal -Encoding UTF8) -match '1 note\(s\) saved, \d+ oldest removed')) $script:Dernier
 
-'--- Persistent memory menu'
+'--- New session'
 $libelles = @($menu.Items | ForEach-Object { $_.Text })
-Verifier 'menu: Open the Claude-Work folder' ($libelles -contains 'Open the Claude-Work folder') ($libelles -join ' | ')
-Verifier 'menu: memory checked at start' ($menuMemoire.Checked)
-$menuMemoire.PerformClick()
-Verifier 'unchecked: memory.md emptied (comment kept), state off' ((Get-NoteMemoire $FichierNotes) -eq '' -and [IO.File]::ReadAllText($FichierNotes, [Text.Encoding]::UTF8).StartsWith('<!--') -and -not $script:Memoire -and (Get-Content $FichierMemoire -Raw).Trim() -eq 'off')
-Verifier 'unchecked: the cleared notes are kept once in data, nothing goes to the bin' ((Get-NoteMemoire $FichierNotesAvant) -match 'the newest note y+' -and $FichierNotesAvant -like '*\data\memory-previous.md' -and @(Get-ChildItem $global:FauxBac -Filter 'memory*').Count -eq 0 -and [bool]((Get-Content $Journal -Encoding UTF8) -match 'Persistent memory: off \(notes cleared'))
-Verifier 'unchecked: instructions.md untouched' ([IO.File]::ReadAllText($FichierInstructions, [Text.Encoding]::UTF8) -eq $ins)
+Verifier 'menu: New session, no Persistent memory, no Stop' ($libelles -contains 'New session' -and $libelles -contains 'Open the Claude-Work folder' -and $libelles -notcontains 'Persistent memory' -and $libelles -notcontains 'Stop the current task') ($libelles -join ' | ')
+Verifier 'an old memory.txt (on or off) no longer turns the notes off' ($script:Memoire -and (Get-Content $FichierMemoire -Raw).Trim() -eq 'on')
+$sessionAvant = Lire-Session
+($menu.Items | Where-Object { $_.Text -eq 'New session' }).PerformClick()
+Verifier 'New session: memory.md emptied (comment kept), a new session id' ((Get-NoteMemoire $FichierNotes) -eq '' -and [IO.File]::ReadAllText($FichierNotes, [Text.Encoding]::UTF8).StartsWith('<!--') -and (Lire-Session) -ne $sessionAvant -and (Lire-Session) -match '^\d{8}-\d{6}')
+Verifier 'New session: the cleared notes are kept once in data, nothing goes to the bin' ((Get-NoteMemoire $FichierNotesAvant) -match 'the newest note y+' -and $FichierNotesAvant -like '*\data\memory-previous.md' -and @(Get-ChildItem $global:FauxBac -Filter 'memory*').Count -eq 0 -and [bool]((Get-Content $Journal -Encoding UTF8) -match 'New session: \d{8}'))
+Verifier 'New session: instructions.md untouched' ([IO.File]::ReadAllText($FichierInstructions, [Text.Encoding]::UTF8) -eq $ins)
 $cap3 = Fausse-Capture
 Lancer-Tache $cap3 ''
-Verifier 'memory off: nothing about memory in the prompt' ((Lire-Prompt $cap3) -notmatch 'MEMORY|Persistent memory')
-Ecrire-Reponse $cap3 "Done.`nMEMORY: must not be read"
+Verifier 'new session: the prompt has no old note' ((Lire-Prompt $cap3) -match 'Persistent memory is ON' -and (Lire-Prompt $cap3) -match '\(no notes yet\)' -and (Lire-Prompt $cap3) -notmatch 'Dupont|newest note')
+Verifier 'during a task: New session is refused' (-not (& { $script:Proc = Faux-Proc 0; $r = Nouvelle-Session; $script:Proc = $null; $r }))
+Ecrire-Reponse $cap3 "Done.`nMEMORY: first note of the new session"
 $script:Proc = Faux-Proc 0
 Processus-Fini
-Verifier 'memory off: answer shown as is, nothing saved' ($script:Dernier -match 'MEMORY: must not' -and (Get-NoteMemoire $FichierNotes) -eq '') $script:Dernier
-$menuMemoire.PerformClick()
-Verifier 'checked again: memory.md is there and empty' ((Test-Path $FichierNotes) -and (Get-NoteMemoire $FichierNotes) -eq '' -and $script:Memoire)
-$menuMemoire.PerformClick()
-Verifier 'unchecked with no notes: the kept notes are not replaced by an empty file' ((Get-NoteMemoire $FichierNotesAvant) -match 'the newest note y+' -and [bool]((Get-Content $Journal -Encoding UTF8) -match 'Persistent memory: off \(no notes\)'))
-$menuMemoire.PerformClick()
+Verifier 'new session: its first note is saved' ((Get-NoteMemoire $FichierNotes) -eq '- first note of the new session') (Get-NoteMemoire $FichierNotes)
+[void](Nouvelle-Session); [void](Nouvelle-Session)
+Verifier 'New session on an empty memory: the kept notes are replaced only by notes' ((Get-NoteMemoire $FichierNotesAvant) -match 'first note of the new session')
+[IO.File]::WriteAllText($FichierMemoire, 'never')
+Verifier 'memory.txt = never: the one way to keep no notes at all' (-not (Test-MemoireActive $FichierMemoire))
+[IO.File]::WriteAllText($FichierMemoire, 'on')
 Ecrire-Reponse $cap3 ''
 $script:Proc = Faux-Proc 1
 Processus-Fini
