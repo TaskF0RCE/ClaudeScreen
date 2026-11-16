@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/TaskF0RCE/ClaudeScreen/compare/v0.7.0...v0.7.1) (2026-11-16)
+
+
+### 🐛 Bug fixes
+
+* the Terminal access question is asked only the first time ([#28](https://github.com/TaskF0RCE/ClaudeScreen/issues/28)) ([938cec7](https://github.com/TaskF0RCE/ClaudeScreen/commit/938cec705a25250f5a74de1f057fecfd9fd80b20))
+
 ## [0.7.0](https://github.com/TaskF0RCE/ClaudeScreen/compare/v0.6.0...v0.7.0) (2026-11-16)
 
 
