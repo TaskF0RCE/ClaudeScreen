@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/TaskF0RCE/ClaudeScreen/compare/v0.6.0...v0.7.0) (2026-11-16)
+
+
+### ✨ Features
+
+* ClaudeScreen-Setup.exe, a question before Terminal access is turned on, a warning when a text is cut ([#25](https://github.com/TaskF0RCE/ClaudeScreen/issues/25)) ([47422ad](https://github.com/TaskF0RCE/ClaudeScreen/commit/47422adb0e8cf2009060b40da52c6ae86d7db6e7))
+
 ## [0.6.0](https://github.com/TaskF0RCE/ClaudeScreen/compare/v0.5.2...v0.6.0) (2026-11-14)
 
 
