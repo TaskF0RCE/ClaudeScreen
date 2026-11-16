@@ -20,3 +20,33 @@ concurrency:
 jobs:
   release:
     uses: TaskF0RCE/.github/.github/workflows/release.yml@main
+
+  # ClaudeScreen-Setup.exe, attached to the release that this push just published.
+  # Nothing to do when this commit is not the one of a release, or when the file is already there.
+  setup:
+    name: Setup.exe on the release
+    needs: release
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Build and attach
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = (Get-Content .release-please-manifest.json -Raw | ConvertFrom-Json).'.'
+          $tag = "v$version"
+          git fetch --tags --quiet
+          $commit = git rev-list -n 1 $tag 2>$null
+          if ($LASTEXITCODE -ne 0 -or $commit -ne (git rev-parse HEAD)) { "This commit is not release $tag: nothing to attach."; exit 0 }
+          $present = gh release view $tag --json assets --jq '.assets[].name'
+          if ($LASTEXITCODE -ne 0) { "Release $tag does not exist yet: nothing to attach."; exit 0 }
+          if ($present -contains 'ClaudeScreen-Setup.exe') { "ClaudeScreen-Setup.exe is already on $tag."; exit 0 }
+          & .\installer\Build-Setup.ps1
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          gh release upload $tag dist\ClaudeScreen-Setup.exe
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          "ClaudeScreen-Setup.exe attached to $tag." >> $env:GITHUB_STEP_SUMMARY

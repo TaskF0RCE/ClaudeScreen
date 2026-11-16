@@ -54,13 +54,13 @@ Each context is a small Markdown file in `Documents\Claude-Work\System-Context\C
 - **Edit them freely.** The app copies them there once and never changes them afterwards.
 - **Add your own**: create `My job.md` in that folder, write a few lines (who you are, what is usually on your screen, what to do when you give no instruction, what never to do), and it appears in the menu.
 - **Remove** the ones you don't need. If the active file disappears, Default is used.
-- Comments (`<!-- ... -->`) are not sent to Claude. A context is at most 4000 characters.
+- Comments (`<!-- ... -->`) are not sent to Claude. A context is at most 4000 characters: past that, its end is not sent, and the result of the task says so.
 
 ### Standing context (optional)
 
 The `Documents\Claude-Work\System-Context` folder is created on first launch, with a `README.md` that explains how to use it.
 
-- **`instructions.md`**: your standing instructions, one per line, added to every task whatever the context. For example: "always answer in English", "never click Finish exam", "my name is Sam". Comments are ignored: as long as you write nothing else, the file does nothing. It is re-read for every task. **This file is yours: neither the app nor Claude ever changes it.**
+- **`instructions.md`**: your standing instructions, one per line, added to every task whatever the context. For example: "always answer in English", "never click Finish exam", "my name is Sam". Comments are ignored: as long as you write nothing else, the file does nothing. It is re-read for every task. **This file is yours: neither the app nor Claude ever changes it.** At most 4000 characters are sent: past that, the result of the task tells you that the end was left out. Put long texts in another file of the folder instead.
 - **`memory.md`**: Claude's notes, when [Persistent memory](#persistent-memory) is on.
 - **`Contexts`**: the contexts above.
 - **The other files in the folder**, subfolders included (courses, notes, procedures, technical documentation, templates...): Claude gets their list with every task. It treats them as more reliable than its general knowledge: it reads the ones related to the task and relies on them first. Best-read formats: `.pdf`, `.txt`, `.md`, images, code, `.csv`, `.html` (for a Word or PowerPoint file, also save it as PDF).
@@ -95,7 +95,7 @@ Right-click the icon (every choice is remembered):
 
 ### Terminal access
 
-Unchecked by default: Claude only has the mouse and keyboard. Check **Terminal access** in the icon menu and Claude can also run PowerShell commands, which opens what the mouse cannot do well: renaming or sorting many files, processing a CSV, producing or converting a document, reading the state of the system (network, processes, disk).
+Unchecked by default: Claude only has the mouse and keyboard. Check **Terminal access** in the icon menu, answer **Yes** to the question it asks, and Claude can also run PowerShell commands, which opens what the mouse cannot do well: renaming or sorting many files, processing a CSV, producing or converting a document, reading the state of the system (network, processes, disk).
 
 The screen comes first: Claude is told to use a command only when the task cannot reasonably be done on screen or is clearly better done that way, and to stay inside the task. Every command goes through a guard before it runs (see [Security](#security)).
 
@@ -178,13 +178,21 @@ Requirements: Windows 10 or 11, with PowerShell 5.1 (built into Windows). Nothin
    irm https://claude.ai/install.ps1 | iex
    ```
 2. Log in once: run `%USERPROFILE%\.local\bin\claude.exe`, choose to log in with your Claude account, then type `/exit`.
-3. Copy this folder to `%USERPROFILE%\ClaudeScreen` (or anywhere else: paths are relative to the script's folder).
-4. Make it start with Windows and launch it right away:
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\ClaudeScreen\Installer-Demarrage.ps1"
-   Start-ScheduledTask -TaskName ClaudeScreen
-   ```
-   The icon appears in the notification area. A scheduled task named "ClaudeScreen" restarts it 20 s after each logon, without any window. To remove it, add `-Retirer` to the first command: it removes the scheduled task and closes the app if it is running.
+3. Download **`ClaudeScreen-Setup.exe`** from the [latest release](https://github.com/TaskF0RCE/ClaudeScreen/releases/latest) and run it. It copies the app to `%USERPROFILE%\ClaudeScreen`, makes it start with Windows and starts it: the icon appears in the notification area.
+
+   The file is not signed (a certificate costs money), so Windows may show "Windows protected your PC": click **More info**, then **Run anyway**. It asks for no administrator rights and writes only in that folder.
+
+A scheduled task named "ClaudeScreen" restarts the app 20 s after each logon, without any window. To remove it:
+```powershell
+powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\ClaudeScreen\Installer-Demarrage.ps1" -Retirer
+```
+It removes the scheduled task and closes the app if it is running. The folder itself stays: delete it yourself if you want.
+
+**Without the Setup** (from a copy of this repository, with `git clone` or the ZIP): put the folder where you want (paths are relative to the script's folder), then:
+```powershell
+powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\ClaudeScreen\Installer-Demarrage.ps1"
+Start-ScheduledTask -TaskName ClaudeScreen
+```
 
 **Where Claude Code is looked for**: first `%USERPROFILE%\.local\bin\claude.exe` (where the official installer puts it), then the `PATH`, then the npm folder. If it is installed after the app started, it is found at the next task.
 
@@ -192,7 +200,7 @@ Requirements: Windows 10 or 11, with PowerShell 5.1 (built into Windows). Nothin
 
 **PDF reading**: `Installer-Demarrage.ps1` also downloads [Poppler for Windows](https://github.com/oschwartz10612/poppler-windows) (about 16 MB) into `outils\poppler`, only once; otherwise the app does it in the background when it starts. The version is pinned and the file is rejected if its SHA-256 hash doesn't match.
 
-**Updating ClaudeScreen**: replace the folder with the new version (or `git pull`), then restart the app: **Quit** in the icon menu, then `Start-ScheduledTask -TaskName ClaudeScreen`. Your settings (`data\`) and your `Claude-Work` folder are kept.
+**Updating ClaudeScreen**: run the `ClaudeScreen-Setup.exe` of the new release. It replaces the app, restarts it, and keeps your settings (`data\`) and your `Claude-Work` folder. With a git copy: `git pull`, then **Quit** in the icon menu and `Start-ScheduledTask -TaskName ClaudeScreen`.
 
 `Lancer.vbs` can also start it by hand (double-click), but Windows is phasing out VBScript: prefer the scheduled task.
 
@@ -241,6 +249,7 @@ outils/garde.ps1    guard: checks every command and every file write of Claude b
 outils/pdf.ps1      PDF reading: text extracted in advance, page as an image (with Poppler)
 outils/memoire.ps1  instructions.md (yours, never changed) and memory.md (Claude's notes, persistent memory)
 outils/deroule.ps1  the steps of a task (what Claude said and did), read from the stream Claude Code writes
+installer/          Setup.cs and Build-Setup.ps1: build ClaudeScreen-Setup.exe (attached to each release)
 outils/poppler.ps1  downloads Poppler (pinned version, verified hash) into outils/poppler (ignored by git)
 outils/System-Context-README.md  user guide copied into Documents\Claude-Work\System-Context (kept up to date at each start)
 contexts/           the contexts, copied once into System-Context\Contexts (then they belong to the user)

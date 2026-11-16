@@ -80,6 +80,11 @@ def instructions(chemin):
     return nettoyer(lire(chemin))[:MAX_INSTRUCTIONS]
 
 
+def coupe(chemin):
+    """True when the file holds more than instructions() sends: its end is left out."""
+    return len(nettoyer(lire(chemin))) > MAX_INSTRUCTIONS
+
+
 def notes(chemin):
     """Claude's notes (memory.md), cleaned, 4000 characters at most."""
     return nettoyer(lire(chemin))[:MAX_MEMOIRE]

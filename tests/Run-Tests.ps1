@@ -1,10 +1,11 @@
 # Runs the whole test suite. Nothing touches your real folders, your screen or Claude: every scenario gets its
 # own copy of the app and its own fake "Documents" in a temporary folder, deleted at the end.
 #   powershell -ExecutionPolicy Bypass -File tests\Run-Tests.ps1
-#   -Seul upgrade      run one scenario only (file name in tests\scenarios, without .ps1; or guard, mcp)
+#   -Seul upgrade      run one scenario only (file name in tests\scenarios, without .ps1; or guard, mcp, setup)
 #   -SansEcran         skip the one check that takes a real screenshot (used by the CI)
 #   -Garder            keep the temporary folder, to look at what a scenario left
-param([string]$Seul, [switch]$SansEcran, [switch]$Garder)
+#   -SetupComplet      CI only: also run a whole install (it replaces the scheduled task of the machine)
+param([string]$Seul, [switch]$SansEcran, [switch]$Garder, [switch]$SetupComplet)
 $ErrorActionPreference = 'Stop'
 $depot = Split-Path $PSScriptRoot -Parent
 $base = Join-Path ([IO.Path]::GetTempPath()) ('claudescreen-tests-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
@@ -88,6 +89,11 @@ try {
     if (-not $Seul -or $Seul -eq 'mcp') {
         $arguments = @('-Bac', (Nouveau-Bac 'mcp' 'vide')); if ($SansEcran) { $arguments += '-SansEcran' }
         Lancer 'MCP server (outils\mcp.ps1)' (Join-Path $PSScriptRoot 'mcp-server.ps1') $arguments
+    }
+    if (-not $Seul -or $Seul -eq 'setup') {
+        $bac = Join-Path $base 'setup'; New-Item -ItemType Directory -Force $bac | Out-Null
+        $arguments = @('-Bac', $bac); if ($SetupComplet) { $arguments += '-Complet' }
+        Lancer 'installer (ClaudeScreen-Setup.exe)' (Join-Path $PSScriptRoot 'setup.ps1') $arguments
     }
 } finally {
     if ($Garder) { "Kept: $base" } else { Remove-Item $base -Recurse -Force -ErrorAction SilentlyContinue }

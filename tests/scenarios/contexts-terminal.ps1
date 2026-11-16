@@ -43,15 +43,44 @@ $c = Fausse-Capture; Lancer-Tache $c ''
 $p = Lire-Prompt $c
 Verifier 'off: no terminal in the prompt' ($p -match 'There is no terminal\.' -and $p -notmatch 'PowerShell')
 Verifier 'off: no PowerShell among the tools' ($global:Appels[-1] -like 'opus|task|--tools Read,Write,Edit,Glob,Grep --mcp-config *') $global:Appels[-1]
+$global:ReponseTerminal = $false
 $menuTerminal.PerformClick()
-Verifier 'checked: on saved' ($script:Terminal -and (Get-Content $FichierTerminal -Raw).Trim() -eq 'on')
+Verifier 'checked, then No to the question: stays off' ($global:QuestionsTerminal -eq 1 -and -not $script:Terminal -and -not $menuTerminal.Checked -and (Get-Content $FichierTerminal -Raw).Trim() -eq 'off' -and [bool]((Get-Content $Journal -Encoding UTF8) -match 'Terminal access: not allowed'))
+$global:ReponseTerminal = $true
+$menuTerminal.PerformClick()
+Verifier 'checked, then Yes: on saved' ($global:QuestionsTerminal -eq 2 -and $script:Terminal -and (Get-Content $FichierTerminal -Raw).Trim() -eq 'on')
 $c = Fausse-Capture; Lancer-Tache $c ''
 $p = Lire-Prompt $c
 Verifier 'on: prompt gives the PowerShell tool and its limits' ($p -match 'you also have the PowerShell tool' -and $p -match 'The screen comes first' -and $p -match 'No administrator rights' -and $p -notmatch 'There is no terminal')
 Verifier 'on: PowerShell among the tools' ($global:Appels[-1] -like 'opus|task|--tools Read,Write,Edit,Glob,Grep,PowerShell --mcp-config *') $global:Appels[-1]
 Verifier 'on: said in the log' ([bool]((Get-Content $Journal -Encoding UTF8) -match 'Model: opus, terminal$'))
 $menuTerminal.PerformClick()
-Verifier 'unchecked again: off saved' (-not $script:Terminal -and (Get-Content $FichierTerminal -Raw).Trim() -eq 'off')
+Verifier 'unchecked again: off saved, no question to turn it off' ($global:QuestionsTerminal -eq 2 -and -not $script:Terminal -and (Get-Content $FichierTerminal -Raw).Trim() -eq 'off')
+
+'--- texts longer than 4000 characters'
+$c = Fausse-Capture; Lancer-Tache $c ''
+Ecrire-Reponse $c 'Done.'
+$script:Proc = Faux-Proc 0; Processus-Fini
+Verifier 'short texts: no warning' ($script:Dernier -notmatch 'Warning') $script:Dernier
+$avantInstructions = [IO.File]::ReadAllText($FichierInstructions)
+[IO.File]::WriteAllText($FichierInstructions, "<!-- $('c' * 5000) -->`n" + (('Always answer briefly. ' * 200)))
+$c = Fausse-Capture; Lancer-Tache $c ''
+$p = Lire-Prompt $c
+Verifier 'long instructions.md: 4000 characters are sent, comments not counted' ($p -match 'Always answer briefly' -and ([regex]::Matches($p, 'Always answer briefly')).Count -lt 180)
+Ecrire-Reponse $c 'Done.'
+$script:Proc = Faux-Proc 0; Processus-Fini
+Verifier 'long instructions.md: said in the result and in the log' ($script:Dernier -match 'Done\.\s+\(Warning: instructions\.md is longer than 4000 characters, so its end was not sent' -and [bool]((Get-Content $Journal -Encoding UTF8) -match 'instructions\.md is longer than 4000 characters')) $script:Dernier
+[IO.File]::WriteAllText((Join-Path $DossierContextes 'Default.md'), ('General assistant. ' * 300))
+$c = Fausse-Capture; Lancer-Tache $c ''
+Ecrire-Reponse $c 'Done.'
+$script:Proc = Faux-Proc 0; Processus-Fini
+Verifier 'long context too: both are named' ($script:Dernier -match 'Warning: Contexts\\Default\.md and instructions\.md is longer') $script:Dernier
+[IO.File]::WriteAllText($FichierInstructions, $avantInstructions)
+[IO.File]::WriteAllText((Join-Path $DossierContextes 'Default.md'), 'General assistant.')
+$c = Fausse-Capture; Lancer-Tache $c ''
+Ecrire-Reponse $c 'Done.'
+$script:Proc = Faux-Proc 0; Processus-Fini
+Verifier 'shortened again: no warning any more' ($script:Dernier -notmatch 'Warning') $script:Dernier
 
 '--- prompt: fields and clicks'
 Verifier 'remplacer is listed, with its warning' ($p -match '(?m)^  remplacer "text" ' -and $p -match 'Never in a document')

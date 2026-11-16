@@ -483,6 +483,7 @@ class Appli:
         self.memoire = lire_texte(FICHIER_MEMOIRE).lower() == 'on'
         self.dernier = 'No task yet. Press %s when the task is on screen.' % NOMS_RACCOURCIS[1]
         self.dernier_hors_historique = False  # self.dernier is a message that no task folder holds
+        self.coupes = []  # files of System-Context whose end was left out of the current task (too long)
 
     # -------------------------------------------------- interface (main thread on macOS)
 
@@ -630,6 +631,12 @@ class Appli:
             precision = ("\nUser instruction for this task (takes priority over everything else): %s\n" % instruction) if instruction else ''
             # Re-read for every task: a change to instructions.md or to the documents applies right away.
             instructions = lire_instructions()
+            # Texts cut at 4000 characters: said in the result, so that the user does not think Claude ignored the end.
+            self.coupes = [nom for nom, chemin in (
+                ('Contexts/%s.md' % contexte_actif()[0], os.path.join(DOSSIER_CONTEXTES, contexte_actif()[0] + '.md')),
+                ('instructions.md', FICHIER_INSTRUCTIONS)) if memoire.coupe(chemin)]
+            for nom in self.coupes:
+                noter('%s is longer than 4000 characters: its end was not sent to Claude' % nom)
             self.memoire_tache = self.memoire
             nom_contexte, contenu_contexte = contexte_actif()
             ecrire_texte(os.path.join(run, 'prompts', 'task.txt'),
@@ -790,6 +797,10 @@ class Appli:
             reponse += ('\n\n(Warning: the computer control tool did not start, so Claude could not act on the screen. '
                         'Try again; if it happens every time, run: claude update.)')
             noter('The computer control tool (MCP) did not start')
+        if code == 0 and reponse and self.coupes:
+            reponse += ('\n\n(Warning: %s is longer than 4000 characters, so its end was not sent to Claude. Keep the '
+                        'essential there and put the rest in another file of System-Context: Claude reads those when '
+                        'needed.)' % ' and '.join(self.coupes))
         if code == 0 and reponse:
             self.dernier = '[%s, %d s] %s' % (self.modele, duree, reponse)
             self.mettre_icone(ICONE_FINI)

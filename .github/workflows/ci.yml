@@ -58,7 +58,7 @@ jobs:
       - name: Run the tests
         shell: powershell
         run: |
-          & .\tests\Run-Tests.ps1 -SansEcran
+          & .\tests\Run-Tests.ps1 -SansEcran -SetupComplet
           exit $LASTEXITCODE
 
   # The logic of the macOS/Linux version, with fake system modules.
