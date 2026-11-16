@@ -2,6 +2,7 @@
 # Claude Code is never started: Demarrer-Claude only records how it would have been called.
 $Claude = Join-Path $env:WINDIR 'System32\whoami.exe'   # any existing program: the app only checks that it exists
 $global:Appels = @()
+$global:NumeroCapture = 0
 # The question asked when Terminal access is checked: answered here, no dialog box.
 $global:ReponseTerminal = $true
 $global:QuestionsTerminal = 0
@@ -11,7 +12,9 @@ function Sans-Duree([string]$t) { ($t -replace '^(\[\w+), \d+ s\]', '$1]') -repl
 function Faux-Proc([int]$code) { [pscustomobject]@{ ExitCode = $code; HasExited = $true } | Add-Member ScriptMethod Dispose { } -PassThru }
 # A task folder as Capturer makes it, without any screenshot. -SansMcp: as if the PC control tool had not started.
 function Fausse-Capture([switch]$SansMcp) {
-    $run = Join-Path $Runs ('test-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+    # Names that sort in the order the tasks were made, like the real ones (a date).
+    $global:NumeroCapture++
+    $run = Join-Path $Runs ('test-{0:D4}-{1}' -f $global:NumeroCapture, [guid]::NewGuid().ToString('N').Substring(0, 6))
     New-Item -ItemType Directory -Force (Join-Path $run 'images'), (Join-Path $run 'prompts'), (Join-Path $run 'responses') | Out-Null
     if (-not $SansMcp) { [IO.File]::WriteAllText((Join-Path $run 'mcp-started.txt'), '') }
     @{ Run = $run; Png = (Join-Path $run 'images\screenshot-01.png'); Fenetre = @('notepad', 'Test'); Hwnd = [IntPtr]::Zero

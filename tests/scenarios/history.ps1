@@ -75,37 +75,71 @@ $long = Join-Path $cap.Run 'long.jsonl'
 $d = Read-Deroule $long
 Verifier 'only the last 80 steps, 400 characters each' ($d.Etapes.Count -eq 80 -and $d.Omises -eq 20 -and $d.Etapes[0] -match '^step 21 ' -and $d.Etapes[0].Length -eq 400 -and (Format-Deroule $d).StartsWith('(... 20 earlier steps not shown)'))
 
-'--- History window'
+'--- sessions'
 Get-ChildItem $Runs -Directory | Remove-Item -Recurse -Force
 $script:Proc = $null
-$e = Lister-Entrees
-Verifier 'no task kept: one entry, the last message' ($e.Count -eq 1 -and -not $e[0].Fichier -and (Texte-Entree $e[0]) -eq $script:Dernier)
-foreach ($i in 1..18) {
-    $dossier = Join-Path $Runs ('20261113-16{0:D2}00' -f $i)
-    New-Item -ItemType Directory -Force $dossier | Out-Null
-    if ($i -ne 17) { [IO.File]::WriteAllText((Join-Path $dossier 'result.txt'), "[sonnet, 12 s] Result number $i`nsecond line") }
+$script:DernierHorsHistorique = $false
+$s = Lister-Sessions
+Verifier 'no task kept: the current session alone, one entry, the last message' ($s.Count -eq 1 -and $s[0].Courante -and $s[0].Taches.Count -eq 0 -and (Lister-Entrees $s[0]).Count -eq 1 -and (Texte-Entree (Lister-Entrees $s[0])[0]) -eq $script:Dernier)
+# Tasks from before the sessions existed: no session.txt in their folder.
+foreach ($i in 1..3) {
+    $dossier = Join-Path $Runs ('20261101-10{0:D2}00' -f $i); New-Item -ItemType Directory -Force $dossier | Out-Null
+    if ($i -ne 2) { [IO.File]::WriteAllText((Join-Path $dossier 'result.txt'), "old result $i") }
 }
-$e = Lister-Entrees
-Verifier 'every kept result, newest first, the task without a result skipped' ($e.Count -eq 17 -and $e[0].Fichier -like '*\20261113-161800\result.txt' -and $e[1].Fichier -like '*\20261113-161600\*' -and $e[-1].Fichier -like '*\20261113-160100\*') ($e | ForEach-Object { $_.Fichier })
-Verifier 'the window opens on the newest result; title = its date and time' ($e[0].Titre -match '13.*(16|4):18' -and (Texte-Entree $e[0]) -eq "[sonnet, 12 s] Result number 18`nsecond line") $e[0].Titre
+function Tache-Finie([string]$consigne, [string]$reponse) {
+    $c = Fausse-Capture; Lancer-Tache $c $consigne; Ecrire-Reponse $c $reponse; $script:Proc = Faux-Proc 0; Processus-Fini; $c
+}
+$premiere = Lire-Session
+$t1 = Tache-Finie 'only question 4' 'Answer A.'
+$t2 = Tache-Finie '' 'Answer B.'
+Verifier 'a task keeps the id of its session, and its instruction' ((Get-Content (Join-Path $t1.Run 'session.txt') -Raw).Trim() -eq $premiere -and [IO.File]::ReadAllText((Join-Path $t1.Run 'instruction.txt')) -eq 'only question 4' -and -not (Test-Path (Join-Path $t2.Run 'instruction.txt')))
+[IO.File]::WriteAllText($FichierSession, '20991231-090000')
+$t3 = Tache-Finie '' 'Answer C.'
+$s = Lister-Sessions
+Verifier 'three sessions, oldest first: earlier tasks, the first one, the current one' ($s.Count -eq 3 -and $s[0].Id -eq '' -and $s[0].Titre -match '^Earlier tasks  -  2 tasks$' -and -not $s[0].Courante -and $s[2].Courante -and $s[2].Taches.Count -eq 1) (($s | ForEach-Object { $_.Titre }) -join ' | ')
+$milieu = $s | Where-Object { $_.Id -eq $premiere }
+Verifier 'a session holds all its tasks, oldest first' ($milieu.Taches.Count -eq 2 -and $milieu.Titre -match '^Session of .*  -  2 tasks$' -and $milieu.Taches[0].Fichier -eq (Join-Path $t1.Run 'result.txt') -and $milieu.Taches[1].Fichier -eq (Join-Path $t2.Run 'result.txt')) $milieu.Titre
+Verifier 'the title of the current session says so' ($s[2].Titre -match '^Session of .*  -  1 task, current$') $s[2].Titre
+$e = Lister-Entrees $milieu
+Verifier 'the newest task is the last entry (2 / 2); its text starts with the instruction' ($e.Count -eq 2 -and (Texte-Entree $e[0]) -match '^Instruction: only question 4\s+\[sonnet, \d+ s\] Answer A\.' -and (Texte-Entree $e[1]) -match '^\[sonnet, \d+ s\] Answer B\.')
 Verifier 'the results live in the task folders: they go away with them' ((Split-Path (Split-Path $e[0].Fichier -Parent) -Parent) -eq $Runs)
 Echec 'Could not start the task: test'
-$e = Lister-Entrees
-Verifier 'a task that could not start: its message first, then the kept results' ($e.Count -eq 18 -and -not $e[0].Fichier -and (Texte-Entree $e[0]) -eq 'Could not start the task: test' -and $e[1].Fichier -like '*161800*')
+$e = Lister-Entrees (Lister-Sessions)[2]
+Verifier 'a task that could not start: its message last, in the current session only' ($e.Count -eq 2 -and -not $e[1].Fichier -and $e[1].Titre -eq 'last message' -and (Texte-Entree $e[1]) -eq 'Could not start the task: test' -and (Lister-Entrees $milieu).Count -eq 2)
 $script:Etape = 'tri'
 $script:Proc = Faux-Proc 0
-$e = Lister-Entrees
-Verifier 'a task in progress: shown first' ($e.Count -eq 18 -and $e[0].Titre -eq 'in progress' -and (Texte-Entree $e[0]) -eq 'Looking at the screen...')
+$e = Lister-Entrees (Lister-Sessions)[2]
+Verifier 'a task in progress: shown last' ($e.Count -eq 2 -and $e[1].Titre -eq 'in progress' -and (Texte-Entree $e[1]) -eq 'Looking at the screen...')
 $script:Proc = $null
-$cap6 = Fausse-Capture
-Lancer-Tache $cap6 ''
-Ecrire-Reponse $cap6 'Done.'
+Remove-Item $milieu.Taches[0].Fichier
+Verifier 'a result removed while the window is open' ((Texte-Entree $milieu.Taches[0]) -eq 'This result is no longer kept.')
+
+'--- ghost mode'
+[void](Nouvelle-Session)
+$sessionGhost = Lire-Session
+[void](Tache-Finie '' "Kept.`nMEMORY: a note of the session")
+Verifier 'ghost mode is off by default' (-not $script:Fantome -and -not (Test-Path $FichierFantome))
+Verifier 'ghost mode cannot change during a task' (-not (& { $script:Proc = Faux-Proc 0; $r = Basculer-Fantome $true; $script:Proc = $null; $r }) -and -not $script:Fantome)
+[void](Basculer-Fantome $true)
+$nbAvant = @(Get-ChildItem $Runs -Directory).Count
+$g = Fausse-Capture
+Lancer-Tache $g 'a secret instruction'
+$p = Lire-Prompt $g
+Verifier 'ghost: the notes of the session are not sent, none is asked for' ($p -notmatch 'MEMORY|Persistent memory|a note of the session' -and $p -match 'a secret instruction')
+Verifier 'ghost: no session id, no instruction file in the task folder' (-not (Test-Path (Join-Path $g.Run 'session.txt')) -and -not (Test-Path (Join-Path $g.Run 'instruction.txt')))
+Ecrire-Reponse $g "Secret answer.`nMEMORY: must not be saved"
 $script:Proc = Faux-Proc 0
 Processus-Fini
-$e = Lister-Entrees
-Verifier 'after a finished task: no separate last message any more' (@($e | Where-Object { -not $_.Fichier }).Count -eq 0 -and $e.Count -eq 18)
-Remove-Item $e[3].Fichier
-Verifier 'a result removed while the window is open' ((Texte-Entree $e[3]) -eq 'This result is no longer kept.')
+Verifier 'ghost: the answer is shown, with its lines as they are' ($script:Dernier -match 'Secret answer\.' -and $script:DernierHorsHistorique)
+Verifier 'ghost: the task folder is gone (screenshots, prompt, answer), no note saved' (-not (Test-Path $g.Run) -and @(Get-ChildItem $Runs -Directory).Count -eq $nbAvant -and (Get-NoteMemoire $FichierNotes) -eq '- a note of the session')
+$e = Lister-Entrees ((Lister-Sessions) | Where-Object Courante)
+Verifier 'ghost: the answer is the last entry, marked as not kept' ($e.Count -eq 2 -and $e[1].Titre -eq 'ghost mode, not kept' -and (Texte-Entree $e[1]) -eq $script:Dernier)
+$g2 = Fausse-Capture; Lancer-Tache $g2 ''; $script:Arret = 'hotkey'; $script:Proc = Faux-Proc 1; Processus-Fini
+Verifier 'ghost, stopped task: nothing kept either' (-not (Test-Path $g2.Run) -and $script:Dernier -match '^Task stopped')
+[void](Basculer-Fantome $false)
+Verifier 'ghost off: the ghost answer is forgotten, the session is back as it was' ($script:Dernier -eq $script:Accueil -and -not $script:DernierHorsHistorique -and (Lire-Session) -eq $sessionGhost -and (Lister-Entrees ((Lister-Sessions) | Where-Object Courante)).Count -eq 1 -and (Get-Content $FichierFantome -Raw).Trim() -eq 'off')
+$c = Tache-Finie '' 'After the ghost.'
+Verifier 'after ghost mode: tasks are kept again, with the notes of the session' ((Test-Path (Join-Path $c.Run 'result.txt')) -and (Lire-Prompt $c) -match 'a note of the session')
 $libelles = @($menu.Items | ForEach-Object { $_.Text })
-Verifier 'menu: History first, no Last result' ($libelles[0] -eq 'History' -and $libelles -notcontains 'Last result') ($libelles -join '|')
+Verifier 'menu: History first, then New session' (($libelles[0..1] -join '|') -eq 'History|New session') ($libelles -join '|')
 } catch { Verifier 'scenario ran to the end' $false ($_.Exception.Message + ' ' + $_.InvocationInfo.PositionMessage) }

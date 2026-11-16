@@ -20,14 +20,14 @@ Same as the Windows version:
 
 **⌃⌥⇧C** / **Ctrl+Alt+Shift+C** takes the screenshot, then opens a small bar in the bottom-left corner: type an instruction ("only do question 4", "configure OSPF on R1 and R2"), then **Enter**. **Esc** or clicking elsewhere cancels.
 
-Pressing the shortcut again during a task stops it (or use the **Stop the current task** menu). Automatic stop after 20 minutes. Nothing is lost when a task stops: **History** then lists what Claude had done before the stop. During a task, don't touch the mouse or keyboard.
+Pressing the shortcut again during a task stops it. Automatic stop after 20 minutes. Nothing is lost when a task stops: **History** then lists what Claude had done before the stop. During a task, don't touch the mouse or keyboard.
 
 ### Standing context (optional)
 
 Like on Windows, the **`~/Documents/Claude-Work/System-Context`** folder is created on first launch, with a `README.md` that explains how to use it (use the **Open the Claude-Work folder** menu to get there). The work folder was called `Claude-Travail` in older versions: it is renamed automatically, with everything in it.
 
 - **`instructions.md`**: your standing instructions, one per line, added to every task while the app is running ("I'm a second-year computer science student", "never click Finish exam", "always answer in English"...). Comments (`<!-- ... -->`) are ignored. The file is re-read for every task: a change applies right away. **This file is yours: neither the app nor Claude ever changes it.** A file from an older version is converted once: an `instructions.txt` becomes `instructions.md` (its `#` lines become comments, the old file goes to the trash), and the notes Claude used to keep at the end of `instructions.md` move to `memory.md`.
-- **`memory.md`**: Claude's notes, when [Persistent memory](#persistent-memory) is on.
+- **`memory.md`**: Claude's notes, for the current session (see [below](#sessions-memory-and-ghost-mode)).
 - **The other files**, subfolders included (courses, notes, technical documentation, assignments, bibliography, sources...): Claude gets their list with every task, treats them as more reliable than its general knowledge, reads the ones related to the task and relies on them first. Best-read formats: `.pdf`, `.txt`, `.md`, images, code, `.csv`, `.html` (for a Word or Keynote file, also export it as PDF). Hidden or temporary files (`.DS_Store`, `~$...`) are ignored, as is the folder's `README.md`.
 - **PDFs**: the app extracts their text in advance, page by page, into `data/context-cache/` (at startup, then only when a PDF changes), with the `pypdfium2` Python library: nothing extra to install, no need for `pdftoppm`. Claude reads that text, which is fast and saves quota, and can search it. For a diagram or a scanned PDF (no text), it shows the page as an image with the `page-pdf` action. If you installed ClaudeScreen before this feature, run `./installer.sh` again to add `pypdfium2`.
 - **Read-only**: Claude can read this folder, but cannot change, move, send to the trash or run anything in it.
@@ -47,7 +47,7 @@ The folder is in your Documents, outside the repository: its contents never end 
 | Green dot | Done: open "History" |
 | Red dot | Error: open "History" for the message |
 
-Menu: **History** (the answer of the last task, or what Claude has said and done so far while a task is running; its two arrows go through your earlier tasks, kept for 30 days), **Model** (Auto, Always Sonnet, Always Opus; the choice is remembered), **Smooth mode**, **Persistent memory** (see below), **Open the Claude-Work folder**, **Stop the current task**, **Quit**. The icon's tooltip and the result window are named **Claude-Work** too.
+Menu: **History** (the answer of the last task, or what Claude has said and done so far while a task is running; its two arrows go through your earlier tasks, oldest first, with the session of each one; they are kept for 30 days), **Model** (Auto, Always Sonnet, Always Opus; the choice is remembered), **New session** and **Ghost mode** (see below), **Smooth mode**, **Open the Claude-Work folder**, **Quit**. The icon's tooltip and the result window are named **Claude-Work** too.
 
 On macOS and with most Linux desktops (AppIndicator), clicking the icon opens the menu; "History" is the first entry.
 
@@ -55,9 +55,9 @@ On macOS and with most Linux desktops (AppIndicator), clicking the icon opens th
 
 Same as on Windows: with **Smooth mode** checked in the menu, the mouse glides to its target like a hand (slightly curved path, speeds up then slows down, about 0.2 s for a short hop and 0.75 s across the screen, short pause before clicking) and the text is typed one key at a time at a human pace (about 9 characters per second, longer pauses after a space, punctuation and Enter). A long text is typed faster so that one action never takes more than about 45 seconds. The choice is remembered (`data/smooth.txt`) and applies at once, even during a task. The settings are in `outils/humain.py`.
 
-### Persistent memory
+### Sessions, memory and ghost mode
 
-Same as on Windows ([details](../README.md#persistent-memory)): with **Persistent memory** checked in the menu (it is by default), Claude ends each task with short notes (what it learned about you and your work, how far it got) and gets them back at the next tasks, a kind of mini session. The notes go into `System-Context/memory.md`, one per line; `instructions.md` is never touched. **Unchecking the mode empties `memory.md`** (the notes it just cleared are kept once in `data/memory-previous.md`). Claude cannot write in the folder: it ends its answer with `MEMORY: ...` lines, and the app saves them and hides them from the result (300 characters per note, 4000 in all; past that, the oldest notes make room). The choice is remembered (`data/memory.txt`). The code is in `outils/memoire.py`.
+Same as on Windows ([details](../README.md#sessions-and-memory)): inside a session, Claude ends each task with short notes (what it learned about you and your work, how far it got) and gets them back at the next tasks. The notes go into `System-Context/memory.md`, one per line; `instructions.md` is never touched. **New session** in the menu empties them and starts a new history (the notes it cleared are kept once in `data/memory-previous.md`). **Ghost mode** in the menu is for tasks that must leave nothing behind: no notes are read or saved, and the task folder is deleted when the task ends. Claude cannot write in the folder: it ends its answer with `MEMORY: ...` lines, and the app saves them and hides them from the result (300 characters per note, 4000 in all; past that, the oldest notes make room). To never keep any note, write `never` in `data/memory.txt`. The code is in `outils/memoire.py`.
 
 On Wayland, the mouse position cannot be read: the first move of a task jumps to its target, the next ones glide from the last known position.
 
@@ -149,7 +149,7 @@ As on Windows, Claude is started with limited permissions (`data/settings.json`,
 
 On top of that:
 
-- **`System-Context` is read-only**, locked three times: a `deny` rule in `data/settings.json` (`Edit(//...)`, which also covers Write), the hook `outils/garde.py` that refuses any file write in that folder (including through a symbolic link or `..`), and the `corbeille` action that refuses to touch it (or `Claude-Work`, which contains it). Claude has no way to write there: its [Persistent memory](#persistent-memory) notes are saved by the app itself.
+- **`System-Context` is read-only**, locked three times: a `deny` rule in `data/settings.json` (`Edit(//...)`, which also covers Write), the hook `outils/garde.py` that refuses any file write in that folder (including through a symbolic link or `..`), and the `corbeille` action that refuses to touch it (or `Claude-Work`, which contains it). Claude has no way to write there: its [notes](#sessions-memory-and-ghost-mode) are saved by the app itself.
 - **Nothing is deleted permanently.** Claude has no terminal, and to remove a file it sends it to the trash (the `corbeille` action). The hook `outils/garde.py` stays as a second lock: if a command tool were ever given to Claude, it blocks `rm`, `rmdir`, `unlink`, `shred`, `find -delete`, `dd`, `mkfs`, `diskutil erase`, `git clean`, `shutdown`, etc.
 - Its instructions forbid buying, paying, sending messages, entering passwords or bank details, changing system settings and deleting anything for good. Text displayed on screen cannot override these rules. This part relies on Claude: what it does with the mouse and keyboard is not filtered by the program.
 - No web access (WebFetch and WebSearch are denied).
@@ -189,9 +189,10 @@ data/               EVERYTHING the app generates, kept apart from the program (p
   settings.json       permissions given to Claude (regenerated at each start)
   model.txt           model choice (Model menu)
   smooth.txt          smooth mode: on or off (Smooth mode menu)
-  memory.txt          persistent memory: on or off (Persistent memory menu)
+  session.txt         the id of the current session
+  ghost.txt           ghost mode: on or off
   last-result.txt     what the History window shows first when it is not the result of a kept task
-  memory-previous.md  the notes cleared the last time Persistent memory was unchecked
+  memory-previous.md  the notes cleared by the last New session
   icon.png            applications menu icon (Linux)
   .venv/              Python environment created by installer.sh
   cache/              compiled Python files
