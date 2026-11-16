@@ -12,8 +12,10 @@ ClaudeScreen runs on top of the **[Claude Code](https://docs.claude.com/en/docs/
 
 ## How it works
 
-1. Press **Ctrl+Alt+C** (or **Ctrl+Alt+Copilot key**).
-2. The app takes a screenshot of the screen your mouse is on.
+1. Put the task on screen and press a shortcut. The app takes a screenshot of the screen your mouse is on.
+   - **Ctrl+Alt+C** (or **Ctrl+Alt+Copilot key**): a tiny bar opens, and you type what you want Claude to do.
+   - **Ctrl+Alt+Shift+C**: automatic. You type nothing, Claude works the task out from the screen and your context.
+2. Either shortcut, pressed again during a task, stops it.
 3. **Haiku** looks at the screenshot and picks the model:
    - **Sonnet** for simple tasks: a question, a form, a short text, a few clicks (fast, uses little quota);
    - **Opus** for calculations, programming, technical configuration, data processing and long reasoning.
@@ -23,15 +25,17 @@ ClaudeScreen runs on top of the **[Claude Code](https://docs.claude.com/en/docs/
 
 In the notification area the app is called **Claude-Work** (tooltip, menu, result window), like the folder in your Documents where Claude puts the files it creates.
 
-### Giving an instruction
+### The two shortcuts
 
-**Ctrl+Alt+Shift+C** takes the screenshot, then opens a tiny bar in the bottom-left corner of the screen. Type your instruction, for example "only do question 4", "sort these files by year" or "make this table a Word report", then press **Enter**. The instruction takes priority over everything else.
+**Ctrl+Alt+C: you say what to do.** It takes the screenshot, then opens a tiny bar in the bottom-left corner of the screen. Type your instruction, for example "only do question 4", "sort these files by year" or "make this table a Word report", then press **Enter**. The instruction takes priority over everything else.
 
 - **Esc** or clicking elsewhere cancels the task and deletes the screenshot.
-- **Enter** on an empty bar starts a normal task.
+- **Enter** on an empty bar starts an automatic task, like the other shortcut.
 - If the bar closes before you press Enter (Esc, a click elsewhere, by accident), what you typed is not lost: it is back in the bar the next time you open it.
 
-Without an instruction, Claude does not act at random: it works out what is expected from your standing instructions, the active context, its notes of the session, your documents and the most recent files of `Claude-Work`, then from the screen. If all of that still does not say what to do, it changes nothing and tells you what it would need. When the screen asks for nothing in particular, give an instruction.
+**Ctrl+Alt+Shift+C: automatic.** No bar: Claude starts at once and does not act at random. It works out what is expected from your standing instructions, the active context, its notes of the session, your documents and the most recent files of `Claude-Work`, then from the screen. If all of that still does not say what to do, it changes nothing and tells you what it would need.
+
+The Sessions window reminds you of both shortcuts whenever it has no task to show.
 
 ### Contexts
 
@@ -110,7 +114,7 @@ It applies at once, even in the middle of a task. Tasks take a bit longer in thi
 
 A **session** is a run of tasks that belong together, like the exercises of one assignment. Inside a session, Claude ends each task with short notes (what it learned about you and your work, how far it got) and gets them back at the next task, so it does not start from scratch or read the same document again.
 
-Everything about sessions is in one window: **Sessions** in the icon menu, or a click on the icon.
+Everything about sessions is in one window: **Sessions** in the icon menu, or a click on the icon. It is small and sits in the bottom-right corner; drag its border to resize it, and the size is remembered, even after a restart (`data\window.txt`). It cannot be made too small to use, and **Default size** appears when the size is not the normal one, to bring it back.
 
 - **The drop-down list** holds your sessions: the one in use first, then the earlier ones (Session 3, Session 2, Session 1...), each with its date and its number of tasks. Pick one to read it.
 - **The `<` `>` arrows** go through the tasks of the chosen session, with the instruction you typed, the answer and the steps. The newest task is the last one (3 / 3). While a task is running, the last entry shows what Claude has said and done so far.
@@ -140,7 +144,7 @@ About the notes:
 
 ### Stopping a task
 
-Press **Ctrl+Alt+C** again while the star is spinning. A task is also stopped automatically after 20 minutes, and when you quit the app.
+Press **Ctrl+Alt+C** (or **Ctrl+Alt+Shift+C**) again while the star is spinning. A task is also stopped automatically after 20 minutes, and when you quit the app.
 
 Nothing is lost when a task stops: **Sessions** then lists what Claude had said and done before the stop. To see where a task is without stopping it, click the icon.
 
@@ -222,12 +226,12 @@ Start-ScheduledTask -TaskName ClaudeScreen
 
 | Shortcut | Status |
 |---|---|
-| Ctrl+Alt+C | Active |
-| Ctrl+Alt+Copilot key | Active |
-| Ctrl+Alt+Shift+C | Active, with the instruction bar |
+| Ctrl+Alt+C | Active: the instruction bar |
+| Ctrl+Alt+Copilot key | Active: the instruction bar |
+| Ctrl+Alt+Shift+C | Active: automatic task |
 | Copilot key alone (Win+Shift+F23) | Reserved by Windows, usually unavailable |
 
-Ctrl+Alt+C is global: while the app is running, other programs no longer receive it. A few use it, for example Visual Studio or Photoshop. If that bothers you, use Ctrl+Alt+Copilot or change the shortcut in `ClaudeScreen.ps1` (`$raccourcis.Enregistrer(...)`).
+Both shortcuts are global: while the app is running, other programs no longer receive them. A few use it, for example Visual Studio or Photoshop. If that bothers you, use Ctrl+Alt+Copilot or change the shortcut in `ClaudeScreen.ps1` (`$raccourcis.Enregistrer(...)`).
 
 ## Subscription and usage
 
@@ -282,6 +286,7 @@ data/               EVERYTHING the app generates, kept apart from the program (p
   log.txt             app log
   settings.json       permissions given to Claude (regenerated at each start)
   model.txt, smooth.txt, terminal.txt, context.txt, ghost.txt    the choices made in the icon menu and in the Sessions window
+  window.txt              the size of the Sessions window, when you changed it
   session.txt             the id of the current session (each task folder holds the id of its own)
   sessions/               the notes of the kept sessions that are not the current one
   terminal-accepted.txt   you answered Yes to the Terminal access question (delete it to be asked again)

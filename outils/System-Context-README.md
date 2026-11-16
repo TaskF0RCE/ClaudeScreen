@@ -55,7 +55,7 @@ Formats read best: `.pdf`, `.txt`, `.md`, images (`.png`, `.jpg`), code, `.csv`,
 
 ## Priorities
 
-1. The instruction typed in the small bar (Ctrl+Alt+Shift+C, or ⌃⌥⇧C on a Mac), for a single task.
+1. The instruction typed in the small bar (Ctrl+Alt+C, or ⌃⌥C on a Mac), for a single task.
 2. `instructions.md`, for every task (then Claude's notes in `memory.md`).
 3. The active context.
 4. What Claude guesses from the screen.

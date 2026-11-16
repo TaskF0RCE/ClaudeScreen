@@ -97,7 +97,7 @@ Verifier 'a task keeps the id of its session, and its instruction' ((Get-Content
 $deuxieme = Lire-Session
 $t3 = Tache-Finie '' "Answer C.`nMEMORY: note of the second session"
 $s = Lister-Sessions
-Verifier 'three sessions, oldest first: earlier tasks, Session 1, Session 2 (current)' ($s.Count -eq 3 -and $s[0].Id -eq '' -and $s[0].Titre -match '^Earlier tasks  -  2 tasks$' -and $s[1].Id -eq $premiere -and $s[1].Titre -match '^Session 1  -  .*  -  2 tasks$' -and -not $s[1].Courante -and $s[2].Courante -and $s[2].Titre -match '^Session 2  -  .*  -  1 task, current$') (($s | ForEach-Object { $_.Titre }) -join ' | ')
+Verifier 'three sessions, oldest first: earlier tasks, Session 1, Session 2 (current)' ($s.Count -eq 3 -and $s[0].Id -eq '' -and $s[0].Titre -match '^Earlier tasks  -  2 tasks$' -and $s[1].Id -eq $premiere -and $s[1].Titre -match '^Session 1  -  .*  -  2 tasks$' -and -not $s[1].Courante -and $s[2].Courante -and $s[2].Titre -match '^Session 2 \(current\)  -  .*  -  1 task$') (($s | ForEach-Object { $_.Titre }) -join ' | ')
 $milieu = $s[1]
 Verifier 'a session holds all its tasks, oldest first' ($milieu.Taches.Count -eq 2 -and $milieu.Taches[0].Fichier -eq (Join-Path $t1.Run 'result.txt') -and $milieu.Taches[1].Fichier -eq (Join-Path $t2.Run 'result.txt'))
 $e = Lister-Entrees $milieu
@@ -135,7 +135,7 @@ Verifier 'Persisted Memory is the default' (-not $script:Fantome -and -not (Test
 Verifier 'the mode cannot change during a task' (-not (& { $script:Proc = Faux-Proc 0; $r = Basculer-Fantome $true; $script:Proc = $null; $r }) -and -not $script:Fantome)
 Verifier 'Ghost Mode selected' ((Basculer-Fantome $true) -and $script:Fantome -and $script:Dernier -eq $script:AccueilFantome)
 $c = Lister-Choix
-Verifier 'ghost: the ghost session is first in the list, no persisted session is "current"' ($c[0].Fantome -and $c[0].Titre -eq 'Ghost session  -  0 tasks, nothing is kept' -and -not ($c | Where-Object { -not $_.Fantome -and $_.Courante }) -and ($c | Where-Object Id -eq $persistee))
+Verifier 'ghost: the ghost session is first in the list, no persisted session is "current"' ($c[0].Fantome -and $c[0].Titre -eq 'Ghost session (current)  -  0 tasks' -and -not ($c | Where-Object { -not $_.Fantome -and $_.Courante }) -and ($c | Where-Object Id -eq $persistee))
 $nbAvant = @(Get-ChildItem $Runs -Directory).Count
 $g = Fausse-Capture
 Lancer-Tache $g 'a secret instruction'
@@ -166,4 +166,40 @@ Verifier 'persisted again: tasks are kept, with the notes of the session' ((Test
 Verifier 'New session after Persisted Memory is chosen: a persisted one' ((Basculer-Fantome $false) -and (Nouvelle-Session) -and -not $script:Fantome -and (Lire-Session) -ne $persistee)
 [void](Basculer-Fantome $true)
 Verifier 'Resume from Ghost Mode: Persisted Memory is selected again, in that session' ((Reprendre-Session $persistee) -and -not $script:Fantome -and (Lire-Session) -eq $persistee -and (Get-NoteMemoire $FichierNotes) -match 'a note of the persisted session')
+
+'--- the two shortcuts'
+Verifier 'the waiting message names both shortcuts and what each does' ($script:Accueil -match 'Ctrl\+Alt\+C: type what you want' -and $script:Accueil -match 'Ctrl\+Alt\+Shift\+C: automatic' -and $script:AccueilFantome -match 'Ghost session' -and $script:AccueilFantome -match 'Ctrl\+Alt\+Shift\+C: automatic')
+[void](Basculer-Fantome $false); [void](Nouvelle-Session)
+Verifier 'a new session says them too' ($script:Dernier -match '^New session\.' -and $script:Dernier -match 'Ctrl\+Alt\+C: type' -and $script:Dernier -match 'Ctrl\+Alt\+Shift\+C: automatic')
+$global:Lances = @()
+function Demander-Consigne { $global:Lances += 'bar' }
+function Lancer-Tache { $global:Lances += 'auto' }
+function Arreter-Tache([string]$raison) { $global:Lances += "stop:$raison" }
+$script:Proc = $null; $script:Boite = $null
+foreach ($id in 1, 2, 3, 4, 99) { $raccourcis.SurAppui.Invoke($id) }
+Verifier 'Ctrl+Alt+C and the Copilot keys open the instruction bar, Ctrl+Alt+Shift+C is automatic' (($global:Lances -join ',') -eq 'bar,bar,bar,auto') ($global:Lances -join ',')
+$global:Lances = @(); $script:Proc = Faux-Proc 0
+$raccourcis.SurAppui.Invoke(1); $raccourcis.SurAppui.Invoke(4)
+Verifier 'during a task, both shortcuts stop it' (($global:Lances -join ',') -eq 'stop:hotkey,stop:hotkey') ($global:Lances -join ',')
+$global:Lances = @(); $script:Proc = $null; $script:Boite = 1
+$raccourcis.SurAppui.Invoke(1); $raccourcis.SurAppui.Invoke(4)
+Verifier 'while the instruction bar is open, a shortcut starts nothing else' ($global:Lances.Count -eq 0)
+$script:Boite = $null
+$src = [IO.File]::ReadAllText((Join-Path $Racine 'ClaudeScreen.ps1'), [Text.Encoding]::UTF8)
+Verifier 'the two shortcuts are two different key combinations' ($src -match [regex]::Escape('Enregistrer(1, 0x3, 0x43)') -and $src -match [regex]::Escape('Enregistrer(4, 0x7, 0x43)'))
+
+'--- size of the Sessions window'
+$zone = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+Verifier 'no saved size: the default one, compact' (-not (Test-Path $FichierFenetre) -and (Lire-TailleFenetre) -eq $TailleDefaut -and $TailleDefaut.Width -le 460 -and $TailleDefaut.Height -le 440)
+Enregistrer-TailleFenetre (New-Object System.Drawing.Size 520, 480)
+Verifier 'a size chosen by the user is kept in data and read back (as after a restart)' ((Get-Content $FichierFenetre -Raw).Trim() -eq '520,480' -and $FichierFenetre -like '*\data\window.txt' -and (Lire-TailleFenetre) -eq (New-Object System.Drawing.Size ([math]::Min(520, $zone.Width - 20)), ([math]::Min(480, $zone.Height - 20))))
+[IO.File]::WriteAllText($FichierFenetre, '90,40')
+Verifier 'never too small to use' ((Lire-TailleFenetre) -eq $TailleMin -and $TailleMin.Width -ge 380 -and $TailleMin.Height -ge 300)
+[IO.File]::WriteAllText($FichierFenetre, '9000,9000')
+$t = Lire-TailleFenetre
+Verifier 'never larger than the screen' ($t.Width -le $zone.Width -and $t.Height -le $zone.Height -and $t.Width -ge $TailleMin.Width)
+[IO.File]::WriteAllText($FichierFenetre, 'not a size')
+Verifier 'an unreadable file: the default size' ((Lire-TailleFenetre) -eq $TailleDefaut)
+Enregistrer-TailleFenetre $TailleDefaut
+Verifier 'back to the default size: nothing is kept' (-not (Test-Path $FichierFenetre))
 } catch { Verifier 'scenario ran to the end' $false ($_.Exception.Message + ' ' + $_.InvocationInfo.PositionMessage) }

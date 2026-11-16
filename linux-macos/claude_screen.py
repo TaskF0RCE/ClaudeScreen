@@ -129,6 +129,10 @@ def langue_systeme():
 
 LANGUE = langue_systeme()
 NOMS_RACCOURCIS = raccourcis.noms()
+# The two ways to start a task, said wherever the app waits for one.
+AIDE_RACCOURCIS = ('Put the task on screen, then:\n  %s: type what you want Claude to do.\n'
+                   '  %s: automatic. Claude works the task out from the screen and your context.' % (
+                       NOMS_RACCOURCIS[raccourcis.NORMAL], NOMS_RACCOURCIS[raccourcis.CONSIGNE]))
 
 
 def noter(texte):
@@ -203,7 +207,7 @@ def texte_consigne(png, largeur, hauteur, fenetre, precision, instructions='', d
         note_touches = ''
         zone_interdite = 'Do not touch the taskbar or the desktop panel.'
     bloc_memoire = texte_memoire() if memoire_active else ''
-    return f"""You were started by a keyboard shortcut: the user just pressed {NOMS_RACCOURCIS[1]} so that you do the task visible on their screen ({SYSTEME}). Nobody can answer you while you work: do not ask any questions.
+    return f"""You were started by a keyboard shortcut: the user just pressed it so that you do the task visible on their screen ({SYSTEME}). Nobody can answer you while you work: do not ask any questions.
 
 Screenshot: {png} ({largeur} x {hauteur} px). Start by reading it with the Read tool.
 Active window: {fenetre[0]} - "{fenetre[1]}"
@@ -523,7 +527,7 @@ class Appli:
         self.smooth = lire_texte(FICHIER_SMOOTH).lower() == 'on'
         self.memoire = memoire.active(FICHIER_MEMOIRE)
         self.fantome = lire_texte(FICHIER_FANTOME).lower() == 'on'
-        self.dernier = 'No task yet. Press %s when the task is on screen.' % NOMS_RACCOURCIS[1]
+        self.dernier = 'No task yet.\n\n' + AIDE_RACCOURCIS
         self.dernier_hors_historique = False  # self.dernier is a message that no task folder holds
         self.coupes = []  # files of System-Context whose end was left out of the current task (too long)
 
@@ -583,7 +587,7 @@ class Appli:
             return False
         self.dernier_hors_historique = False
         if self.fantome:
-            self.dernier = 'Ghost session: nothing is kept. Press %s when the task is on screen.' % NOMS_RACCOURCIS[1]
+            self.dernier = 'Ghost session: nothing is kept.\n\n' + AIDE_RACCOURCIS
             try:
                 os.remove(DERNIER)
             except OSError:
@@ -602,7 +606,7 @@ class Appli:
         if ident == ancienne:
             ident += '-2'
         ecrire_texte(FICHIER_SESSION, ident)
-        self.dernier = 'New session. Press %s when the task is on screen.' % NOMS_RACCOURCIS[1]
+        self.dernier = 'New session.\n\n' + AIDE_RACCOURCIS
         noter('New session: %s' % ident)
         return True
 
@@ -614,11 +618,11 @@ class Appli:
         self.fantome = actif
         ecrire_texte(FICHIER_FANTOME, 'on' if actif else 'off')
         if actif:
-            self.dernier = 'Ghost session: nothing is kept. Press %s when the task is on screen.' % NOMS_RACCOURCIS[1]
+            self.dernier = 'Ghost session: nothing is kept.\n\n' + AIDE_RACCOURCIS
             self.dernier_hors_historique = False
         else:
             # Back to Persisted Memory: the ghost answer is forgotten.
-            self.dernier = 'No task yet. Press %s when the task is on screen.' % NOMS_RACCOURCIS[1]
+            self.dernier = 'No task yet.\n\n' + AIDE_RACCOURCIS
             self.dernier_hors_historique = False
             try:
                 os.remove(DERNIER)
@@ -943,9 +947,11 @@ class Appli:
             if self.proc:
                 self.arreter_tache('raccourci')
             elif ident == raccourcis.CONSIGNE:
-                self.demander_consigne()
-            else:
+                # The longer shortcut: automatic, Claude works the task out from the screen and the context.
                 self.lancer_tache()
+            else:
+                # The simple shortcut: the instruction bar, to say what to do.
+                self.demander_consigne()
         elif genre == 'resultat':
             self.montrer_resultat()
         elif genre == 'arreter':
@@ -1012,9 +1018,11 @@ class Appli:
                 conn.settimeout(2)
                 commande = conn.recv(256).decode('utf-8', 'replace').strip()
                 reponse = 'OK'
-                if commande == 'declencher':
+                # The desktop shortcuts installed on Linux call these two commands: each one does what its
+                # key does (see traiter), whatever its name says.
+                if commande == 'declencher':  # same as Ctrl+Alt+C: the instruction bar
                     self.poster('raccourci', raccourcis.NORMAL)
-                elif commande == 'consigne':
+                elif commande == 'consigne':   # same as Ctrl+Alt+Shift+C: automatic
                     self.poster('raccourci', raccourcis.CONSIGNE)
                 elif commande == 'arreter':
                     self.poster('arreter', 'commande')

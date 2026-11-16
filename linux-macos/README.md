@@ -12,13 +12,15 @@ Like the Windows version, it runs on top of the **[Claude Code](https://docs.cla
 
 Same as the Windows version:
 
-1. Press **⌃⌥C** (Ctrl+Option+C) on a Mac, or **Ctrl+Alt+C** on Linux.
-2. The app takes a screenshot of the screen your mouse is on.
+1. Put the task on screen and press a shortcut. The app takes a screenshot of the screen your mouse is on.
+   - **⌃⌥C** (Ctrl+Option+C) on a Mac, **Ctrl+Alt+C** on Linux: a small bar opens, and you type what you want Claude to do.
+   - **⌃⌥⇧C** / **Ctrl+Alt+Shift+C**: automatic. You type nothing, Claude works the task out from the screen and your context.
+2. Either shortcut, pressed again during a task, stops it.
 3. **Haiku** looks at the screenshot and picks **Sonnet** (quiz, course question, simple form) or **Opus** (calculations, programming, networking, infrastructure). If the active window is Packet Tracer, GNS3, PuTTY, Wireshark, MATLAB, etc., Opus is picked directly.
 4. Claude does the task with the mouse and keyboard, takes a new screenshot after each action to check, then writes a short summary.
 5. Click the icon → **Sessions** to read it.
 
-**⌃⌥⇧C** / **Ctrl+Alt+Shift+C** takes the screenshot, then opens a small bar in the bottom-left corner: type an instruction ("only do question 4", "configure OSPF on R1 and R2"), then **Enter**. **Esc** or clicking elsewhere cancels.
+The bar of **⌃⌥C** / **Ctrl+Alt+C** is in the bottom-left corner: type an instruction ("only do question 4", "configure OSPF on R1 and R2"), then **Enter**. **Esc** or clicking elsewhere cancels; **Enter** on an empty bar starts an automatic task.
 
 Pressing the shortcut again during a task stops it. Automatic stop after 20 minutes. Nothing is lost when a task stops: **Sessions** then lists what Claude had done before the stop. During a task, don't touch the mouse or keyboard.
 
@@ -130,8 +132,8 @@ Wayland deliberately prevents apps from listening to the keyboard, reading the s
 
 ```bash
 ./lancer.sh               # starts the app
-./lancer.sh declencher    # same as Ctrl+Alt+C
-./lancer.sh consigne      # same as Ctrl+Alt+Shift+C
+./lancer.sh declencher    # same as Ctrl+Alt+C: the instruction bar
+./lancer.sh consigne      # same as Ctrl+Alt+Shift+C: automatic task
 ./lancer.sh arreter       # stops the current task
 ./lancer.sh resultat      # shows the last result
 ./lancer.sh etat          # ready / working

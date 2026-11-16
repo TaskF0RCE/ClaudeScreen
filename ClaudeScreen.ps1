@@ -1,4 +1,5 @@
-﻿# ClaudeScreen: icon in the notification area. Ctrl+Alt+C (or Ctrl+Alt+Copilot) -> screenshot -> Claude does the task.
+﻿# ClaudeScreen: icon in the notification area. Ctrl+Alt+C (or Ctrl+Alt+Copilot) -> screenshot -> instruction bar -> Claude does it.
+# Ctrl+Alt+Shift+C -> screenshot -> Claude works the task out by itself.
 # Pressing it again during a task stops it.
 $ErrorActionPreference = 'Stop'
 # Only one instance: the conversions below must not run twice at the same time.
@@ -12,7 +13,7 @@ $Outils = Join-Path $Racine 'outils'
 # Everything the app generates goes to data/ (same layout as the macOS/Linux version):
 #   data/runs/<date>/  one folder per task: images/, prompts/, responses/ + screen.json, result.txt (History window)
 #   data/context-cache/, data/log.txt, data/settings.json, data/model.txt, data/smooth.txt, data/memory.txt,
-#   data/context.txt, data/terminal.txt, data/terminal-accepted.txt, data/session.txt, data/ghost.txt, data/sessions/
+#   data/context.txt, data/terminal.txt, data/terminal-accepted.txt, data/session.txt, data/ghost.txt, data/sessions/, data/window.txt
 $Donnees = Join-Path $Racine 'data'
 $Runs = Join-Path $Donnees 'runs'
 $Journal = Join-Path $Donnees 'log.txt'
@@ -22,6 +23,7 @@ $FichierMemoire = Join-Path $Donnees 'memory.txt'  # Claude's notes are always k
 $FichierSession = Join-Path $Donnees 'session.txt'  # id of the current session (see New session)
 $FichierFantome = Join-Path $Donnees 'ghost.txt'    # ghost mode: 'on' or 'off' (default)
 $DossierSessions = Join-Path $Donnees 'sessions'    # the notes of the persisted sessions that are not the current one
+$FichierFenetre = Join-Path $Donnees 'window.txt'   # size of the Sessions window, when the user changed it
 $FichierContexte = Join-Path $Donnees 'context.txt'   # name of the active context (Context menu); none = Default
 $FichierTerminal = Join-Path $Donnees 'terminal.txt'  # terminal access (PowerShell tool): 'on' or 'off' (default)
 $FichierTerminalAccepte = Join-Path $Donnees 'terminal-accepted.txt'  # the user answered Yes once: not asked again
@@ -198,14 +200,38 @@ function Infobulle([string]$texte) {
 #   Ghost Mode: a session that only lives in the memory of the app. Its notes and its results are never
 #     written anywhere, and the folder of each task (screenshots, prompt, answer) is deleted when the task ends.
 #     It ends when a new session is started, when Persisted Memory is chosen again, or when the app stops.
-$script:Accueil = 'No task yet. Press Ctrl+Alt+C when the task is on screen.'
-$script:AccueilFantome = 'Ghost session: nothing is kept. Press Ctrl+Alt+C when the task is on screen.'
+# The two ways to start a task, said wherever the app waits for one.
+$script:AideRaccourcis = "Put the task on screen, then:`n  Ctrl+Alt+C: type what you want Claude to do.`n  Ctrl+Alt+Shift+C: automatic. Claude works the task out from the screen and your context."
+$script:Accueil = "No task yet.`n`n$script:AideRaccourcis"
+$script:AccueilFantome = "Ghost session: nothing is kept.`n`n$script:AideRaccourcis"
 $script:Fantome = (Test-Path $FichierFantome) -and ("$(Get-Content $FichierFantome -Raw)".Trim() -eq 'on')
 $script:Dernier = if ($script:Fantome) { $script:AccueilFantome } else { $script:Accueil }
 $script:DernierHorsHistorique = $false   # $script:Dernier is a message that no session holds (the task could not start)
 $script:NotesFantome = New-Object System.Collections.Generic.List[string]     # the notes of the ghost session
 $script:EntreesFantome = New-Object System.Collections.Generic.List[object]   # the results of the ghost session
 $script:Fenetre = $null
+# The window can be resized: its size is kept in data\window.txt. It can never be made too small to use
+# or larger than the screen, and "Default size" brings the normal size back.
+$TailleDefaut = New-Object System.Drawing.Size 440, 420
+$TailleMin = New-Object System.Drawing.Size 380, 300
+function Lire-TailleFenetre {
+    $taille = $TailleDefaut
+    if (Test-Path -LiteralPath $FichierFenetre) {
+        $m = [regex]::Match("$(Get-Content -LiteralPath $FichierFenetre -Raw)", '^\s*(\d{2,5})\s*[,x ]\s*(\d{2,5})\s*$')
+        if ($m.Success) { $taille = New-Object System.Drawing.Size ([int]$m.Groups[1].Value), ([int]$m.Groups[2].Value) }
+    }
+    $zone = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+    New-Object System.Drawing.Size ([math]::Max($TailleMin.Width, [math]::Min($taille.Width, $zone.Width - 20))), ([math]::Max($TailleMin.Height, [math]::Min($taille.Height, $zone.Height - 20)))
+}
+function Enregistrer-TailleFenetre([System.Drawing.Size]$taille) {
+    if ($taille -eq $TailleDefaut) { Remove-Item -LiteralPath $FichierFenetre -Force -ErrorAction SilentlyContinue }
+    else { Set-Content -Path $FichierFenetre -Value "$($taille.Width),$($taille.Height)" -Encoding ASCII }
+}
+# Bottom-right corner of the screen, whatever the size.
+function Placer-Fenetre {
+    $zone = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+    $script:Fenetre.Location = New-Object System.Drawing.Point ($zone.Right - $script:Fenetre.Width - 10), ($zone.Bottom - $script:Fenetre.Height - 10)
+}
 $script:Choix = @()        # what the drop-down list offers, in its order
 $script:Entrees = @()
 $script:Position = 0
@@ -257,11 +283,11 @@ function Lister-Sessions {
     $numero = 0
     $sessions = foreach ($id in ($taches.Keys | Sort-Object)) {
         $n = $taches[$id].Count
-        if ($id) { $numero++; $titre = 'Session {0}  -  {1:g}' -f $numero, (Date-Dossier $id (Get-Date)) } else { $titre = 'Earlier tasks' }
-        $titre += '  -  ' + $(if ($n -eq 1) { '1 task' } else { "$n tasks" })
         # In ghost mode no persisted session is the one in use.
         $enCours = ($id -eq $courante) -and -not $script:Fantome
-        if ($enCours) { $titre += ', current' }
+        # What matters comes first: the end of the title is cut in a narrow window.
+        if ($id) { $numero++; $titre = "Session $numero" + $(if ($enCours) { ' (current)' } else { '' }) + ('  -  {0:g}' -f (Date-Dossier $id (Get-Date))) } else { $titre = 'Earlier tasks' }
+        $titre += '  -  ' + $(if ($n -eq 1) { '1 task' } else { "$n tasks" })
         [pscustomobject]@{ Id = $id; Courante = $enCours; Fantome = $false; Titre = $titre; Taches = $taches[$id].ToArray() }
     }
     , @($sessions)
@@ -271,7 +297,7 @@ function Lister-Sessions {
 function Lire-SessionFantome {
     $n = $script:EntreesFantome.Count
     [pscustomobject]@{ Id = ''; Courante = $true; Fantome = $true; Taches = $script:EntreesFantome.ToArray()
-        Titre = 'Ghost session  -  ' + $(if ($n -eq 1) { '1 task' } else { "$n tasks" }) + ', nothing is kept' }
+        Titre = 'Ghost session (current)  -  ' + $(if ($n -eq 1) { '1 task' } else { "$n tasks" }) }
 }
 
 # What is going on now: the last message, or the steps so far while a task is running
@@ -333,7 +359,7 @@ function Nouvelle-Session {
     $id = $base; $n = 2
     while ($id -eq $ancienne -or (Test-Path -LiteralPath (Fichier-NotesSession $id))) { $id = "$base-$n"; $n++ }
     Set-Content -Path $FichierSession -Value $id -Encoding ASCII
-    $script:Dernier = 'New session. Press Ctrl+Alt+C when the task is on screen.'
+    $script:Dernier = "New session.`n`n$script:AideRaccourcis"
     Noter "New session: $id"
     $true
 }
@@ -348,7 +374,7 @@ function Reprendre-Session([string]$id) {
         try { Sauver-NotesSession $courante; Charger-NotesSession $id } catch { Noter "memory.md: $($_.Exception.Message)" }
         Set-Content -Path $FichierSession -Value $id -Encoding ASCII
     }
-    $script:Dernier = 'Session resumed. Press Ctrl+Alt+C when the task is on screen.'
+    $script:Dernier = "Session resumed: Claude has the notes it had.`n`n$script:AideRaccourcis"
     $script:DernierHorsHistorique = $false
     Noter "Session resumed: $id"
     $true
@@ -420,10 +446,14 @@ function Montrer-Resultat {
     if (-not $script:Fenetre -or $script:Fenetre.IsDisposed) {
         $f = New-Object System.Windows.Forms.Form
         $f.Text = "$Nom - Sessions"; $f.Icon = $IconeRepos; $f.TopMost = $true; $f.ShowInTaskbar = $false
-        $f.FormBorderStyle = 'SizableToolWindow'; $f.Size = New-Object System.Drawing.Size 560, 440
-        $f.StartPosition = 'Manual'
-        $zone = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
-        $f.Location = New-Object System.Drawing.Point ($zone.Right - 570), ($zone.Bottom - 450)
+        $f.FormBorderStyle = 'SizableToolWindow'; $f.StartPosition = 'Manual'
+        $f.MinimumSize = $TailleMin
+        $f.Size = Lire-TailleFenetre
+        # A resize by the user is kept for the next times (the event also fires after a move: same size, nothing changes).
+        $f.add_ResizeEnd({
+            Enregistrer-TailleFenetre $this.Size
+            $script:BoutonTaille.Visible = ($this.Size -ne $TailleDefaut)
+        })
         $police = New-Object System.Drawing.Font 'Segoe UI', 9
         $t = New-Object System.Windows.Forms.TextBox
         $t.Multiline = $true; $t.ReadOnly = $true; $t.ScrollBars = 'Vertical'; $t.Dock = 'Fill'
@@ -434,6 +464,7 @@ function Montrer-Resultat {
         $haut.Dock = 'Top'; $haut.Height = 30; $haut.Padding = New-Object System.Windows.Forms.Padding 3
         $liste = New-Object System.Windows.Forms.ComboBox
         $liste.DropDownStyle = 'DropDownList'; $liste.Dock = 'Fill'; $liste.Font = $police
+        $liste.DropDownWidth = 380   # the whole title of a session shows in the open list, even in a narrow window
         $liste.add_SelectedIndexChanged({ if (-not $script:Remplissage -and $this.SelectedIndex -ge 0) { Choisir-Session $this.SelectedIndex } })
         $reprendre = New-Object System.Windows.Forms.Button
         $reprendre.Text = 'Resume'; $reprendre.Dock = 'Right'; $reprendre.Width = 66; $reprendre.Font = $police; $reprendre.FlatStyle = 'System'
@@ -446,12 +477,25 @@ function Montrer-Resultat {
         $modes = New-Object System.Windows.Forms.Panel
         $modes.Dock = 'Top'; $modes.Height = 26; $modes.Padding = New-Object System.Windows.Forms.Padding 6, 2, 3, 2
         $persiste = New-Object System.Windows.Forms.RadioButton
-        $persiste.Text = 'Persisted Memory'; $persiste.Dock = 'Left'; $persiste.Width = 170; $persiste.Font = $police; $persiste.AutoCheck = $false
+        $persiste.Text = 'Persisted Memory'; $persiste.Dock = 'Left'; $persiste.Width = 150; $persiste.Font = $police; $persiste.AutoCheck = $false
         $persiste.add_Click({ [void](Basculer-Fantome $false); Remplir-Fenetre })
         $fantome = New-Object System.Windows.Forms.RadioButton
-        $fantome.Text = 'Ghost Mode (nothing is kept)'; $fantome.Dock = 'Fill'; $fantome.Font = $police; $fantome.AutoCheck = $false
+        $fantome.Text = 'Ghost Mode'; $fantome.Dock = 'Fill'; $fantome.Font = $police; $fantome.AutoCheck = $false
         $fantome.add_Click({ [void](Basculer-Fantome $true); Remplir-Fenetre })
-        $modes.Controls.AddRange(@($fantome, $persiste))
+        # Only there when the window does not have its normal size.
+        $taille = New-Object System.Windows.Forms.Button
+        $taille.Text = 'Default size'; $taille.Dock = 'Right'; $taille.Width = 84; $taille.Font = $police; $taille.FlatStyle = 'System'
+        $taille.add_Click({
+            $script:Fenetre.Size = $TailleDefaut
+            Enregistrer-TailleFenetre $TailleDefaut
+            Placer-Fenetre
+            $this.Visible = $false
+        })
+        $bulles = New-Object System.Windows.Forms.ToolTip
+        $bulles.SetToolTip($persiste, 'The session is kept: its tasks stay in the list for 30 days and it can be resumed.')
+        $bulles.SetToolTip($fantome, 'Nothing is kept: no notes, and the folder of each task is deleted when the task ends.')
+        $bulles.SetToolTip($taille, 'Back to the normal size of this window.')
+        $modes.Controls.AddRange(@($fantome, $persiste, $taille))
         # Row 3: the tasks of the session, older on the left, newer on the right.
         $barre = New-Object System.Windows.Forms.Panel
         $barre.Dock = 'Top'; $barre.Height = 28
@@ -472,9 +516,11 @@ function Montrer-Resultat {
         $script:Fenetre = $f; $script:ZoneResultat = $t; $script:TitreResultat = $titre
         $script:BoutonAncien = $ancien; $script:BoutonRecent = $recent
         $script:ListeSessions = $liste; $script:BoutonSession = $nouvelle; $script:BoutonReprendre = $reprendre
-        $script:ModePersiste = $persiste; $script:ModeFantome = $fantome
+        $script:ModePersiste = $persiste; $script:ModeFantome = $fantome; $script:BoutonTaille = $taille
     }
     Remplir-Fenetre
+    $script:BoutonTaille.Visible = ($script:Fenetre.Size -ne $TailleDefaut)
+    Placer-Fenetre
     $script:Fenetre.Show(); $script:Fenetre.Activate()
     if ($script:Proc -eq $null) { $icone.Icon = $IconeRepos }
 }
@@ -710,7 +756,7 @@ Terminal: you also have the PowerShell tool. The screen comes first: use a comma
         } else { $outil += "`nThere is no terminal." }
         $image = 'the image comes back in the result'
         $consigne = @"
-You were started by a keyboard shortcut: the user just pressed Ctrl+Alt+C so that you do the task visible on their screen. Nobody can answer you while you work: do not ask any questions.
+You were started by a keyboard shortcut: the user just pressed it so that you do the task visible on their screen. Nobody can answer you while you work: do not ask any questions.
 
 Screenshot: $png ($largeur x $hauteur px). Start by reading it with the Read tool.
 Active window: $($fenetre[0]) - "$($fenetre[1])"
@@ -794,7 +840,7 @@ function Lancer-Travail([string]$modele) {
     }
 }
 
-# Instruction bar (Ctrl+Alt+Shift+C): screenshot first, then a small bar at the bottom of the screen.
+# Instruction bar (Ctrl+Alt+C): screenshot first, then a small bar at the bottom of the screen.
 # Enter = start with the instruction; Esc or clicking elsewhere = cancel.
 $script:Boite = $null
 $script:Attente = $null
@@ -849,7 +895,7 @@ function Demander-Consigne {
 
     $script:Boite = $f
     $f.Show()
-    [ClaudeScreen.Natif]::Indice($t.Handle, 'Instruction...')
+    [ClaudeScreen.Natif]::Indice($t.Handle, 'What should Claude do?')
     $f.Activate(); $t.Focus() | Out-Null
     if ($script:Brouillon) { $t.Text = $script:Brouillon; $t.SelectionStart = $t.TextLength }
 }
@@ -1109,15 +1155,17 @@ if ($raccourcis.Enregistrer(1, 0x3, 0x43)) { $actifs += 'Ctrl+Alt+C' }
 if ($raccourcis.Enregistrer(2, 0xC, 0x86)) { $actifs += 'Copilot' }
 if ($raccourcis.Enregistrer(3, 0xF, 0x86)) { $actifs += 'Ctrl+Alt+Copilot' }
 if ($raccourcis.Enregistrer(4, 0x7, 0x43)) { $actifs += 'Ctrl+Alt+Shift+C' }
-# Press = start (id 4: with the instruction bar); press during a task = stop.
+# Press = start; press during a task = stop.
+#   Ctrl+Alt+C and the Copilot keys (ids 1 to 3): the instruction bar, to say what to do.
+#   Ctrl+Alt+Shift+C (id 4): automatic, Claude works the task out from the screen and the context.
 # Id 99 is only used to check that the app is responding.
 $raccourcis.SurAppui = [Action[int]] {
     param($id)
     Noter "Hotkey received (id $id)"
     if ($id -eq 99 -or $script:Boite) { return }
     if ($script:Proc) { Arreter-Tache 'hotkey' }
-    elseif ($id -eq 4) { Demander-Consigne }
-    else { Lancer-Tache }
+    elseif ($id -eq 4) { Lancer-Tache }
+    else { Demander-Consigne }
 }
 Noter ("Started. Active hotkeys: " + ($actifs -join ', ') + "; window $($raccourcis.Handle)")
 if (-not (Test-Path $Claude)) { $icone.Icon = $IconeErreur; $script:Dernier = "Claude Code not found: $Claude"; $script:DernierHorsHistorique = $true }

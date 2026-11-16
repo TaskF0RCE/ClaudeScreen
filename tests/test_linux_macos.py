@@ -442,6 +442,27 @@ verifier('only the last 80 steps, 400 characters each', len(etapes) == 80 and om
          and len(etapes[0]) == 400 and fin is None and cs.deroule.texte(etapes, omises).startswith('(... 20 earlier steps not shown)'))
 verifier('no stream: no step, no result', cs.deroule.lire(os.path.join(bac, 'none.jsonl')) == ([], None, 0))
 
+print('--- the two shortcuts')
+lances = []
+a.demander_consigne = lambda: lances.append('bar')
+a.lancer_tache = lambda *args, **kw: lances.append('auto')
+a.arreter_tache = lambda raison: lances.append('stop:' + raison)
+a.proc = None
+a.boite = None
+for ident in (cs.raccourcis.NORMAL, cs.raccourcis.CONSIGNE):
+    a.dernier_appui = -1e9
+    a.traiter(('raccourci', ident))
+verifier('the simple shortcut opens the instruction bar, the longer one is automatic', lances == ['bar', 'auto'], lances)
+del lances[:]
+a.proc = types.SimpleNamespace(returncode=None)
+for ident in (cs.raccourcis.NORMAL, cs.raccourcis.CONSIGNE):
+    a.dernier_appui = -1e9
+    a.traiter(('raccourci', ident))
+verifier('during a task, both shortcuts stop it', lances == ['stop:raccourci', 'stop:raccourci'], lances)
+a.proc = None
+verifier('the waiting message names both shortcuts and what each does',
+         'Ctrl+Alt+C: type what you want Claude to do.' in cs.AIDE_RACCOURCIS and 'Ctrl+Alt+Shift+C: automatic' in cs.AIDE_RACCOURCIS)
+
 print('--- MCP server (outils/mcp.py), driven as Claude Code drives it')
 # The only actions run are waits and refused ones: nothing is clicked, typed or captured.
 run_mcp = os.path.join(bac, 'run-mcp')
