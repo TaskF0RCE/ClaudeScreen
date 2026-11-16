@@ -12,7 +12,7 @@ $Outils = Join-Path $Racine 'outils'
 # Everything the app generates goes to data/ (same layout as the macOS/Linux version):
 #   data/runs/<date>/  one folder per task: images/, prompts/, responses/ + screen.json, result.txt (History window)
 #   data/context-cache/, data/log.txt, data/settings.json, data/model.txt, data/smooth.txt, data/memory.txt,
-#   data/context.txt, data/terminal.txt
+#   data/context.txt, data/terminal.txt, data/terminal-accepted.txt
 $Donnees = Join-Path $Racine 'data'
 $Runs = Join-Path $Donnees 'runs'
 $Journal = Join-Path $Donnees 'log.txt'
@@ -21,6 +21,7 @@ $FichierSmooth = Join-Path $Donnees 'smooth.txt'   # smooth mode: 'on' or 'off',
 $FichierMemoire = Join-Path $Donnees 'memory.txt'  # persistent memory: 'on' (default) or 'off'
 $FichierContexte = Join-Path $Donnees 'context.txt'   # name of the active context (Context menu); none = Default
 $FichierTerminal = Join-Path $Donnees 'terminal.txt'  # terminal access (PowerShell tool): 'on' or 'off' (default)
+$FichierTerminalAccepte = Join-Path $Donnees 'terminal-accepted.txt'  # the user answered Yes once: not asked again
 $CacheContexte = Join-Path $Donnees 'context-cache'   # text extracted from the context PDFs
 # Name shown in the notification area (tooltip, menu, result window) and name of the work folder in Documents.
 $Nom = 'Claude-Work'
@@ -794,10 +795,13 @@ $menu.Items.Add($menuMemoire) | Out-Null
 # Terminal access: Claude may also run PowerShell commands when the screen is not enough (files, data, documents).
 # Every command goes through outils/garde.ps1 first. Unchecked (the default): mouse and keyboard only.
 $script:Terminal = (Test-Path $FichierTerminal) -and ("$(Get-Content $FichierTerminal -Raw)".Trim() -eq 'on')
+# Already on when this version arrives: the user chose it before the question existed.
+if ($script:Terminal -and -not (Test-Path -LiteralPath $FichierTerminalAccepte)) { Set-Content -Path $FichierTerminalAccepte -Value 'on before the question existed' -Encoding ASCII }
 $menuTerminal = New-Object System.Windows.Forms.ToolStripMenuItem 'Terminal access'
 $menuTerminal.CheckOnClick = $true
 $menuTerminal.Checked = $script:Terminal
-# Checking it asks first: it is the one setting that lets Claude do more than a person at the keyboard sees.
+# The first time it is checked, the app asks: it is the one setting that lets Claude do more than a person at the
+# keyboard sees. After one Yes (kept in data\terminal-accepted.txt), checking and unchecking is direct.
 function Confirmer-Terminal {
     $message = "Terminal access lets Claude run PowerShell commands on this PC during a task, on top of the mouse and keyboard.`n`n" +
         "Every command goes through a guard first: no deletion, no administrator rights, no installation or download, no change to Windows. " +
@@ -806,9 +810,14 @@ function Confirmer-Terminal {
     [System.Windows.Forms.MessageBox]::Show($message, "$Nom - Terminal access", 'YesNo', 'Warning', 'Button2') -eq 'Yes'
 }
 $menuTerminal.add_Click({
-    if ($menuTerminal.Checked -and -not (Confirmer-Terminal)) {
-        $menuTerminal.Checked = $false
-        Noter 'Terminal access: not allowed (the user answered No)'
+    if ($menuTerminal.Checked -and -not (Test-Path -LiteralPath $FichierTerminalAccepte)) {
+        if (Confirmer-Terminal) {
+            Set-Content -Path $FichierTerminalAccepte -Value (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') -Encoding ASCII
+            Noter 'Terminal access: allowed by the user (not asked again)'
+        } else {
+            $menuTerminal.Checked = $false
+            Noter 'Terminal access: not allowed (the user answered No)'
+        }
     }
     $script:Terminal = $menuTerminal.Checked
     $etat = if ($script:Terminal) { 'on' } else { 'off' }

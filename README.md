@@ -95,7 +95,7 @@ Right-click the icon (every choice is remembered):
 
 ### Terminal access
 
-Unchecked by default: Claude only has the mouse and keyboard. Check **Terminal access** in the icon menu, answer **Yes** to the question it asks, and Claude can also run PowerShell commands, which opens what the mouse cannot do well: renaming or sorting many files, processing a CSV, producing or converting a document, reading the state of the system (network, processes, disk).
+Unchecked by default: Claude only has the mouse and keyboard. Check **Terminal access** in the icon menu and Claude can also run PowerShell commands (the first time, the app explains what this allows and asks you to confirm; after one Yes it does not ask again), which opens what the mouse cannot do well: renaming or sorting many files, processing a CSV, producing or converting a document, reading the state of the system (network, processes, disk).
 
 The screen comes first: Claude is told to use a command only when the task cannot reasonably be done on screen or is clearly better done that way, and to stay inside the task. Every command goes through a guard before it runs (see [Security](#security)).
 
@@ -269,6 +269,7 @@ data/               EVERYTHING the app generates, kept apart from the program (p
   log.txt             app log
   settings.json       permissions given to Claude (regenerated at each start)
   model.txt, smooth.txt, memory.txt, terminal.txt, context.txt    the choices made in the icon menu
+  terminal-accepted.txt   you answered Yes to the Terminal access question (delete it to be asked again)
 ```
 
 The macOS/Linux version uses the same `data/` layout.
