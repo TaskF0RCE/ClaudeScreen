@@ -303,6 +303,20 @@ a.proc = types.SimpleNamespace(returncode=0)
 a.processus_fini()
 verifier('shortened again: no warning any more', a.coupes == [] and 'Warning' not in a.dernier, a.dernier)
 
+print('--- the task is worked out from the context')
+with open(os.path.join(cs.TRAVAIL, 'exo7_notes.txt'), 'w') as f:
+    f.write('work in progress')
+cz = capture()
+a.proc = None
+a.lancer_tache(cz, '')
+pz = prompt(cz)
+verifier('prompt: never act at random, the order of what to rely on', '1. Find what is being asked before you act: never act at random' in pz
+         and 'their standing instructions; the active context; your notes of this session; the documents and the recent files' in pz
+         and 'do not guess an action: change nothing' in pz)
+verifier('prompt: the recent files of the work folder, not those of System-Context', 'Most recent files of the work folder' in pz
+         and os.path.join(cs.TRAVAIL, 'exo7_notes.txt') + '  (' in pz and 'instructions.md' not in pz[pz.index('Most recent files'):pz.index('1. Find what')])
+a.proc = None
+
 print('--- steps of a task and History')
 a.memoire = True
 a.choix_modele = 'sonnet'
@@ -385,8 +399,9 @@ print('--- New session and ghost mode')
 with open(cs.FICHIER_NOTES, 'w', encoding='utf-8') as f:
     f.write(memoire.ENTETE + '- a note of the session\n')
 avant = cs.lire_session()
-verifier('New session: notes emptied and kept once, a new session id', a.nouvelle_session() and memoire.notes(cs.FICHIER_NOTES) == ''
-         and 'a note of the session' in memoire.notes(cs.FICHIER_NOTES_AVANT) and cs.lire_session() != avant
+verifier('New session: notes emptied, those of the session that ended put away with it, a new session id',
+         a.nouvelle_session() and memoire.notes(cs.FICHIER_NOTES) == ''
+         and 'a note of the session' in memoire.notes(os.path.join(cs.DOSSIER_SESSIONS, avant + '.md')) and cs.lire_session() != avant
          and re.match(r'^\d{8}-\d{6}', cs.lire_session()) is not None)
 with open(cs.FICHIER_NOTES, 'w', encoding='utf-8') as f:
     f.write(memoire.ENTETE + '- a note of the new session\n')
@@ -409,6 +424,9 @@ a.processus_fini()
 verifier('ghost: the answer is shown, the task folder is gone, no note saved', 'Secret answer.' in a.dernier and not os.path.exists(g['run'])
          and len(os.listdir(cs.RUNS)) == nb and memoire.notes(cs.FICHIER_NOTES) == '- a note of the new session', a.dernier)
 verifier('ghost: the answer is the last entry of the window', a.fichiers_resultat()[-1] == cs.DERNIER and 'Secret answer.' in lire(cs.DERNIER))
+ident = cs.lire_session()
+verifier('New session in Ghost Mode: still ghost, the answer forgotten, the persisted session untouched', a.nouvelle_session() and a.fantome
+         and a.dernier.startswith('Ghost session') and not os.path.exists(cs.DERNIER) and cs.lire_session() == ident)
 verifier('ghost off: the ghost answer is forgotten', a.basculer_fantome(False) and a.dernier.startswith('No task yet') and not os.path.exists(cs.DERNIER)
          and a.fichiers_resultat() == cs.historique() and lire(cs.FICHIER_FANTOME) == 'off')
 k = capture()
@@ -423,6 +441,27 @@ etapes, fin, omises = cs.deroule.lire(long)
 verifier('only the last 80 steps, 400 characters each', len(etapes) == 80 and omises == 20 and etapes[0].startswith('step 21 ')
          and len(etapes[0]) == 400 and fin is None and cs.deroule.texte(etapes, omises).startswith('(... 20 earlier steps not shown)'))
 verifier('no stream: no step, no result', cs.deroule.lire(os.path.join(bac, 'none.jsonl')) == ([], None, 0))
+
+print('--- the two shortcuts')
+lances = []
+a.demander_consigne = lambda: lances.append('bar')
+a.lancer_tache = lambda *args, **kw: lances.append('auto')
+a.arreter_tache = lambda raison: lances.append('stop:' + raison)
+a.proc = None
+a.boite = None
+for ident in (cs.raccourcis.NORMAL, cs.raccourcis.CONSIGNE):
+    a.dernier_appui = -1e9
+    a.traiter(('raccourci', ident))
+verifier('the simple shortcut opens the instruction bar, the longer one is automatic', lances == ['bar', 'auto'], lances)
+del lances[:]
+a.proc = types.SimpleNamespace(returncode=None)
+for ident in (cs.raccourcis.NORMAL, cs.raccourcis.CONSIGNE):
+    a.dernier_appui = -1e9
+    a.traiter(('raccourci', ident))
+verifier('during a task, both shortcuts stop it', lances == ['stop:raccourci', 'stop:raccourci'], lances)
+a.proc = None
+verifier('the waiting message names both shortcuts and what each does',
+         'Ctrl+Alt+C: type what you want Claude to do.' in cs.AIDE_RACCOURCIS and 'Ctrl+Alt+Shift+C: automatic' in cs.AIDE_RACCOURCIS)
 
 print('--- MCP server (outils/mcp.py), driven as Claude Code drives it')
 # The only actions run are waits and refused ones: nothing is clicked, typed or captured.

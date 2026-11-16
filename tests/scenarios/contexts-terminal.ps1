@@ -15,7 +15,7 @@ $script:ChoixModele = 'auto'
 $c = Fausse-Capture; Lancer-Tache $c ''
 $p = Lire-Prompt $c
 Verifier 'prompt: Default context and its text' ($p -match 'Active context: Default \(chosen by the user in the icon menu\)' -and $p -match 'General assistant' -and $p -notmatch '<!--')
-Verifier 'prompt: the context says how to find the task' ($p -match 'the active context above says how to find the task')
+Verifier 'prompt: the context says how to find the task' ($p -match 'their standing instructions; the active context; your notes of this session')
 Verifier 'prompt: context files are not listed as documents' ($p -notmatch [regex]::Escape($DossierContextes))
 Verifier 'triage: names the context' ((Lire-Prompt $c 'triage') -match '(?m)^Active context: Default\.')
 ($items | Where-Object { $_.Text -eq 'Networking' }).PerformClick()

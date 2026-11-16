@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Starts ClaudeScreen in the background (only the icon in the menu bar / notification area).
 #   ./lancer.sh               starts the app
-#   ./lancer.sh declencher    same as Ctrl+Alt+C        (for a desktop keyboard shortcut)
-#   ./lancer.sh consigne      same as Ctrl+Alt+Shift+C
+#   ./lancer.sh declencher    same as Ctrl+Alt+C: the instruction bar   (for a desktop keyboard shortcut)
+#   ./lancer.sh consigne      same as Ctrl+Alt+Shift+C: automatic task
 #   ./lancer.sh arreter | resultat | quitter | etat | diagnostic
 DIR="$(cd "$(dirname "$0")" && pwd)"
 PY="$DIR/data/.venv/bin/python3"

@@ -90,19 +90,20 @@ function Tache-Finie([string]$consigne, [string]$reponse) {
     $c = Fausse-Capture; Lancer-Tache $c $consigne; Ecrire-Reponse $c $reponse; $script:Proc = Faux-Proc 0; Processus-Fini; $c
 }
 $premiere = Lire-Session
-$t1 = Tache-Finie 'only question 4' 'Answer A.'
+$t1 = Tache-Finie 'only question 4' "Answer A.`nMEMORY: note of the first session"
 $t2 = Tache-Finie '' 'Answer B.'
 Verifier 'a task keeps the id of its session, and its instruction' ((Get-Content (Join-Path $t1.Run 'session.txt') -Raw).Trim() -eq $premiere -and [IO.File]::ReadAllText((Join-Path $t1.Run 'instruction.txt')) -eq 'only question 4' -and -not (Test-Path (Join-Path $t2.Run 'instruction.txt')))
-[IO.File]::WriteAllText($FichierSession, '20991231-090000')
-$t3 = Tache-Finie '' 'Answer C.'
+[void](Nouvelle-Session)
+$deuxieme = Lire-Session
+$t3 = Tache-Finie '' "Answer C.`nMEMORY: note of the second session"
 $s = Lister-Sessions
-Verifier 'three sessions, oldest first: earlier tasks, the first one, the current one' ($s.Count -eq 3 -and $s[0].Id -eq '' -and $s[0].Titre -match '^Earlier tasks  -  2 tasks$' -and -not $s[0].Courante -and $s[2].Courante -and $s[2].Taches.Count -eq 1) (($s | ForEach-Object { $_.Titre }) -join ' | ')
-$milieu = $s | Where-Object { $_.Id -eq $premiere }
-Verifier 'a session holds all its tasks, oldest first' ($milieu.Taches.Count -eq 2 -and $milieu.Titre -match '^Session of .*  -  2 tasks$' -and $milieu.Taches[0].Fichier -eq (Join-Path $t1.Run 'result.txt') -and $milieu.Taches[1].Fichier -eq (Join-Path $t2.Run 'result.txt')) $milieu.Titre
-Verifier 'the title of the current session says so' ($s[2].Titre -match '^Session of .*  -  1 task, current$') $s[2].Titre
+Verifier 'three sessions, oldest first: earlier tasks, Session 1, Session 2 (current)' ($s.Count -eq 3 -and $s[0].Id -eq '' -and $s[0].Titre -match '^Earlier tasks  -  2 tasks$' -and $s[1].Id -eq $premiere -and $s[1].Titre -match '^Session 1  -  .*  -  2 tasks$' -and -not $s[1].Courante -and $s[2].Courante -and $s[2].Titre -match '^Session 2 \(current\)  -  .*  -  1 task$') (($s | ForEach-Object { $_.Titre }) -join ' | ')
+$milieu = $s[1]
+Verifier 'a session holds all its tasks, oldest first' ($milieu.Taches.Count -eq 2 -and $milieu.Taches[0].Fichier -eq (Join-Path $t1.Run 'result.txt') -and $milieu.Taches[1].Fichier -eq (Join-Path $t2.Run 'result.txt'))
 $e = Lister-Entrees $milieu
 Verifier 'the newest task is the last entry (2 / 2); its text starts with the instruction' ($e.Count -eq 2 -and (Texte-Entree $e[0]) -match '^Instruction: only question 4\s+\[sonnet, \d+ s\] Answer A\.' -and (Texte-Entree $e[1]) -match '^\[sonnet, \d+ s\] Answer B\.')
-Verifier 'the results live in the task folders: they go away with them' ((Split-Path (Split-Path $e[0].Fichier -Parent) -Parent) -eq $Runs)
+$c = Lister-Choix
+Verifier 'the drop-down list: the session in use first, then the others, newest first' ($c.Count -eq 3 -and $c[0].Id -eq $deuxieme -and $c[1].Id -eq $premiere -and $c[2].Id -eq '')
 Echec 'Could not start the task: test'
 $e = Lister-Entrees (Lister-Sessions)[2]
 Verifier 'a task that could not start: its message last, in the current session only' ($e.Count -eq 2 -and -not $e[1].Fichier -and $e[1].Titre -eq 'last message' -and (Texte-Entree $e[1]) -eq 'Could not start the task: test' -and (Lister-Entrees $milieu).Count -eq 2)
@@ -110,36 +111,95 @@ $script:Etape = 'tri'
 $script:Proc = Faux-Proc 0
 $e = Lister-Entrees (Lister-Sessions)[2]
 Verifier 'a task in progress: shown last' ($e.Count -eq 2 -and $e[1].Titre -eq 'in progress' -and (Texte-Entree $e[1]) -eq 'Looking at the screen...')
+Verifier 'during a task: no resume' (-not (Reprendre-Session $premiere) -and (Lire-Session) -eq $deuxieme)
 $script:Proc = $null
+
+'--- resuming a session'
+Verifier 'each session has its own notes' ((Get-NoteMemoire $FichierNotes) -eq '- note of the second session' -and (Get-NoteMemoire (Fichier-NotesSession $premiere)) -match '(?m)^- note of the first session$' -and (Get-NoteMemoire (Fichier-NotesSession $premiere)) -notmatch 'second session')
+Verifier 'resume the first session: done' (Reprendre-Session $premiere)
+Verifier 'resumed: it is the current one again, with its notes; the other one keeps its own' ((Lire-Session) -eq $premiere -and (Get-NoteMemoire $FichierNotes) -match '(?m)^- note of the first session$' -and (Get-NoteMemoire $FichierNotes) -notmatch 'second session' -and (Get-NoteMemoire (Fichier-NotesSession $deuxieme)) -eq '- note of the second session')
+$t4 = Tache-Finie '' 'Answer D.'
+Verifier 'resumed: the next task gets its notes and joins it' ((Lire-Prompt $t4) -match 'note of the first session' -and (Lire-Prompt $t4) -notmatch 'note of the second session' -and ((Lister-Sessions) | Where-Object Id -eq $premiere).Taches.Count -eq 3)
+Verifier 'earlier tasks and unknown ids cannot be resumed' (-not (Reprendre-Session '') -and -not (Reprendre-Session '..\x') -and (Lire-Session) -eq $premiere)
 Remove-Item $milieu.Taches[0].Fichier
 Verifier 'a result removed while the window is open' ((Texte-Entree $milieu.Taches[0]) -eq 'This result is no longer kept.')
+Get-ChildItem $Runs -Directory | Where-Object { (Test-Path (Join-Path $_.FullName 'session.txt')) -and (Get-Content (Join-Path $_.FullName 'session.txt') -Raw).Trim() -eq $deuxieme } | Remove-Item -Recurse -Force
+Nettoyer-Runs
+Verifier 'the notes of a session go away with its last task' (-not (Test-Path (Fichier-NotesSession $deuxieme)))
 
-'--- ghost mode'
+'--- Ghost Mode'
 [void](Nouvelle-Session)
-$sessionGhost = Lire-Session
-[void](Tache-Finie '' "Kept.`nMEMORY: a note of the session")
-Verifier 'ghost mode is off by default' (-not $script:Fantome -and -not (Test-Path $FichierFantome))
-Verifier 'ghost mode cannot change during a task' (-not (& { $script:Proc = Faux-Proc 0; $r = Basculer-Fantome $true; $script:Proc = $null; $r }) -and -not $script:Fantome)
-[void](Basculer-Fantome $true)
+$persistee = Lire-Session
+[void](Tache-Finie '' "Kept.`nMEMORY: a note of the persisted session")
+Verifier 'Persisted Memory is the default' (-not $script:Fantome -and -not (Test-Path $FichierFantome))
+Verifier 'the mode cannot change during a task' (-not (& { $script:Proc = Faux-Proc 0; $r = Basculer-Fantome $true; $script:Proc = $null; $r }) -and -not $script:Fantome)
+Verifier 'Ghost Mode selected' ((Basculer-Fantome $true) -and $script:Fantome -and $script:Dernier -eq $script:AccueilFantome)
+$c = Lister-Choix
+Verifier 'ghost: the ghost session is first in the list, no persisted session is "current"' ($c[0].Fantome -and $c[0].Titre -eq 'Ghost session (current)  -  0 tasks' -and -not ($c | Where-Object { -not $_.Fantome -and $_.Courante }) -and ($c | Where-Object Id -eq $persistee))
 $nbAvant = @(Get-ChildItem $Runs -Directory).Count
 $g = Fausse-Capture
 Lancer-Tache $g 'a secret instruction'
 $p = Lire-Prompt $g
-Verifier 'ghost: the notes of the session are not sent, none is asked for' ($p -notmatch 'MEMORY|Persistent memory|a note of the session' -and $p -match 'a secret instruction')
-Verifier 'ghost: no session id, no instruction file in the task folder' (-not (Test-Path (Join-Path $g.Run 'session.txt')) -and -not (Test-Path (Join-Path $g.Run 'instruction.txt')))
-Ecrire-Reponse $g "Secret answer.`nMEMORY: must not be saved"
+Verifier 'ghost: the notes of the persisted session are not sent' ($p -notmatch 'a note of the persisted session' -and $p -match '\(no notes yet\)' -and $p -match 'a secret instruction')
+Verifier 'ghost: no session id, no instruction file in the task folder' (-not (Test-Path (Join-Path $g.Run 'session.txt')) -and -not (Test-Path (Join-Path $g.Run 'instruction.txt')) -and (Test-Path (Join-Path $g.Run 'ghost.txt')))
+Ecrire-Reponse $g "Secret answer.`nMEMORY: a ghost note"
 $script:Proc = Faux-Proc 0
 Processus-Fini
-Verifier 'ghost: the answer is shown, with its lines as they are' ($script:Dernier -match 'Secret answer\.' -and $script:DernierHorsHistorique)
-Verifier 'ghost: the task folder is gone (screenshots, prompt, answer), no note saved' (-not (Test-Path $g.Run) -and @(Get-ChildItem $Runs -Directory).Count -eq $nbAvant -and (Get-NoteMemoire $FichierNotes) -eq '- a note of the session')
-$e = Lister-Entrees ((Lister-Sessions) | Where-Object Courante)
-Verifier 'ghost: the answer is the last entry, marked as not kept' ($e.Count -eq 2 -and $e[1].Titre -eq 'ghost mode, not kept' -and (Texte-Entree $e[1]) -eq $script:Dernier)
-$g2 = Fausse-Capture; Lancer-Tache $g2 ''; $script:Arret = 'hotkey'; $script:Proc = Faux-Proc 1; Processus-Fini
-Verifier 'ghost, stopped task: nothing kept either' (-not (Test-Path $g2.Run) -and $script:Dernier -match '^Task stopped')
-[void](Basculer-Fantome $false)
-Verifier 'ghost off: the ghost answer is forgotten, the session is back as it was' ($script:Dernier -eq $script:Accueil -and -not $script:DernierHorsHistorique -and (Lire-Session) -eq $sessionGhost -and (Lister-Entrees ((Lister-Sessions) | Where-Object Courante)).Count -eq 1 -and (Get-Content $FichierFantome -Raw).Trim() -eq 'off')
-$c = Tache-Finie '' 'After the ghost.'
-Verifier 'after ghost mode: tasks are kept again, with the notes of the session' ((Test-Path (Join-Path $c.Run 'result.txt')) -and (Lire-Prompt $c) -match 'a note of the session')
-$libelles = @($menu.Items | ForEach-Object { $_.Text })
-Verifier 'menu: History first, then New session' (($libelles[0..1] -join '|') -eq 'History|New session') ($libelles -join '|')
+Verifier 'ghost: the answer is shown, its note is hidden' ((Sans-Duree $script:Dernier) -eq '[sonnet] Secret answer.')
+Verifier 'ghost: nothing on disk (task folder gone, no note written anywhere)' (-not (Test-Path $g.Run) -and @(Get-ChildItem $Runs -Directory).Count -eq $nbAvant -and (Get-NoteMemoire $FichierNotes) -eq '- a note of the persisted session' -and -not (Get-ChildItem $Donnees -Recurse -File | Where-Object { $_.Name -ne 'log.txt' } | Select-String -Pattern 'Secret answer|a ghost note|a secret instruction' -List))
+$g2 = Fausse-Capture; Lancer-Tache $g2 ''
+Verifier 'ghost: the next task of the ghost session gets its note' ((Lire-Prompt $g2) -match '- a ghost note' -and (Lire-Prompt $g2) -notmatch 'persisted session')
+$script:Arret = 'hotkey'; $script:Proc = Faux-Proc 1; Processus-Fini
+$e = Lister-Entrees (Lister-Choix)[0]
+Verifier 'ghost: the session shows its two tasks, with the instruction, from memory' ($e.Count -eq 2 -and (Texte-Entree $e[0]) -match '^Instruction: a secret instruction\s+\[sonnet, \d+ s\] Secret answer\.' -and (Texte-Entree $e[1]) -match '^Task stopped' -and -not (Test-Path $g2.Run))
+$g3 = Fausse-Capture; Lancer-Tache $g3 ''; $script:Proc = $null
+Nettoyer-Runs
+Verifier 'ghost: a task that never ended (app closed) is deleted at the next cleanup' (-not (Test-Path $g3.Run))
+Verifier 'New session in Ghost Mode: another ghost session, still ghost, the old one forgotten' ((Nouvelle-Session) -and $script:Fantome -and (Lister-Entrees (Lister-Choix)[0]).Count -eq 1 -and $script:NotesFantome.Count -eq 0 -and (Lire-Session) -eq $persistee)
+[void](Tache-Finie '' 'Ghost again.')
+Verifier 'back to Persisted Memory' ((Basculer-Fantome $false) -and -not $script:Fantome -and (Get-Content $FichierFantome -Raw).Trim() -eq 'off')
+$c = Lister-Choix
+Verifier 'persisted again: the ghost session is forgotten, the session that was current is back as it was' ($script:EntreesFantome.Count -eq 0 -and $script:Dernier -eq $script:Accueil -and $c[0].Id -eq $persistee -and $c[0].Courante -and $c[0].Taches.Count -eq 1 -and -not ($c | Where-Object Fantome))
+$k = Tache-Finie '' 'After the ghost.'
+Verifier 'persisted again: tasks are kept, with the notes of the session' ((Test-Path (Join-Path $k.Run 'result.txt')) -and (Lire-Prompt $k) -match 'a note of the persisted session')
+[void](Basculer-Fantome $true)
+Verifier 'New session after Persisted Memory is chosen: a persisted one' ((Basculer-Fantome $false) -and (Nouvelle-Session) -and -not $script:Fantome -and (Lire-Session) -ne $persistee)
+[void](Basculer-Fantome $true)
+Verifier 'Resume from Ghost Mode: Persisted Memory is selected again, in that session' ((Reprendre-Session $persistee) -and -not $script:Fantome -and (Lire-Session) -eq $persistee -and (Get-NoteMemoire $FichierNotes) -match 'a note of the persisted session')
+
+'--- the two shortcuts'
+Verifier 'the waiting message names both shortcuts and what each does' ($script:Accueil -match 'Ctrl\+Alt\+C: type what you want' -and $script:Accueil -match 'Ctrl\+Alt\+Shift\+C: automatic' -and $script:AccueilFantome -match 'Ghost session' -and $script:AccueilFantome -match 'Ctrl\+Alt\+Shift\+C: automatic')
+[void](Basculer-Fantome $false); [void](Nouvelle-Session)
+Verifier 'a new session says them too' ($script:Dernier -match '^New session\.' -and $script:Dernier -match 'Ctrl\+Alt\+C: type' -and $script:Dernier -match 'Ctrl\+Alt\+Shift\+C: automatic')
+$global:Lances = @()
+function Demander-Consigne { $global:Lances += 'bar' }
+function Lancer-Tache { $global:Lances += 'auto' }
+function Arreter-Tache([string]$raison) { $global:Lances += "stop:$raison" }
+$script:Proc = $null; $script:Boite = $null
+foreach ($id in 1, 2, 3, 4, 99) { $raccourcis.SurAppui.Invoke($id) }
+Verifier 'Ctrl+Alt+C and the Copilot keys open the instruction bar, Ctrl+Alt+Shift+C is automatic' (($global:Lances -join ',') -eq 'bar,bar,bar,auto') ($global:Lances -join ',')
+$global:Lances = @(); $script:Proc = Faux-Proc 0
+$raccourcis.SurAppui.Invoke(1); $raccourcis.SurAppui.Invoke(4)
+Verifier 'during a task, both shortcuts stop it' (($global:Lances -join ',') -eq 'stop:hotkey,stop:hotkey') ($global:Lances -join ',')
+$global:Lances = @(); $script:Proc = $null; $script:Boite = 1
+$raccourcis.SurAppui.Invoke(1); $raccourcis.SurAppui.Invoke(4)
+Verifier 'while the instruction bar is open, a shortcut starts nothing else' ($global:Lances.Count -eq 0)
+$script:Boite = $null
+$src = [IO.File]::ReadAllText((Join-Path $Racine 'ClaudeScreen.ps1'), [Text.Encoding]::UTF8)
+Verifier 'the two shortcuts are two different key combinations' ($src -match [regex]::Escape('Enregistrer(1, 0x3, 0x43)') -and $src -match [regex]::Escape('Enregistrer(4, 0x7, 0x43)'))
+
+'--- size of the Sessions window'
+$zone = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+Verifier 'no saved size: the default one, compact' (-not (Test-Path $FichierFenetre) -and (Lire-TailleFenetre) -eq $TailleDefaut -and $TailleDefaut.Width -le 460 -and $TailleDefaut.Height -le 440)
+Enregistrer-TailleFenetre (New-Object System.Drawing.Size 520, 480)
+Verifier 'a size chosen by the user is kept in data and read back (as after a restart)' ((Get-Content $FichierFenetre -Raw).Trim() -eq '520,480' -and $FichierFenetre -like '*\data\window.txt' -and (Lire-TailleFenetre) -eq (New-Object System.Drawing.Size ([math]::Min(520, $zone.Width - 20)), ([math]::Min(480, $zone.Height - 20))))
+[IO.File]::WriteAllText($FichierFenetre, '90,40')
+Verifier 'never too small to use' ((Lire-TailleFenetre) -eq $TailleMin -and $TailleMin.Width -ge 380 -and $TailleMin.Height -ge 300)
+[IO.File]::WriteAllText($FichierFenetre, '9000,9000')
+$t = Lire-TailleFenetre
+Verifier 'never larger than the screen' ($t.Width -le $zone.Width -and $t.Height -le $zone.Height -and $t.Width -ge $TailleMin.Width)
+[IO.File]::WriteAllText($FichierFenetre, 'not a size')
+Verifier 'an unreadable file: the default size' ((Lire-TailleFenetre) -eq $TailleDefaut)
+Enregistrer-TailleFenetre $TailleDefaut
+Verifier 'back to the default size: nothing is kept' (-not (Test-Path $FichierFenetre))
 } catch { Verifier 'scenario ran to the end' $false ($_.Exception.Message + ' ' + $_.InvocationInfo.PositionMessage) }

@@ -12,15 +12,17 @@ Like the Windows version, it runs on top of the **[Claude Code](https://docs.cla
 
 Same as the Windows version:
 
-1. Press **⌃⌥C** (Ctrl+Option+C) on a Mac, or **Ctrl+Alt+C** on Linux.
-2. The app takes a screenshot of the screen your mouse is on.
+1. Put the task on screen and press a shortcut. The app takes a screenshot of the screen your mouse is on.
+   - **⌃⌥C** (Ctrl+Option+C) on a Mac, **Ctrl+Alt+C** on Linux: a small bar opens, and you type what you want Claude to do.
+   - **⌃⌥⇧C** / **Ctrl+Alt+Shift+C**: automatic. You type nothing, Claude works the task out from the screen and your context.
+2. Either shortcut, pressed again during a task, stops it.
 3. **Haiku** looks at the screenshot and picks **Sonnet** (quiz, course question, simple form) or **Opus** (calculations, programming, networking, infrastructure). If the active window is Packet Tracer, GNS3, PuTTY, Wireshark, MATLAB, etc., Opus is picked directly.
 4. Claude does the task with the mouse and keyboard, takes a new screenshot after each action to check, then writes a short summary.
-5. Click the icon → **History** to read it.
+5. Click the icon → **Sessions** to read it.
 
-**⌃⌥⇧C** / **Ctrl+Alt+Shift+C** takes the screenshot, then opens a small bar in the bottom-left corner: type an instruction ("only do question 4", "configure OSPF on R1 and R2"), then **Enter**. **Esc** or clicking elsewhere cancels.
+The bar of **⌃⌥C** / **Ctrl+Alt+C** is in the bottom-left corner: type an instruction ("only do question 4", "configure OSPF on R1 and R2"), then **Enter**. **Esc** or clicking elsewhere cancels; **Enter** on an empty bar starts an automatic task.
 
-Pressing the shortcut again during a task stops it. Automatic stop after 20 minutes. Nothing is lost when a task stops: **History** then lists what Claude had done before the stop. During a task, don't touch the mouse or keyboard.
+Pressing the shortcut again during a task stops it. Automatic stop after 20 minutes. Nothing is lost when a task stops: **Sessions** then lists what Claude had done before the stop. During a task, don't touch the mouse or keyboard.
 
 ### Standing context (optional)
 
@@ -44,12 +46,12 @@ The folder is in your Documents, outside the repository: its contents never end 
 |---|---|
 | Still star | Ready |
 | Spinning star | Working |
-| Green dot | Done: open "History" |
-| Red dot | Error: open "History" for the message |
+| Green dot | Done: open "Sessions" |
+| Red dot | Error: open "Sessions" for the message |
 
-Menu: **History** (the answer of the last task, or what Claude has said and done so far while a task is running; its two arrows go through your earlier tasks, oldest first, with the session of each one; they are kept for 30 days), **Model** (Auto, Always Sonnet, Always Opus; the choice is remembered), **New session** and **Ghost mode** (see below), **Smooth mode**, **Open the Claude-Work folder**, **Quit**. The icon's tooltip and the result window are named **Claude-Work** too.
+Menu: **Sessions** (the answer of the last task, or what Claude has said and done so far while a task is running; its two arrows go through your earlier tasks, oldest first, with the session of each one; they are kept for 30 days), **Model** (Auto, Always Sonnet, Always Opus; the choice is remembered), **New session** and **Ghost mode** (see below), **Smooth mode**, **Open the Claude-Work folder**, **Quit**. The icon's tooltip and the result window are named **Claude-Work** too.
 
-On macOS and with most Linux desktops (AppIndicator), clicking the icon opens the menu; "History" is the first entry.
+On macOS and with most Linux desktops (AppIndicator), clicking the icon opens the menu; "Sessions" is the first entry.
 
 ### Smooth mode
 
@@ -57,7 +59,7 @@ Same as on Windows: with **Smooth mode** checked in the menu, the mouse glides t
 
 ### Sessions, memory and ghost mode
 
-Same as on Windows ([details](../README.md#sessions-and-memory)): inside a session, Claude ends each task with short notes (what it learned about you and your work, how far it got) and gets them back at the next tasks. The notes go into `System-Context/memory.md`, one per line; `instructions.md` is never touched. **New session** in the menu empties them and starts a new history (the notes it cleared are kept once in `data/memory-previous.md`). **Ghost mode** in the menu is for tasks that must leave nothing behind: no notes are read or saved, and the task folder is deleted when the task ends. Claude cannot write in the folder: it ends its answer with `MEMORY: ...` lines, and the app saves them and hides them from the result (300 characters per note, 4000 in all; past that, the oldest notes make room). To never keep any note, write `never` in `data/memory.txt`. The code is in `outils/memoire.py`.
+Same as on Windows ([details](../README.md#sessions)): inside a session, Claude ends each task with short notes (what it learned about you and your work, how far it got) and gets them back at the next tasks. The notes go into `System-Context/memory.md`, one per line; `instructions.md` is never touched. **New session** in the menu starts a new history without them (the notes of the session that ended are put away in `data/sessions/`, until its last task expires). **Ghost mode** in the menu is for tasks that must leave nothing behind: no notes are read or saved, and the task folder is deleted when the task ends; it stays on until you untick it, and **New session** then only forgets the last ghost answer. Here these two are menu items: the Sessions window of Windows, with its list of sessions and its Resume button, is not ported. Claude cannot write in the folder: it ends its answer with `MEMORY: ...` lines, and the app saves them and hides them from the result (300 characters per note, 4000 in all; past that, the oldest notes make room). To never keep any note, write `never` in `data/memory.txt`. The code is in `outils/memoire.py`.
 
 On Wayland, the mouse position cannot be read: the first move of a task jumps to its target, the next ones glide from the last known position.
 
@@ -130,8 +132,8 @@ Wayland deliberately prevents apps from listening to the keyboard, reading the s
 
 ```bash
 ./lancer.sh               # starts the app
-./lancer.sh declencher    # same as Ctrl+Alt+C
-./lancer.sh consigne      # same as Ctrl+Alt+Shift+C
+./lancer.sh declencher    # same as Ctrl+Alt+C: the instruction bar
+./lancer.sh consigne      # same as Ctrl+Alt+Shift+C: automatic task
 ./lancer.sh arreter       # stops the current task
 ./lancer.sh resultat      # shows the last result
 ./lancer.sh etat          # ready / working
@@ -168,7 +170,7 @@ lancer.sh           starts the app in the background, or sends it a command (dec
 requirements.txt    Python dependencies
 outils/natif.py     system calls: screens, screenshot, mouse, keyboard (XTest on X11), active window, trash
 outils/raccourcis.py global shortcuts (Carbon on macOS, X11 listener on Linux)
-outils/fenetres.py  History window and instruction bar (Tk, separate process)
+outils/fenetres.py  Sessions window and instruction bar (Tk, separate process)
 outils/pc.py        the computer control actions (click, type, screenshot, trash...)
 outils/mcp.py       MCP server that gives these actions to Claude: several actions per call, screenshot in the answer
 outils/humain.py    smooth mode: mouse path and typing pace that look human
@@ -182,7 +184,7 @@ data/               EVERYTHING the app generates, kept apart from the program (p
     images/             screenshot-01.png, zoom-01.png, pdf-01.png...
     prompts/            task.txt (instructions sent to Claude), triage.txt (model choice)
     responses/          task.jsonl (what Claude said and did, step by step), task-errors.txt, triage.txt, triage-errors.txt
-    result.txt          what you were shown at the end, with the steps (History window)
+    result.txt          what you were shown at the end, with the steps (Sessions window)
     screen.json         position and scale of the captured screen
   context-cache/      text extracted from the System-Context PDFs (rebuilt when needed)
   log.txt             app log
@@ -191,8 +193,8 @@ data/               EVERYTHING the app generates, kept apart from the program (p
   smooth.txt          smooth mode: on or off (Smooth mode menu)
   session.txt         the id of the current session
   ghost.txt           ghost mode: on or off
-  last-result.txt     what the History window shows first when it is not the result of a kept task
-  memory-previous.md  the notes cleared by the last New session
+  last-result.txt     what the Sessions window shows first when it is not the result of a kept task
+  sessions/           the notes of the kept sessions that ended
   icon.png            applications menu icon (Linux)
   .venv/              Python environment created by installer.sh
   cache/              compiled Python files

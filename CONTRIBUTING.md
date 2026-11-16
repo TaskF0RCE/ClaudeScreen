@@ -174,7 +174,7 @@ python tests\test_linux_macos.py
 ```
 
 - They are safe to run on your own PC: every scenario gets its own copy of the app and its own fake "Documents" in a temporary folder. Nothing touches your real folders, nothing is clicked or typed, and Claude is never called. One check takes a screenshot (kept in the temporary folder, then deleted); `-SansEcran` skips it.
-- `tests\scenarios\*.ps1`: each one runs the real `ClaudeScreen.ps1` in a sandbox and checks what it did (an upgrade from an old version, a first start, the contexts and the menu, Terminal access, the Claude Code update, the steps of a task and the History window...). `-Seul upgrade` runs only one.
+- `tests\scenarios\*.ps1`: each one runs the real `ClaudeScreen.ps1` in a sandbox and checks what it did (an upgrade from an old version, a first start, the contexts and the menu, Terminal access, the Claude Code update, the steps of a task, the sessions and Ghost Mode...). `-Seul upgrade` runs only one.
 - `tests\guard.ps1`: the commands the guard must allow and the ones it must block. **If you touch `outils\garde.ps1`, add your cases there.**
 - `tests\mcp-server.ps1`: the MCP server, driven like Claude Code drives it.
 - `tests\setup.ps1`: builds `ClaudeScreen-Setup.exe` (`installer\Build-Setup.ps1`) and installs it silently into a temporary folder, without starting anything. The whole install, with the scheduled task, only runs in the CI (`-SetupComplet`): on your PC it would replace your own ClaudeScreen task.

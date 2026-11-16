@@ -35,8 +35,8 @@ Claude ends each task with short notes
 (what it learned about you and your work, how far it got). ClaudeScreen saves them in `memory.md`
 and gives them back to Claude at the next tasks of the same session.
 
-You can open `memory.md`, fix a note or remove a line. When you choose **New session** in the icon menu,
-the file is emptied. The notes it just lost are kept once in the `data` folder of the app (`memory-previous.md`).
+You can open `memory.md`, fix a note or remove a line. When you start a **new session**
+(Sessions window of the icon; a menu item on macOS and Linux), the file is emptied: the notes go with the session that ended.
 
 ## Your documents
 
@@ -55,7 +55,7 @@ Formats read best: `.pdf`, `.txt`, `.md`, images (`.png`, `.jpg`), code, `.csv`,
 
 ## Priorities
 
-1. The instruction typed in the small bar (Ctrl+Alt+Shift+C, or ⌃⌥⇧C on a Mac), for a single task.
+1. The instruction typed in the small bar (Ctrl+Alt+C, or ⌃⌥C on a Mac), for a single task.
 2. `instructions.md`, for every task (then Claude's notes in `memory.md`).
 3. The active context.
 4. What Claude guesses from the screen.
