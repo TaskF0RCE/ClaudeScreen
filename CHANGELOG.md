@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0](https://github.com/TaskF0RCE/ClaudeScreen/compare/v0.9.0...v1.0.0) (2026-11-17)
+
+
+### ✨ Features
+
+* v1.0 - session names, retention, per-session roles and documents, Sessions window on macOS/Linux ([#34](https://github.com/TaskF0RCE/ClaudeScreen/issues/34)) ([3823b79](https://github.com/TaskF0RCE/ClaudeScreen/commit/3823b79b54172b5117d45afa26a64dffdf3e2279))
+
 ## [0.9.0](https://github.com/TaskF0RCE/ClaudeScreen/compare/v0.8.0...v0.9.0) (2026-11-16)
 
 
