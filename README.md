@@ -303,7 +303,8 @@ Click the icon: the message says what happened. The details are in `data\log.txt
 
 ```
 ClaudeScreen.ps1    notification-area app: shortcuts, screenshot, model triage, prompt, starting Claude
-Lancer.vbs          starts the app without a window (by hand)
+Lancer.lnk          starts the app by hand through its scheduled task
+Lancer.vbs          starts the app without a window (by hand, older way: Windows is phasing out VBScript)
 Installer-Demarrage.ps1  installs or removes the startup scheduled task
 outils/natif.cs     Windows calls (DPI, screenshot, mouse, keyboard, smooth mode, global hotkeys, active window)
 outils/natif.ps1    compiles natif.cs into a DLL only once (the name changes when the source changes)
