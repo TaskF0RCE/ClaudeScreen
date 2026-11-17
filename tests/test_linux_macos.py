@@ -299,8 +299,8 @@ verifier('unticking a role', a.roles_session(ident) == ['My job'])
 a.basculer_role(ident, 'General assistant')
 verifier('General assistant = no specific role: the others unticked, nothing kept',
          a.roles_session(ident) == [] and not os.path.exists(sessions.fichier_roles(cs.DONNEES, ident)))
-sessions.enregistrer_roles(cs.DONNEES, ident, ['Student', 'A role whose file is gone'])
-verifier('a role whose file is gone is ignored', a.roles_session(ident) == ['Student'])
+sessions.enregistrer_roles(cs.DONNEES, ident, ['Professor', 'A role whose file is gone'])
+verifier('a role whose file is gone is ignored', a.roles_session(ident) == ['Professor'])
 sessions.enregistrer_roles(cs.DONNEES, ident, [])
 corbeille(os.path.join(cs.DOSSIER_ROLES, 'General assistant.md'))
 c = capture()
@@ -502,18 +502,18 @@ shutil.rmtree(os.path.join(cs.RUNS, '20261113-161900'))
 print('--- New session, resume, roles that follow')
 ecrire(cs.FICHIER_NOTES, memoire.ENTETE + '- a note of the session\n')
 avant = cs.lire_session()
-sessions.enregistrer_roles(cs.DONNEES, avant, ['Student'])
+sessions.enregistrer_roles(cs.DONNEES, avant, ['Professor'])
 verifier('New session: notes emptied, those of the session that ended put away with it, a new session id',
          a.nouvelle_session() and memoire.notes(cs.FICHIER_NOTES) == ''
          and 'a note of the session' in memoire.notes(sessions.fichier_notes(cs.DONNEES, avant)) and cs.lire_session() != avant
          and re.match(r'^\d{8}-\d{6}', cs.lire_session()) is not None)
 nouvelle = cs.lire_session()
 verifier('the new session starts with the roles of the one it follows, which keeps them',
-         a.roles_session(nouvelle) == ['Student'] and a.roles_session(avant) == ['Student'])
+         a.roles_session(nouvelle) == ['Professor'] and a.roles_session(avant) == ['Professor'])
 a.nouvelle_session()
 troisieme = cs.lire_session()
 verifier('two new sessions in the same second: never the id of a session that still has something',
-         troisieme not in (avant, nouvelle) and a.roles_session(troisieme) == ['Student'])
+         troisieme not in (avant, nouvelle) and a.roles_session(troisieme) == ['Professor'])
 verifier('resume: the session comes back with its notes', a.reprendre_session(avant) and cs.lire_session() == avant
          and 'a note of the session' in memoire.notes(cs.FICHIER_NOTES))
 verifier('resume: not an id that is not a session', not a.reprendre_session('../x') and cs.lire_session() == avant)
@@ -529,17 +529,17 @@ verifier('memory.txt = never: no notes at all', not memoire.active(os.path.join(
 
 print('--- Ghost Mode')
 verifier('ghost mode: off by default, turned on', not a.fantome and a.basculer_fantome(True) and a.fantome and lire(cs.FICHIER_FANTOME) == 'on')
-verifier('ghost: its roles start as those of the persisted session', a.roles_fantome == ['Student'] and a.id_en_cours() == '')
+verifier('ghost: its roles start as those of the persisted session', a.roles_fantome == ['Professor'] and a.id_en_cours() == '')
 a.basculer_role('', 'Network engineer')
 verifier('ghost: a role ticked for it stays in memory, the persisted session keeps its own',
-         a.roles_fantome == ['Student', 'Network engineer'] and a.roles_session(nouvelle) == ['Student']
+         a.roles_fantome == ['Professor', 'Network engineer'] and a.roles_session(nouvelle) == ['Professor']
          and not os.path.exists(sessions.fichier_roles(cs.DONNEES, '')))
 nb = len(os.listdir(cs.RUNS))
 nb_titres = len(questions_titre)
 g = capture()
 a.lancer_tache(g, 'a secret instruction')
 pg = prompt(g)
-verifier('ghost: its own roles, the notes of the persisted session not sent', 'Roles of this session: Student, Network engineer' in pg
+verifier('ghost: its own roles, the notes of the persisted session not sent', 'Roles of this session: Professor, Network engineer' in pg
          and 'a note of the new session' not in pg and 'a secret instruction' in pg and '(no notes yet)' in pg)
 verifier('ghost: no session id, no instruction file', not os.path.exists(os.path.join(g['run'], 'session.txt')) and not os.path.exists(os.path.join(g['run'], 'instruction.txt')))
 open(os.path.join(g['run'], 'mcp-started.txt'), 'w').close()
@@ -567,10 +567,10 @@ verifier('ghost off: back to the persisted session as it was', a.basculer_fantom
 k = capture()
 a.lancer_tache(k, '')
 verifier('after ghost mode: the notes and the roles of the session are sent again', 'a note of the new session' in prompt(k)
-         and 'Roles of this session: Student (chosen' in prompt(k))
+         and 'Roles of this session: Professor (chosen' in prompt(k))
 a.proc = None
 a.basculer_fantome(True)
-verifier('ghost on again: its roles start again from the persisted session', a.roles_fantome == ['Student'])
+verifier('ghost on again: its roles start again from the persisted session', a.roles_fantome == ['Professor'])
 a.basculer_fantome(False)
 a.retirer_runs_fantomes()
 verifier('a ghost task that never reached its end leaves nothing', not os.path.exists(g2['run']))
@@ -615,7 +615,7 @@ verifier('a session that has documents but no task is listed: it can be resumed'
 expiree = '20250101-090000'
 sessions.ajouter_documents(cs.CONTEXTE, expiree, [os.path.join(src, 'plan.txt')])
 ecrire(sessions.fichier_notes(cs.DONNEES, expiree), memoire.ENTETE + '- an old note\n')
-sessions.enregistrer_roles(cs.DONNEES, expiree, ['Student'])
+sessions.enregistrer_roles(cs.DONNEES, expiree, ['Professor'])
 vieillir(sessions.dossier_documents(cs.CONTEXTE, expiree), 40)
 a.nettoyer_runs()
 verifier('expired session (no task, documents older than the time kept): its documents in the trash, its notes and roles gone',
@@ -829,23 +829,23 @@ if tk_ok:
         return json.loads(json.dumps(a.commande_sessions(commande)))
 
     ident = cs.lire_session()
-    sessions.enregistrer_roles(cs.DONNEES, ident, ['Student'])
+    sessions.enregistrer_roles(cs.DONNEES, ident, ['Professor'])
     f = fenetres.FenetreSessions(json.loads(json.dumps(a.etat_sessions())), par_la_fenetre, tk, ttk)
     f.root.withdraw()
     try:
         n_docs = len(sessions.lister_documents(cs.CONTEXTE, ident))
         verifier('window: the session in use first, its roles and its documents',
-                 f.liste.current() == 0 and f.choix[0]['id'] == ident and f.bouton_roles.cget('text') == 'Roles: Student'
+                 f.liste.current() == 0 and f.choix[0]['id'] == ident and f.bouton_roles.cget('text') == 'Roles: Professor'
                  and f.bouton_documents.cget('text') == 'Documents (%d)' % n_docs and n_docs and f.duree.get() == '30 days',
                  (f.choix[0]['id'], ident, f.bouton_roles.cget('text'), f.bouton_documents.cget('text'), f.duree.get()))
         f.remplir_menu_roles()
         etiquettes = [f.menu_roles.entrycget(i, 'label') for i in range(f.menu_roles.index('end') + 1)
                       if f.menu_roles.type(i) != 'separator']
         verifier('window: every role in the Roles menu, then the folder', etiquettes == cs.lister_roles() + ['Open the Roles folder (edit or add a role)']
-                 and f.coches['Student'].get() and not f.coches['General assistant'].get(), etiquettes)
+                 and f.coches['Professor'].get() and not f.coches['General assistant'].get(), etiquettes)
         f.menu_roles.invoke(cs.lister_roles().index('Network engineer'))
         verifier('window: ticking a role (one more)', envoyes[-1] == {'action': 'role', 'id': ident, 'nom': 'Network engineer'}
-                 and a.roles_session(ident) == ['Student', 'Network engineer'] and f.bouton_roles.cget('text') == 'Roles: Student, Network engineer')
+                 and a.roles_session(ident) == ['Professor', 'Network engineer'] and f.bouton_roles.cget('text') == 'Roles: Professor, Network engineer')
         autre_i = [i for i, x in enumerate(f.choix) if x['id'] == autre][0]
         f.liste.current(autre_i)
         f.choisir(autre_i)
@@ -855,7 +855,7 @@ if tk_ok:
         f.menu_roles.invoke(cs.lister_roles().index('IT administrator'))
         verifier('window: a role changed for that session, the window stays on it, the session in use untouched',
                  f.session_affichee()['id'] == autre and a.roles_session(autre) == ['IT administrator']
-                 and a.roles_session(ident) == ['Student', 'Network engineer'] and f.bouton_roles.cget('text') == 'Roles: IT administrator')
+                 and a.roles_session(ident) == ['Professor', 'Network engineer'] and f.bouton_roles.cget('text') == 'Roles: IT administrator')
         tkinter.filedialog.askopenfilenames = lambda **_kw: (os.path.join(src, 'network course.md'),)
         f.choisir_documents(f.session_affichee())
         verifier('window: Add documents copies them into that session, the window stays on it',
@@ -887,8 +887,8 @@ if tk_ok:
                  envoyes[-1] == {'action': 'fantome', 'actif': True} and f.choix[0]['fantome']
                  and f.bouton_roles.cget('text') == 'Roles: IT administrator' and f.bouton_documents.cget('text') == 'Documents (0)')
         f.remplir_menu_roles()
-        f.menu_roles.invoke(cs.lister_roles().index('Student'))
-        verifier('window: a role of the ghost session stays in memory', a.roles_fantome == ['IT administrator', 'Student']
+        f.menu_roles.invoke(cs.lister_roles().index('Professor'))
+        verifier('window: a role of the ghost session stays in memory', a.roles_fantome == ['IT administrator', 'Professor']
                  and a.roles_session(autre) == ['IT administrator'] and f.liste.current() == 0 and f.choix[0]['fantome'])
         f.persiste.invoke()
         verifier('window: Persisted Memory again', envoyes[-1] == {'action': 'fantome', 'actif': False} and not f.choix[0]['fantome'])

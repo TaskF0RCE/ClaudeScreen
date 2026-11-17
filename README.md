@@ -39,23 +39,22 @@ The Sessions window reminds you of both shortcuts whenever it has no task to sho
 
 ### Roles
 
-A role tells Claude who you are and how to work for you, for example **Network engineer** or **Student**. Each session has its own roles, one or more. Tick them with the **Roles** button of the Sessions window, or in the icon menu (**Roles: ...**, for the session in use). A change applies to the next task of that session.
+A role tells Claude who you are and how to work for you, for example **Network engineer** or **Professor**. Each session has its own roles, one or more. Tick them with the **Roles** button of the Sessions window, or in the icon menu (**Roles: ...**, for the session in use). A change applies to the next task of that session.
 
 Roles go with their session: resuming a session brings its roles back, and a new session starts with the roles of the one before it.
 
 | Role | For |
 |---|---|
 | **General assistant** | Anyone, any task. Used when no other role is ticked. |
-| Student | Courses, homework, quizzes, revision (school and university) |
+| Professor | Lessons, exercises and tests to prepare, grading (school and university) |
 | Software developer | Code, IDE, terminal, debugging |
 | IT administrator | Windows, servers, accounts, support |
 | Network engineer | Routers, switches, addressing, simulators |
 | Security analyst | Logs, alerts, hardening (defensive work only) |
 | Business professional | Spreadsheets, invoices, reports, CRM or ERP forms |
 | Office assistant | Word, Excel, PowerPoint, drafts, file organisation |
-| Personal assistant | Everyday things at home |
 
-With several roles ticked, Claude works in all of them (for example Student and Network engineer for a networking course). The roles are part of Claude's instructions for every task of the session. They come after your standing instructions (`instructions.md`) and never replace them.
+With several roles ticked, Claude works in all of them (for example Professor and Network engineer to prepare a networking course). The roles are part of Claude's instructions for every task of the session. They come after your standing instructions (`instructions.md`) and never replace them.
 
 Each role is a small Markdown file in `Documents\Claude-Work\System-Context\Roles`. **Open the Roles folder** is at the bottom of the roles menu.
 
@@ -66,7 +65,7 @@ Each role is a small Markdown file in `Documents\Claude-Work\System-Context\Role
 
 **Coming from a version before 1.0:** the contexts become roles at the first start.
 
-- The context that was active becomes the role of the session in use (Networking → Network engineer, Studies → Student...).
+- The context that was active becomes the role of the session in use (Networking → Network engineer, Office productivity → Office assistant...). Studies and Personal use have no role: a session that used them gets General assistant.
 - A context file that you wrote or changed is kept as a role with the same name.
 - The old `Contexts` folder goes to the Recycle Bin.
 

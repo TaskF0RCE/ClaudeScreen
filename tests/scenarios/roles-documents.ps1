@@ -7,7 +7,7 @@ function Finir($c, [string]$reponse = 'Done.') { Ecrire-Reponse $c $reponse; $sc
 
 '--- contexts of 0.9 become roles'
 $noms = @(Lister-Roles)
-Verifier 'Roles folder created, General assistant first' ($noms[0] -eq 'General assistant' -and $noms -contains 'Network engineer' -and $noms -contains 'Student') ($noms -join ' | ')
+Verifier 'Roles folder created, General assistant first' ($noms[0] -eq 'General assistant' -and $noms -contains 'Network engineer' -and $noms -contains 'Professor') ($noms -join ' | ')
 Verifier 'the old Contexts folder is in the Recycle Bin, not deleted' (-not (Test-Path $AncienDossierContextes) -and @(Get-ChildItem $global:FauxBac -Directory | Where-Object Name -like 'Contexts.*').Count -eq 1)
 Verifier 'context files left as installed do not come back as roles' (-not (Test-Path (Join-Path $DossierRoles 'Networking.md')) -and -not (Test-Path (Join-Path $DossierRoles 'Default.md')))
 Verifier 'a context the user changed is kept as a role, under its name' ((Get-InstructionUtilisateur (Join-Path $DossierRoles 'Studies.md')) -match 'BTS SIO')
@@ -25,18 +25,18 @@ Verifier 'triage too' ((Lire-Prompt $c 'triage') -match '(?m)^Roles of this sess
 $script:ChoixModele = 'sonnet'
 
 '--- roles belong to a session'
-Basculer-Role $idAvant 'Student'
-Verifier 'several roles for one session' ((@(Lire-RolesSession $idAvant) -join '|') -eq 'Network engineer|Student' -and (Lire-RolesActifs).Noms -eq 'Network engineer, Student')
+Basculer-Role $idAvant 'Professor'
+Verifier 'several roles for one session' ((@(Lire-RolesSession $idAvant) -join '|') -eq 'Network engineer|Professor' -and (Lire-RolesActifs).Noms -eq 'Network engineer, Professor')
 [void](Nouvelle-Session)
 $id2 = Lire-Session
-Verifier 'a new session starts with the roles of the previous one' ((@(Lire-RolesSession $id2) -join '|') -eq 'Network engineer|Student')
-Basculer-Role $id2 'Student'
+Verifier 'a new session starts with the roles of the previous one' ((@(Lire-RolesSession $id2) -join '|') -eq 'Network engineer|Professor')
+Basculer-Role $id2 'Professor'
 Basculer-Role $id2 'Security analyst'
-Verifier 'changing them there does not change the earlier session' ((@(Lire-RolesSession $id2) -join '|') -eq 'Network engineer|Security analyst' -and (@(Lire-RolesSession $idAvant) -join '|') -eq 'Network engineer|Student')
+Verifier 'changing them there does not change the earlier session' ((@(Lire-RolesSession $id2) -join '|') -eq 'Network engineer|Security analyst' -and (@(Lire-RolesSession $idAvant) -join '|') -eq 'Network engineer|Professor')
 $c = Tache; $p = Lire-Prompt $c; Finir $c
-Verifier 'the task gets the roles of its session' ($p -match 'Roles of this session: Network engineer, Security analyst' -and $p -match 'Defensive work only' -and $p -notmatch 'Student: the user')
+Verifier 'the task gets the roles of its session' ($p -match 'Roles of this session: Network engineer, Security analyst' -and $p -match 'Defensive work only' -and $p -notmatch 'Professor: the user')
 [void](Reprendre-Session $idAvant)
-Verifier 'resuming a session brings its roles back' ((Lire-RolesActifs).Noms -eq 'Network engineer, Student')
+Verifier 'resuming a session brings its roles back' ((Lire-RolesActifs).Noms -eq 'Network engineer, Professor')
 [void](Reprendre-Session $id2)
 Basculer-Role $id2 'General assistant'
 Verifier 'General assistant = no specific role: nothing kept for the session' ((Lire-RolesActifs).Noms -eq 'General assistant' -and -not (Test-Path (Fichier-RolesSession $id2)))
@@ -48,14 +48,14 @@ Verifier 'a role whose file is gone, an empty line or a repeat is ignored' ((@(L
 [void](Basculer-Fantome $true)
 Verifier 'the ghost session starts with the roles of the session it comes from' ((Lire-RolesActifs).Noms -eq 'Network engineer')
 $fichiers = @(Get-ChildItem $DossierSessions -File | ForEach-Object { $_.FullName + '=' + $_.LastWriteTime.Ticks })
-Basculer-Role '' 'Student'
-Verifier 'its roles change in memory only' ((Lire-RolesActifs).Noms -eq 'Network engineer, Student' -and (@(Get-ChildItem $DossierSessions -File | ForEach-Object { $_.FullName + '=' + $_.LastWriteTime.Ticks }) -join '|') -eq ($fichiers -join '|') -and $menuRoles.Text -match '^Roles' )
+Basculer-Role '' 'Professor'
+Verifier 'its roles change in memory only' ((Lire-RolesActifs).Noms -eq 'Network engineer, Professor' -and (@(Get-ChildItem $DossierSessions -File | ForEach-Object { $_.FullName + '=' + $_.LastWriteTime.Ticks }) -join '|') -eq ($fichiers -join '|') -and $menuRoles.Text -match '^Roles' )
 Remplir-MenuRoles
-Verifier 'the icon menu shows the roles of the ghost session' ($menuRoles.Text -eq 'Roles: Network engineer, Student') $menuRoles.Text
+Verifier 'the icon menu shows the roles of the ghost session' ($menuRoles.Text -eq 'Roles: Network engineer, Professor') $menuRoles.Text
 $c = Tache; $p = Lire-Prompt $c; Finir $c
-Verifier 'a ghost task gets the ghost roles' ($p -match 'Roles of this session: Network engineer, Student')
+Verifier 'a ghost task gets the ghost roles' ($p -match 'Roles of this session: Network engineer, Professor')
 [void](Nouvelle-Session)
-Verifier 'a new ghost session keeps them' ((Lire-RolesActifs).Noms -eq 'Network engineer, Student')
+Verifier 'a new ghost session keeps them' ((Lire-RolesActifs).Noms -eq 'Network engineer, Professor')
 [void](Basculer-Fantome $false)
 Verifier 'back to Persisted Memory: the roles of the persisted session, untouched' ((Lire-RolesActifs).Noms -eq 'Network engineer')
 
@@ -118,7 +118,7 @@ Verifier 'the ghost session never wrote roles or documents of its own on disk' (
 Enregistrer-Conservation 30
 $vieux = '20200101-090000'
 [void](Ajouter-DocumentsSession $vieux @((Join-Path $source 'lab.txt')))
-Enregistrer-RolesSession $vieux @('Student')
+Enregistrer-RolesSession $vieux @('Professor')
 (Get-Item (Dossier-DocumentsSession $vieux)).LastWriteTime = (Get-Date).AddDays(-40)
 (Get-Item (Dossier-DocumentsSession $id3)).LastWriteTime = (Get-Date).AddDays(-5)
 Nettoyer-Runs

@@ -3,9 +3,9 @@
 try {
 '--- roles'
 $fournis = @(Get-ChildItem (Join-Path $Racine 'roles') -Filter *.md).Count
-Verifier 'Roles folder created with the files of the app' ((Test-Path $DossierRoles) -and @(Get-ChildItem $DossierRoles -Filter *.md).Count -eq $fournis -and $fournis -ge 9 -and -not (Test-Path $AncienDossierContextes))
+Verifier 'Roles folder created with the files of the app' ((Test-Path $DossierRoles) -and @(Get-ChildItem $DossierRoles -Filter *.md).Count -eq $fournis -and $fournis -ge 8 -and -not (Test-Path $AncienDossierContextes))
 $noms = @(Lister-Roles)
-Verifier 'General assistant comes first in the list' ($noms[0] -eq 'General assistant' -and $noms -contains 'Network engineer' -and $noms -contains 'Student') ($noms -join ' | ')
+Verifier 'General assistant comes first in the list' ($noms[0] -eq 'General assistant' -and $noms -contains 'Network engineer' -and $noms -contains 'Professor') ($noms -join ' | ')
 Verifier 'no choice yet: General assistant, nothing saved' ((Lire-RolesActifs).Noms -eq 'General assistant' -and -not (Test-Path (Fichier-RolesSession (Lire-Session))))
 Verifier 'menu title names the roles' ($menuRoles.Text -eq 'Roles: General assistant') $menuRoles.Text
 $items = @($menuRoles.DropDownItems | Where-Object { $_.Tag })
@@ -23,10 +23,10 @@ Verifier 'click: role saved for the session, title and check updated' ((Get-Cont
 $c = Fausse-Capture; Lancer-Tache $c ''
 $p = Lire-Prompt $c
 Verifier 'prompt: Network engineer replaces General assistant' ($p -match 'Roles of this session: Network engineer \(' -and $p -match 'addressing' -and $p -notmatch 'General assistant')
-($menuRoles.DropDownItems | Where-Object { $_.Text -eq 'Student' }).PerformClick()
+($menuRoles.DropDownItems | Where-Object { $_.Text -eq 'Professor' }).PerformClick()
 $c = Fausse-Capture; Lancer-Tache $c ''
 $p = Lire-Prompt $c
-Verifier 'a second role: both, in the menu and in the prompt' ($menuRoles.Text -eq 'Roles: Network engineer, Student' -and @($menuRoles.DropDownItems | Where-Object Checked).Count -eq 2 -and $p -match 'Roles of this session: Network engineer, Student \(chosen by the user for this session\)\. Work in all of these roles' -and $p -match 'addressing' -and $p -match 'Student: the user is studying') $menuRoles.Text
+Verifier 'a second role: both, in the menu and in the prompt' ($menuRoles.Text -eq 'Roles: Network engineer, Professor' -and @($menuRoles.DropDownItems | Where-Object Checked).Count -eq 2 -and $p -match 'Roles of this session: Network engineer, Professor \(chosen by the user for this session\)\. Work in all of these roles' -and $p -match 'addressing' -and $p -match 'Professor: the user teaches') $menuRoles.Text
 [IO.File]::WriteAllText((Join-Path $DossierRoles 'My job.md'), "<!-- mine -->`r`nI am an accountant.`r`n")
 Remplir-MenuRoles
 $mien = $menuRoles.DropDownItems | Where-Object { $_.Text -eq 'My job' }

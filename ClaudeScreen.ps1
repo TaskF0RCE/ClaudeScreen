@@ -770,7 +770,7 @@ $McpScript = Join-Path $Outils 'mcp.ps1'
 
 # --- Roles of a session ---
 # A role (System-Context\Roles\<name>.md) says who the user is and how to work for them: Network engineer,
-# Student... Each session has its own, one or more, ticked in the Sessions window or the icon menu (Roles):
+# Professor... Each session has its own, one or more, ticked in the Sessions window or the icon menu (Roles):
 # data\sessions\<id>.roles.txt, one name per line; those of the ghost session only live in the memory of the app.
 # A new session starts with the roles of the one it follows. No role ticked (or none of their files left):
 # "General assistant". The roles come on top of the user's standing instructions, never instead of them.
@@ -830,8 +830,8 @@ $EmpreintesContextes = @(   # the context files as versions 0.6 to 0.9 installed
     'cdbc40011a089a85a3cbb90e15c4200104ffe3811ab7ac6f641095d824f864f9', '79e6c3d4108e0682525f29af6692627c9cb6fb896d32435205f6667d4e621640',
     '96731d63e414cb092f909475b01dc34131cbbe2544109193a2f376acdbbc8afc')
 $RolesDesContextes = @{ 'Default' = 'General assistant'; 'Networking' = 'Network engineer'; 'Software development' = 'Software developer'
-    'Studies' = 'Student'; 'IT administration' = 'IT administrator'; 'Defensive security' = 'Security analyst'
-    'Business and management' = 'Business professional'; 'Office productivity' = 'Office assistant'; 'Personal use' = 'Personal assistant' }
+    'IT administration' = 'IT administrator'; 'Defensive security' = 'Security analyst'
+    'Business and management' = 'Business professional'; 'Office productivity' = 'Office assistant' }
 function Empreinte-Texte([string]$chemin) {
     $texte = [IO.File]::ReadAllText($chemin, [Text.Encoding]::UTF8).Replace("`r`n", "`n").Trim()
     -join ([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($texte)) | ForEach-Object { $_.ToString('x2') })
