@@ -12,11 +12,11 @@ $base = Join-Path ([IO.Path]::GetTempPath()) ('claudescreen-tests-' + [guid]::Ne
 $modele = Join-Path $base 'modele'
 $utf8Bom = New-Object System.Text.UTF8Encoding $true
 
-# The app as a user has it: scripts, tools, contexts, examples. natif.cs is compiled once here.
+# The app as a user has it: scripts, tools, roles, examples. natif.cs is compiled once here.
 New-Item -ItemType Directory -Force (Join-Path $modele 'outils') | Out-Null
 Copy-Item (Join-Path $depot 'ClaudeScreen.ps1') $modele
 Copy-Item (Join-Path $depot 'outils\*') (Join-Path $modele 'outils') -Include *.ps1, *.cs, *.md
-Copy-Item (Join-Path $depot 'contexts'), (Join-Path $depot 'examples') $modele -Recurse
+Copy-Item (Join-Path $depot 'roles'), (Join-Path $depot 'examples') $modele -Recurse
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ". '$modele\outils\natif.ps1'"
 if ($LASTEXITCODE -ne 0) { throw 'natif.cs does not compile' }
 
@@ -51,6 +51,14 @@ function Nouveau-Bac([string]$nom, [string]$documents) {
         [IO.File]::WriteAllText((Join-Path $ctx 'README.md'), 'old guide', $utf8Bom)
         [IO.File]::WriteAllText((Join-Path $bac 'docs\Claude-Travail\report.txt'), 'a file made by Claude earlier')
         [IO.File]::WriteAllText((Join-Path $bac 'app\data\memory.txt'), 'on')
+    } elseif ($documents -eq 'contextes') {
+        # Version 0.9: the contexts folder as it installed it (two files untouched, one changed, one added by the
+        # user), Networking active, a session in progress.
+        $ctx = Join-Path $bac 'docs\Claude-Work\System-Context'
+        New-Item -ItemType Directory -Force $ctx | Out-Null
+        Copy-Item (Join-Path $PSScriptRoot 'fixtures\contexts-0.9') (Join-Path $ctx 'Contexts') -Recurse
+        [IO.File]::WriteAllText((Join-Path $bac 'app\data\context.txt'), 'Networking')
+        [IO.File]::WriteAllText((Join-Path $bac 'app\data\session.txt'), '20261110-090000')
     } elseif ($documents -eq 'txt') {
         $ctx = Join-Path $bac 'docs\Claude-Travail\System-Context'
         New-Item -ItemType Directory -Force $ctx | Out-Null
@@ -66,14 +74,16 @@ function Lancer([string]$titre, [string]$fichier, [string[]]$arguments) {
     $code = $LASTEXITCODE
     $sortie | Where-Object { "$_" -match '^\s*(FAIL|skip)\b|^=== ' -or $code -ne 0 -and "$_" -notmatch '^\s*ok\b' } | ForEach-Object { "  $_" }
     $bilan = $sortie | Where-Object { "$_" -match '^=== (\d+) checks, (\d+) failure' } | Select-Object -Last 1
-    if ("$bilan" -match '^=== (\d+) checks, (\d+) failure') { $script:total += [int]$Matches[1]; $script:echecs += [int]$Matches[2] }
+    # A scenario that checks nothing did not run (a syntax error in its file, for example): that is a failure.
+    if ("$bilan" -match '^=== 0 checks') { $script:total++; $script:echecs++; '  FAIL  the test checked nothing: its file probably does not parse'; $sortie | Select-Object -Last 12 | ForEach-Object { "    $_" } }
+    elseif ("$bilan" -match '^=== (\d+) checks, (\d+) failure') { $script:total += [int]$Matches[1]; $script:echecs += [int]$Matches[2] }
     else { $script:total++; $script:echecs++; '  FAIL  the test did not run to the end' }
 }
 
 $harnais = Join-Path $PSScriptRoot 'harness.ps1'
 $scenarios = @(
     @('upgrade', 'ancien', $null), @('fresh', 'vide', $null), @('old-txt', 'txt', $null),
-    @('locked', 'ancien', 'locked-before.ps1'), @('contexts-terminal', 'vide', $null), @('update', 'vide', $null), @('history', 'vide', $null)
+    @('locked', 'ancien', 'locked-before.ps1'), @('roles-terminal', 'vide', $null), @('update', 'vide', $null), @('history', 'vide', $null), @('names-retention', 'vide', $null), @('roles-documents', 'contextes', $null)
 )
 try {
     foreach ($s in $scenarios) {

@@ -33,45 +33,63 @@ In the notification area the app is called **Claude-Work** (tooltip, menu, resul
 - **Enter** on an empty bar starts an automatic task, like the other shortcut.
 - If the bar closes before you press Enter (Esc, a click elsewhere, by accident), what you typed is not lost: it is back in the bar the next time you open it.
 
-**Ctrl+Alt+Shift+C: automatic.** No bar: Claude starts at once and does not act at random. It works out what is expected from your standing instructions, the active context, its notes of the session, your documents and the most recent files of `Claude-Work`, then from the screen. If all of that still does not say what to do, it changes nothing and tells you what it would need.
+**Ctrl+Alt+Shift+C: automatic.** No bar: Claude starts at once and does not act at random. It works out what is expected from your standing instructions, the roles of the session, its notes of the session, the documents of the session and your other documents, and the most recent files of `Claude-Work`, then from the screen. If all of that still does not say what to do, it changes nothing and tells you what it would need.
 
 The Sessions window reminds you of both shortcuts whenever it has no task to show.
 
-### Contexts
+### Roles
 
-A context tells Claude who you are and how to work for you. One context is active at a time. Right-click the icon, open **Context** and pick one: the menu title shows the active one (for example "Context: Networking"), and the change applies to the next task.
+A role tells Claude who you are and how to work for you, for example **Network engineer** or **Student**. Each session has its own roles, one or more. Tick them with the **Roles** button of the Sessions window, or in the icon menu (**Roles: ...**, for the session in use). A change applies to the next task of that session.
 
-| Context | For |
+Roles go with their session: resuming a session brings its roles back, and a new session starts with the roles of the one before it.
+
+| Role | For |
 |---|---|
-| **Default** | Anyone, any task. Used when you choose nothing. |
-| Studies | Courses, homework, quizzes, revision (school and university) |
-| Software development | Code, IDE, terminal, debugging |
-| IT administration | Windows, servers, accounts, support |
-| Networking | Routers, switches, addressing, simulators |
-| Defensive security | Logs, alerts, hardening (defensive work only) |
-| Business and management | Spreadsheets, invoices, reports, CRM or ERP forms |
-| Office productivity | Word, Excel, PowerPoint, drafts, file organisation |
-| Personal use | Everyday things at home |
+| **General assistant** | Anyone, any task. Used when no other role is ticked. |
+| Student | Courses, homework, quizzes, revision (school and university) |
+| Software developer | Code, IDE, terminal, debugging |
+| IT administrator | Windows, servers, accounts, support |
+| Network engineer | Routers, switches, addressing, simulators |
+| Security analyst | Logs, alerts, hardening (defensive work only) |
+| Business professional | Spreadsheets, invoices, reports, CRM or ERP forms |
+| Office assistant | Word, Excel, PowerPoint, drafts, file organisation |
+| Personal assistant | Everyday things at home |
 
-Each context is a small Markdown file in `Documents\Claude-Work\System-Context\Contexts` (**Open the Contexts folder** in the same menu):
+With several roles ticked, Claude works in all of them (for example Student and Network engineer for a networking course). The roles are part of Claude's instructions for every task of the session. They come after your standing instructions (`instructions.md`) and never replace them.
+
+Each role is a small Markdown file in `Documents\Claude-Work\System-Context\Roles`. **Open the Roles folder** is at the bottom of the roles menu.
 
 - **Edit them freely.** The app copies them there once and never changes them afterwards.
-- **Add your own**: create `My job.md` in that folder, write a few lines (who you are, what is usually on your screen, what to do when you give no instruction, what never to do), and it appears in the menu.
-- **Remove** the ones you don't need. If the active file disappears, Default is used.
-- Comments (`<!-- ... -->`) are not sent to Claude. A context is at most 4000 characters: past that, its end is not sent, and the result of the task says so.
+- **Add your own**: create `Accountant.md` in that folder and write a few lines: who you are, what is usually on your screen, what to do when you give no instruction, what never to do. It then appears in the menu.
+- **Remove** the ones you don't need. A role whose file is gone is left out.
+- Comments (`<!-- ... -->`) are not sent to Claude. A role is at most 4000 characters: past that, its end is not sent, and the result of the task says so.
+
+**Coming from a version before 1.0:** the contexts become roles at the first start.
+
+- The context that was active becomes the role of the session in use (Networking → Network engineer, Studies → Student...).
+- A context file that you wrote or changed is kept as a role with the same name.
+- The old `Contexts` folder goes to the Recycle Bin.
 
 ### Standing context (optional)
 
 The `Documents\Claude-Work\System-Context` folder is created on first launch, with a `README.md` that explains how to use it.
 
-- **`instructions.md`**: your standing instructions, one per line, added to every task whatever the context. For example: "always answer in English", "never click Finish exam", "my name is Sam". Comments are ignored: as long as you write nothing else, the file does nothing. It is re-read for every task. **This file is yours: neither the app nor Claude ever changes it.** At most 4000 characters are sent: past that, the result of the task tells you that the end was left out. Put long texts in another file of the folder instead.
+- **`instructions.md`**: your standing instructions, one per line, added to every task whatever the session and its roles. For example: "always answer in English", "never click Finish exam", "my name is Sam". Comments are ignored: as long as you write nothing else, the file does nothing. It is re-read for every task. **This file is yours: neither the app nor Claude ever changes it.** At most 4000 characters are sent: past that, the result of the task tells you that the end was left out. Put long texts in another file of the folder instead.
 - **`memory.md`**: Claude's notes for the current session (see [Sessions and memory](#sessions)).
-- **`Contexts`**: the contexts above.
-- **The other files in the folder**, subfolders included (courses, notes, procedures, technical documentation, templates...): Claude gets their list with every task. It treats them as more reliable than its general knowledge: it reads the ones related to the task and relies on them first. Best-read formats: `.pdf`, `.txt`, `.md`, images, code, `.csv`, `.html` (for a Word or PowerPoint file, also save it as PDF).
+- **`Roles`**: the roles above.
+- **`Session documents`**: the documents you gave to each session (see [Sessions](#sessions)). Manage them from the Sessions window.
+- **The other files in the folder**, subfolders included (courses, notes, procedures, technical documentation, templates...): Claude gets their list with every task, whatever the session. It treats them as more reliable than its general knowledge: it reads the ones related to the task and relies on them first. Best-read formats: `.pdf`, `.txt`, `.md`, images, code, `.csv`, `.html` (for a Word or PowerPoint file, also save it as PDF).
 - **PDFs**: the app extracts their text in advance, page by page, into `data\context-cache\` (redone only when the PDF changes). For a diagram or a scanned PDF, Claude looks at the page as an image. This uses [Poppler](https://poppler.freedesktop.org/) (see [Installation](#installation)).
 - **Read-only**: Claude can read this folder, but cannot change anything in it (see [Security](#security)).
 
-Priority order: the instruction typed in the bar (for one task), then `instructions.md`, then the active context, then what Claude infers from the screen.
+Priority order:
+
+1. the instruction typed in the bar (for one task);
+2. `instructions.md`;
+3. the roles of the session;
+4. Claude's notes and the documents of the session;
+5. the other documents;
+6. what Claude infers from the screen.
 
 The folder is in your Documents, outside the repository: your documents and instructions never end up on GitHub.
 
@@ -87,11 +105,11 @@ The folder is in your Documents, outside the repository: your documents and inst
 | Red dot | Error: click to see the message |
 
 Right-click the icon (every choice is remembered):
-- **Sessions**: the answer of the last task (a click on the icon does the same), or what Claude has said and done so far while a task is running; your earlier sessions; a new session; and the choice between Persisted Memory and Ghost Mode (see [Sessions](#sessions))
+- **Sessions**: the answer of the last task (a click on the icon does the same), or what Claude has said and done so far while a task is running. It also holds your earlier sessions, a new session, the choice between Persisted Memory and Ghost Mode, the roles and documents of each session, and how long sessions are kept (see [Sessions](#sessions))
 - **Model**: Auto, Always Sonnet or Always Opus
 - **Smooth mode**: the mouse glides and the text is typed at a human pace
 - **Terminal access**: Claude may also run commands when the screen is not enough
-- **Context**: who you are and how to work for you
+- **Roles**: the roles of the session in use; the menu title shows them, for example "Roles: Network engineer" (see [Roles](#roles))
 - **Open the Claude-Work folder**
 - **Quit**
 
@@ -116,15 +134,38 @@ A **session** is a run of tasks that belong together, like the exercises of one 
 
 Everything about sessions is in one window: **Sessions** in the icon menu, or a click on the icon. It is small and sits in the bottom-right corner; drag its border to resize it, and the size is remembered, even after a restart (`data\window.txt`). It cannot be made too small to use, and **Default size** appears when the size is not the normal one, to bring it back.
 
-- **The drop-down list** holds your sessions: the one in use first, then the earlier ones (Session 3, Session 2, Session 1...), each with its date and its number of tasks. Pick one to read it.
+- **The drop-down list** holds your sessions: the one in use first, then the earlier ones, newest first. Each one shows its name (see below), its date and its number of tasks. Pick one to read it.
 - **The `<` `>` arrows** go through the tasks of the chosen session, with the instruction you typed, the answer and the steps. The newest task is the last one (3 / 3). While a task is running, the last entry shows what Claude has said and done so far.
 - **New session** starts again from nothing, in the mode that is selected. Use it when you move on to something unrelated.
 - **Resume** goes back to an earlier session: it becomes the current one again, Claude gets the notes it had, and the next tasks are added to it.
+- **Roles** shows the roles of the chosen session. Click it to tick or untick some (see [Roles](#roles)).
+- **Documents (n)** holds the documents of the chosen session: open one, remove one, or add some (see below).
+
+**Names.** You have nothing to do: a session gets its name on its own.
+
+- After its first finished task, Claude Haiku names the session from what the task was about, like the title of a conversation ("OSPF lab on R1 and R2", "Dupont client report").
+- This runs in the background and never delays anything.
+- Until the name arrives, the session is named by its number and date (Session 3 - 17/11/2026 14:05).
+- If Haiku fails, answers something that is not a name, or takes more than 90 seconds, that name stays. Haiku tries again after the next task, 3 times at most.
+- A ghost session is never named: nothing of it is sent for that.
+
+**Documents of a session.** Give a session the files it is about: an assignment, a course, a procedure, specifications, instructions in Markdown...
+
+- **Add documents...** copies files into the session; the originals are not touched. They are kept in `System-Context\Session documents\<session>\`.
+- Claude gets them with every task of that session, reads the ones related to the task and relies on them first.
+- They come on top of your standing instructions and of the other files of `System-Context`, never instead of them.
+- They go with the session: resuming it brings them back, and a new session starts without any.
+- **Remove** sends a document to the Recycle Bin.
 
 A session is in one of two modes, chosen right under the list:
 
-- **Persisted Memory** (the default): the session is kept. Its tasks stay in the list for 30 days, and you can resume it.
-- **Ghost Mode**: nothing is kept, like a private window in a browser. The session only lives in the memory of the app: its notes and its results are never written anywhere, and the folder of each task (screenshots, instruction, answer, steps) is deleted for good when the task ends. You can still read the tasks of the ghost session in the window while it lasts.
+- **Persisted Memory** (the default): the session is kept, with its notes, name, roles and documents. Its tasks stay in the list for the time chosen at the bottom of the window, and you can resume it.
+- **Ghost Mode**: nothing is kept, like a private window in a browser.
+  - The session only lives in the memory of the app: its notes, its results and its roles are never written anywhere.
+  - The folder of each task (screenshots, instruction, answer, steps) is deleted for good when the task ends.
+  - You can still read the tasks of the ghost session in the window while it lasts.
+  - It starts with the roles of the session you were in. Changing them does not change that session.
+  - The documents you add to it are copies, deleted for good when it ends, or at the next start if the app was closed.
 
 Going from one mode to the other:
 
@@ -134,6 +175,14 @@ Going from one mode to the other:
 - None of this can be done while a task is running.
 
 Ghost Mode does not hide the files that Claude creates for you in `Claude-Work`, and the task still goes through your Claude account like any other.
+
+**How long sessions are kept.** The bottom of the window shows how long persisted sessions are kept: 7 days, **30 days** (the default), 90 days or 1 year.
+
+- The choice applies at once, to every persisted session, and is kept in `data\retention.txt`.
+- A task older than that is deleted (screenshots, instruction, answer).
+- A session goes away with its last task, along with its notes, its name and its roles. Its documents go to the Recycle Bin.
+- A session that has documents but no task stays as long as its documents were added within that time.
+- Ghost Mode keeps nothing, whatever this choice.
 
 About the notes:
 
@@ -148,7 +197,7 @@ Press **Ctrl+Alt+C** (or **Ctrl+Alt+Shift+C**) again while the star is spinning.
 
 Nothing is lost when a task stops: **Sessions** then lists what Claude had said and done before the stop. To see where a task is without stopping it, click the icon.
 
-Each result is kept in the folder of its task (`data\runs\<date>\result.txt`), next to its screenshots, and goes away with it after 30 days.
+Each result is kept in the folder of its task (`data\runs\<date>\result.txt`), next to its screenshots, and goes away with it after the time chosen in the Sessions window (30 days by default).
 
 During a task, don't touch the mouse or keyboard: Claude uses the real ones. If another window comes to the front, Claude is told to stop, and every result it gets names the active window so that it can notice. This relies on Claude: nothing in the app blocks a click in the wrong window, so keep an eye on a task that matters.
 
@@ -268,12 +317,12 @@ outils/deroule.ps1  the steps of a task (what Claude said and did), read from th
 installer/          Setup.cs and Build-Setup.ps1: build ClaudeScreen-Setup.exe (attached to each release)
 outils/poppler.ps1  downloads Poppler (pinned version, verified hash) into outils/poppler (ignored by git)
 outils/System-Context-README.md  user guide copied into Documents\Claude-Work\System-Context (kept up to date at each start)
-contexts/           the contexts, copied once into System-Context\Contexts (then they belong to the user)
+roles/              the roles, copied once into System-Context\Roles (then they belong to the user)
 examples/           ready-made files for some software (Packet Tracer...), to copy into System-Context if you use it
 tests/              the test suite (see CONTRIBUTING.md)
 linux-macos/        the macOS/Linux port
 data/               EVERYTHING the app generates, kept apart from the program (private, ignored by git):
-  runs/<date>/        one folder per task, deleted after 30 days:
+  runs/<date>/        one folder per task, deleted after the time chosen in the Sessions window (30 days by default):
     images/             screenshot-01.png, zoom-01.png, pdf-01.png...
     prompts/            task.txt (instructions sent to Claude), triage.txt (model choice)
     responses/          task.jsonl (what Claude said and did, step by step), task-errors.txt, triage.txt, triage-errors.txt
@@ -285,18 +334,19 @@ data/               EVERYTHING the app generates, kept apart from the program (p
   context-cache/      text extracted from the System-Context PDFs (rebuilt when needed)
   log.txt             app log
   settings.json       permissions given to Claude (regenerated at each start)
-  model.txt, smooth.txt, terminal.txt, context.txt, ghost.txt    the choices made in the icon menu and in the Sessions window
+  model.txt, smooth.txt, terminal.txt, ghost.txt    the choices made in the icon menu and in the Sessions window
+  retention.txt           how long persisted sessions are kept, in days (30 when absent)
   window.txt              the size of the Sessions window, when you changed it
   session.txt             the id of the current session (each task folder holds the id of its own)
-  sessions/               the notes of the kept sessions that are not the current one
+  sessions/               per session: <id>.title.txt (its name), <id>.roles.txt (its roles), <id>.md (its notes, when not current)
   terminal-accepted.txt   you answered Yes to the Terminal access question (delete it to be asked again)
 ```
 
 The macOS/Linux version uses the same `data/` layout.
 
-Files created by Claude go to `Documents\Claude-Work`. Your instructions, your contexts, Claude's notes and your documents are in `Documents\Claude-Work\System-Context`.
+Files created by Claude go to `Documents\Claude-Work`. Your instructions, your roles, Claude's notes, your documents and those of each session are in `Documents\Claude-Work\System-Context`.
 
-Automatic cleanup: at startup and then every 6 hours, the app permanently deletes the `data\runs\` folders older than 30 days (`$JoursConserves` variable in `ClaudeScreen.ps1`). The log is trimmed too. Files in `Documents\Claude-Work` are never touched.
+Automatic cleanup: at startup and then every 6 hours, the app permanently deletes the `data\runs\` folders older than the time chosen in the Sessions window (30 days by default). The documents of an expired session go to the Recycle Bin. The log is trimmed too. The other files in `Documents\Claude-Work` are never touched.
 
 ## Limitations
 
@@ -305,7 +355,7 @@ Automatic cleanup: at startup and then every 6 hours, the app permanently delete
 - Precise mouse work (drag and drop, cabling in a simulator) is slow and not always reliable.
 - For websites, the Claude in Chrome extension is often more reliable: it reads the page content directly instead of going through screenshots.
 - Only one screen is captured: the one the mouse is on when you press the shortcut.
-- The macOS/Linux port has the contexts and the MCP server, but no Terminal access (see its README). It has not been tried on as many machines as the Windows version.
+- The macOS/Linux port has the Sessions window, the roles, the session documents and the MCP server, but no Terminal access (see its README). It has not been tried on as many machines as the Windows version.
 
 ## Contributing and versions
 

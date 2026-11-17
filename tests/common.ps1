@@ -8,6 +8,20 @@ $global:ReponseTerminal = $true
 $global:QuestionsTerminal = 0
 function Confirmer-Terminal { $global:QuestionsTerminal++; $global:ReponseTerminal }
 function Demarrer-Claude([string]$modele, [string]$nom, [string]$options) { $global:Appels += "$modele|$nom|$options"; $script:Proc = $null }
+# The title of a session is never asked to Claude either: the call is recorded, and Titre-Recu answers it.
+$global:Titrages = @()
+function Demarrer-Titrage([string]$id, [string]$instruction, [string]$resultat) {
+    if ($script:Titrage -or -not $id -or [int]$script:EssaisTitre[$id] -ge $EssaisTitreMax) { return }
+    $script:EssaisTitre[$id] = [int]$script:EssaisTitre[$id] + 1
+    New-Item -ItemType Directory -Force $DossierSessions | Out-Null
+    $global:Titrages += [pscustomobject]@{ Id = $id; Question = (Texte-Titrage $instruction $resultat) }
+    $script:Titrage = [pscustomobject]@{ Proc = (Faux-Proc 0); Id = $id; Sortie = (Join-Path $DossierSessions "$id.title-answer.txt"); Question = (Join-Path $DossierSessions "$id.title-prompt.txt"); Debut = Get-Date }
+}
+# What Haiku answers to the title being asked for ($null: no answer at all), then the app reads it.
+function Titre-Recu($texte) {
+    if ($null -ne $texte) { [IO.File]::WriteAllText($script:Titrage.Sortie, [string]$texte, (New-Object System.Text.UTF8Encoding $false)) }
+    Finir-Titrage
+}
 function Sans-Duree([string]$t) { ($t -replace '^(\[\w+), \d+ s\]', '$1]') -replace '(\(code \d+, \w+), \d+ s\)', '$1)' }
 function Faux-Proc([int]$code) { [pscustomobject]@{ ExitCode = $code; HasExited = $true } | Add-Member ScriptMethod Dispose { } -PassThru }
 # A task folder as Capturer makes it, without any screenshot. -SansMcp: as if the PC control tool had not started.

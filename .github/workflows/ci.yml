@@ -61,12 +61,27 @@ jobs:
           & .\tests\Run-Tests.ps1 -SansEcran -SetupComplet
           exit $LASTEXITCODE
 
-  # The logic of the macOS/Linux version, with fake system modules.
+  # The logic of the macOS/Linux version, with fake system modules. The Sessions window (Tk) is built hidden:
+  # on Linux in a virtual display, on macOS on the runner's own (Aqua) display.
   tests-linux:
     name: tests (macOS/Linux logic)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+      - name: Tk and a virtual display
+        run: sudo apt-get update -q && sudo apt-get install -y -q python3-tk xvfb
       - name: Run the tests
-        run: python3 tests/test_linux_macos.py
+        run: xvfb-run -a python3 tests/test_linux_macos.py
+
+  tests-macos:
+    name: tests (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Run the tests
+        run: python tests/test_linux_macos.py

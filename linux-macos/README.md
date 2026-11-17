@@ -30,13 +30,14 @@ Like on Windows, the **`~/Documents/Claude-Work/System-Context`** folder is crea
 
 - **`instructions.md`**: your standing instructions, one per line, added to every task while the app is running ("I'm a second-year computer science student", "never click Finish exam", "always answer in English"...). Comments (`<!-- ... -->`) are ignored. The file is re-read for every task: a change applies right away. **This file is yours: neither the app nor Claude ever changes it.** A file from an older version is converted once: an `instructions.txt` becomes `instructions.md` (its `#` lines become comments, the old file goes to the trash), and the notes Claude used to keep at the end of `instructions.md` move to `memory.md`.
 - **`memory.md`**: Claude's notes, for the current session (see [below](#sessions-memory-and-ghost-mode)).
+- **`Roles`**: who you are and how to work for you, one small file per role (General assistant, Student, Network engineer, Software developer, Office assistant...). Each session has its own roles, one or more: tick them in the Sessions window (**Roles**) or in the icon menu (**Roles: ...**). Edit the files, add your own or remove some, as explained in the [Windows README](../README.md#roles). Contexts from a version before 1.0 become roles at the first start, the same way.
+- **`Session documents`**: the documents you gave to each session from the Sessions window (see [below](#sessions-memory-and-ghost-mode)).
 - **The other files**, subfolders included (courses, notes, technical documentation, assignments, bibliography, sources...): Claude gets their list with every task, treats them as more reliable than its general knowledge, reads the ones related to the task and relies on them first. Best-read formats: `.pdf`, `.txt`, `.md`, images, code, `.csv`, `.html` (for a Word or Keynote file, also export it as PDF). Hidden or temporary files (`.DS_Store`, `~$...`) are ignored, as is the folder's `README.md`.
 - **PDFs**: the app extracts their text in advance, page by page, into `data/context-cache/` (at startup, then only when a PDF changes), with the `pypdfium2` Python library: nothing extra to install, no need for `pdftoppm`. Claude reads that text, which is fast and saves quota, and can search it. For a diagram or a scanned PDF (no text), it shows the page as an image with the `page-pdf` action. If you installed ClaudeScreen before this feature, run `./installer.sh` again to add `pypdfium2`.
 - **Read-only**: Claude can read this folder, but cannot change, move, send to the trash or run anything in it.
-- **Contexts**: who you are and how to work for you, one small file per context in `System-Context/Contexts` (Default, Studies, Software development, Networking, Office productivity...). Pick the active one in the icon menu (**Context**); edit the files, add your own or remove some, as explained in the [Windows README](../README.md#contexts).
 - **Know-how for one piece of software**: the `examples` folder at the root of the repository has ready-made files (`packet-tracer.md`...). Copy the ones you use into `System-Context`.
 
-Priority order: the instruction from the bar (for one task), then `instructions.md` (for every task), then what Claude infers from the screen.
+Priority order: the instruction from the bar (for one task), then `instructions.md` (for every task), then the roles of the session, then Claude's notes and the documents of the session, then the other documents, then what Claude infers from the screen.
 
 The folder is in your Documents, outside the repository: its contents never end up on GitHub.
 
@@ -49,7 +50,17 @@ The folder is in your Documents, outside the repository: its contents never end 
 | Green dot | Done: open "Sessions" |
 | Red dot | Error: open "Sessions" for the message |
 
-Menu: **Sessions** (the answer of the last task, or what Claude has said and done so far while a task is running; its two arrows go through your earlier tasks, oldest first, with the session of each one; they are kept for 30 days), **Model** (Auto, Always Sonnet, Always Opus; the choice is remembered), **New session** and **Ghost mode** (see below), **Smooth mode**, **Open the Claude-Work folder**, **Quit**. The icon's tooltip and the result window are named **Claude-Work** too.
+Menu:
+
+- **Sessions**: the Sessions window (see [below](#sessions-memory-and-ghost-mode)).
+- **Model**: Auto, Always Sonnet or Always Opus; the choice is remembered.
+- **Smooth mode**.
+- **New session** and **Ghost mode**: the same as in the Sessions window.
+- **Roles: ...**: the roles of the session in use.
+- **Open the Claude-Work folder**.
+- **Quit**.
+
+The icon's tooltip and the windows are named **Claude-Work** too.
 
 On macOS and with most Linux desktops (AppIndicator), clicking the icon opens the menu; "Sessions" is the first entry.
 
@@ -59,7 +70,26 @@ Same as on Windows: with **Smooth mode** checked in the menu, the mouse glides t
 
 ### Sessions, memory and ghost mode
 
-Same as on Windows ([details](../README.md#sessions)): inside a session, Claude ends each task with short notes (what it learned about you and your work, how far it got) and gets them back at the next tasks. The notes go into `System-Context/memory.md`, one per line; `instructions.md` is never touched. **New session** in the menu starts a new history without them (the notes of the session that ended are put away in `data/sessions/`, until its last task expires). **Ghost mode** in the menu is for tasks that must leave nothing behind: no notes are read or saved, and the task folder is deleted when the task ends; it stays on until you untick it, and **New session** then only forgets the last ghost answer. Here these two are menu items: the Sessions window of Windows, with its list of sessions and its Resume button, is not ported. Claude cannot write in the folder: it ends its answer with `MEMORY: ...` lines, and the app saves them and hides them from the result (300 characters per note, 4000 in all; past that, the oldest notes make room). To never keep any note, write `never` in `data/memory.txt`. The code is in `outils/memoire.py`.
+Same as on Windows ([details](../README.md#sessions)). Inside a session, Claude ends each task with short notes (what it learned about you and your work, how far it got) and gets them back at the next tasks.
+
+The **Sessions** window has the same content and behaviour as on Windows:
+
+- the list of your sessions, each named by Haiku after its first task (by number and date until then, or if Haiku fails);
+- the `<` `>` arrows through the tasks of a session;
+- **Resume** and **New session**;
+- **Persisted Memory** or **Ghost Mode**;
+- the **Roles** and **Documents** of each session;
+- at the bottom, how long persisted sessions are kept (30 days by default).
+
+It is a small Tk window in the bottom-right corner of the screen, above the Dock on macOS. Drag its border to resize it: the size is remembered (`data/window.txt`), and **Default size** brings it back. It closes when you click elsewhere, except while you pick documents. The code is in `outils/fenetres.py` and `outils/sessions.py`.
+
+About the notes:
+
+- They go into `System-Context/memory.md`, one per line; `instructions.md` is never touched.
+- Claude cannot write in the folder: it ends its answer with `MEMORY: ...` lines, and the app saves them and hides them from the result.
+- One note is at most 300 characters, and all notes together at most 4000: past that, the oldest notes make room.
+- To never keep any note, write `never` in `data/memory.txt`.
+- The code is in `outils/memoire.py`.
 
 On Wayland, the mouse position cannot be read: the first move of a task jumps to its target, the next ones glide from the last known position.
 
@@ -171,6 +201,7 @@ requirements.txt    Python dependencies
 outils/natif.py     system calls: screens, screenshot, mouse, keyboard (XTest on X11), active window, trash
 outils/raccourcis.py global shortcuts (Carbon on macOS, X11 listener on Linux)
 outils/fenetres.py  Sessions window and instruction bar (Tk, separate process)
+outils/sessions.py  sessions: their tasks, names, roles, documents, how long they are kept, the size of their window
 outils/pc.py        the computer control actions (click, type, screenshot, trash...)
 outils/mcp.py       MCP server that gives these actions to Claude: several actions per call, screenshot in the answer
 outils/humain.py    smooth mode: mouse path and typing pace that look human
@@ -180,11 +211,12 @@ outils/memoire.py   instructions.md (yours, never changed) and memory.md (Claude
 outils/deroule.py   the steps of a task (what Claude said and did), read from the stream Claude Code writes
 outils/System-Context-README.md  user guide copied into ~/Documents/Claude-Work/System-Context (kept up to date at each start)
 data/               EVERYTHING the app generates, kept apart from the program (private, ignored by git):
-  runs/<date>/        one folder per task, deleted after 30 days:
+  runs/<date>/        one folder per task, deleted after the time chosen in the Sessions window (30 days by default):
     images/             screenshot-01.png, zoom-01.png, pdf-01.png...
     prompts/            task.txt (instructions sent to Claude), triage.txt (model choice)
     responses/          task.jsonl (what Claude said and did, step by step), task-errors.txt, triage.txt, triage-errors.txt
     result.txt          what you were shown at the end, with the steps (Sessions window)
+    session.txt, instruction.txt    the session of the task, and the instruction typed for it
     screen.json         position and scale of the captured screen
   context-cache/      text extracted from the System-Context PDFs (rebuilt when needed)
   log.txt             app log
@@ -193,8 +225,9 @@ data/               EVERYTHING the app generates, kept apart from the program (p
   smooth.txt          smooth mode: on or off (Smooth mode menu)
   session.txt         the id of the current session
   ghost.txt           ghost mode: on or off
-  last-result.txt     what the Sessions window shows first when it is not the result of a kept task
-  sessions/           the notes of the kept sessions that ended
+  retention.txt       how long persisted sessions are kept, in days (30 when absent)
+  window.txt          the size of the Sessions window, when you changed it
+  sessions/           per session: <id>.title.txt (its name), <id>.roles.txt (its roles), <id>.md (its notes, when not current)
   icon.png            applications menu icon (Linux)
   .venv/              Python environment created by installer.sh
   cache/              compiled Python files

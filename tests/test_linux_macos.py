@@ -1,23 +1,27 @@
 """Tests of the logic of linux-macos/claude_screen.py, on any system (Windows included).
 
 The system modules (natif, raccourcis, pdf, fcntl) are replaced by small fakes, and everything happens in a
-temporary folder: nothing touches the screen, your Documents or Claude.
+temporary folder: nothing touches the screen, your Documents or Claude. The Sessions window (Tk) is built
+hidden and off-screen, and only when Tk can start (skipped otherwise).
 Usage: python tests/test_linux_macos.py
 """
 import json
 import os
+import queue
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import types
 
 depot = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 bac = tempfile.mkdtemp(prefix='claudescreen-tests-')
 app = os.path.join(bac, 'depot', 'linux-macos')
 shutil.copytree(os.path.join(depot, 'linux-macos'), app, ignore=shutil.ignore_patterns('data', '__pycache__'))
-shutil.copytree(os.path.join(depot, 'contexts'), os.path.join(bac, 'depot', 'contexts'))
+shutil.copytree(os.path.join(depot, 'roles'), os.path.join(bac, 'depot', 'roles'))
 docs, poubelle = os.path.join(bac, 'docs'), os.path.join(bac, 'bin')
 tests = echecs = 0
 
@@ -44,27 +48,42 @@ def corbeille(chemin):
     shutil.move(chemin, os.path.join(poubelle, '%s.%d' % (os.path.basename(chemin), len(os.listdir(poubelle)))))
 
 
+def dans_corbeille(debut):
+    return os.path.isdir(poubelle) and any(n.startswith(debut) for n in os.listdir(poubelle))
+
+
 def lire(chemin):
     with open(chemin, encoding='utf-8-sig') as f:
         return f.read()
 
 
-# Documents of a user coming from an old version: Claude-Travail, notes at the end of instructions.md.
+def ecrire(chemin, texte):
+    os.makedirs(os.path.dirname(chemin), exist_ok=True)
+    with open(chemin, 'w', encoding='utf-8') as f:
+        f.write(texte)
+
+
+def vieillir(chemin, jours):
+    t = time.time() - jours * 86400
+    os.utime(chemin, (t, t))
+
+
+# Documents of a user coming from an old version: Claude-Travail, notes at the end of instructions.md, and the
+# contexts of versions 0.6 to 0.9 (two as installed, one changed by the user, one of their own).
 ancien = os.path.join(docs, 'Claude-Travail', 'System-Context')
 os.makedirs(ancien)
-with open(os.path.join(docs, 'Claude-Travail', 'report.txt'), 'w') as f:
-    f.write('a file made by Claude earlier')
-with open(os.path.join(ancien, 'README.md'), 'w') as f:
-    f.write('old guide')
-with open(os.path.join(ancien, 'instructions.md'), 'w', encoding='utf-8') as f:
-    f.write('<!--\nStanding instructions for Claude (optional): write them below this comment, one per line.\n\n'
-            'Keep the dashed line below. What you write above it is yours: it is never changed.\n'
-            'Below it, Claude writes its notes while "Persistent memory" is checked in the icon menu;\n'
-            'they are erased when you uncheck it.\n-->\n\n\n---------------------\n'
-            "<!-- Claude's notes (persistent memory): erased when the mode is turned off. -->\n"
-            '- User writes reports in Word; report for client Dupont in progress\n'
-            '- Budget sheet 2026: columns A to F checked on 09/11\n'
-            '- Lab 3: routers R0 to R3 configured, PCs not addressed yet\n')
+ecrire(os.path.join(docs, 'Claude-Travail', 'report.txt'), 'a file made by Claude earlier')
+ecrire(os.path.join(ancien, 'README.md'), 'old guide')
+ecrire(os.path.join(ancien, 'instructions.md'),
+       '<!--\nStanding instructions for Claude (optional): write them below this comment, one per line.\n\n'
+       'Keep the dashed line below. What you write above it is yours: it is never changed.\n'
+       'Below it, Claude writes its notes while "Persistent memory" is checked in the icon menu;\n'
+       'they are erased when you uncheck it.\n-->\n\n\n---------------------\n'
+       "<!-- Claude's notes (persistent memory): erased when the mode is turned off. -->\n"
+       '- User writes reports in Word; report for client Dupont in progress\n'
+       '- Budget sheet 2026: columns A to F checked on 09/11\n'
+       '- Lab 3: routers R0 to R3 configured, PCs not addressed yet\n')
+shutil.copytree(os.path.join(depot, 'tests', 'fixtures', 'contexts-0.9'), os.path.join(ancien, 'Contexts'))
 
 faux('fcntl')
 faux('natif', MAC=False, LINUX=True, SESSION='x11', dossier_documents=lambda: docs, corbeille=corbeille,
@@ -75,9 +94,11 @@ os.getuid = lambda: 0
 sys.path.insert(0, app)
 import claude_screen as cs  # noqa: E402
 memoire = cs.memoire
+sessions = cs.sessions
 os.makedirs(os.path.join(cs.DONNEES), exist_ok=True)
-with open(cs.FICHIER_MEMOIRE, 'w') as f:
-    f.write('on')
+ecrire(cs.FICHIER_MEMOIRE, 'on')
+ecrire(os.path.join(cs.DONNEES, 'context.txt'), 'Studies')   # the context that was active (changed by the user)
+roles_app = sorted(os.listdir(os.path.join(depot, 'roles')))
 
 print('--- startup')
 cs.renommer_travail()
@@ -94,25 +115,72 @@ verifier('instructions.md: no instruction', cs.lire_instructions() == '')
 mem = memoire.notes(cs.FICHIER_NOTES)
 verifier('memory.md: the 3 notes moved', len(mem.split('\n')) == 3 and 'Dupont' in mem and 'Lab 3' in mem, mem)
 verifier('guide replaced, old one in the trash',
-         cs._memes_fichiers(os.path.join(cs.OUTILS, 'System-Context-README.md'), cs.FICHIER_LISEZMOI)
-         and any(n.startswith('README.md') for n in os.listdir(poubelle)))
-verifier('Contexts folder created with the files of the app',
-         sorted(os.listdir(cs.DOSSIER_CONTEXTES)) == sorted(os.listdir(os.path.join(depot, 'contexts'))))
+         cs._memes_fichiers(os.path.join(cs.OUTILS, 'System-Context-README.md'), cs.FICHIER_LISEZMOI) and dans_corbeille('README.md'))
+roles_dossier = sorted(os.listdir(cs.DOSSIER_ROLES))
+verifier('Roles folder: the roles of the app, plus the contexts the user wrote or changed',
+         roles_dossier == sorted(roles_app + ['My job.md', 'Studies.md']), roles_dossier)
+verifier('contexts as installed are not kept (their role replaces them), the others are, unchanged',
+         'Networking.md' not in roles_dossier and 'Default.md' not in roles_dossier
+         and 'BTS SIO' in lire(os.path.join(cs.DOSSIER_ROLES, 'Studies.md'))
+         and 'I am an accountant.' in lire(os.path.join(cs.DOSSIER_ROLES, 'My job.md')))
+verifier('the old Contexts folder is in the trash, context.txt is gone',
+         not os.path.exists(cs.ANCIEN_DOSSIER_CONTEXTES) and dans_corbeille('Contexts')
+         and not os.path.exists(os.path.join(cs.DONNEES, 'context.txt')))
+verifier('the context that was active is the role of the current session',
+         sessions.lire_roles(cs.DONNEES, cs.DOSSIER_ROLES, cs.lire_session()) == ['Studies'])
 avant = lire(cs.FICHIER_INSTRUCTIONS)
+nb_bac = len(os.listdir(poubelle))
 cs.preparer_contexte()
-verifier('second start changes nothing', lire(cs.FICHIER_INSTRUCTIONS) == avant and memoire.notes(cs.FICHIER_NOTES) == mem)
+verifier('second start changes nothing', lire(cs.FICHIER_INSTRUCTIONS) == avant and memoire.notes(cs.FICHIER_NOTES) == mem
+         and sorted(os.listdir(cs.DOSSIER_ROLES)) == roles_dossier and len(os.listdir(poubelle)) == nb_bac
+         and sessions.lire_roles(cs.DONNEES, cs.DOSSIER_ROLES, cs.lire_session()) == ['Studies'])
+
+# Other users of the contexts: one installed context was active; or only context.txt is left.
+for actif, attendu, avec_dossier in (('Networking', ['Network engineer'], True), ('Default', [], False)):
+    d = os.path.join(bac, 'migration-' + actif)
+    roles_d = os.path.join(d, 'Roles')
+    shutil.copytree(os.path.join(depot, 'roles'), roles_d)
+    if avec_dossier:
+        shutil.copytree(os.path.join(depot, 'tests', 'fixtures', 'contexts-0.9'), os.path.join(d, 'Contexts'))
+        os.remove(os.path.join(d, 'Contexts', 'My job.md'))
+        os.remove(os.path.join(d, 'Contexts', 'Studies.md'))
+    ecrire(os.path.join(d, 'data', 'context.txt'), actif)
+    sessions.migrer_contextes(os.path.join(d, 'data'), os.path.join(d, 'Contexts'), roles_d, corbeille)
+    ident = sessions.lire_session(os.path.join(d, 'data'))
+    verifier('context %s active: the session gets %s' % (actif, attendu or 'no specific role'),
+             sessions.lire_roles(os.path.join(d, 'data'), roles_d, ident) == attendu
+             and sorted(os.listdir(roles_d)) == roles_app and not os.path.exists(os.path.join(d, 'Contexts'))
+             and not os.path.exists(os.path.join(d, 'data', 'context.txt')))
+sessions.enregistrer_roles(cs.DONNEES, cs.lire_session(), [])   # the next checks start with no specific role
 
 print('--- prompt and end of a task')
 a = cs.Appli()
 a.icone = types.SimpleNamespace(icon=None, title='')
 appels = []
 a.demarrer_claude = lambda modele, nom, options: appels.append((modele, nom, options))
+# Haiku, for the title of a session: answers what the test put in titres ('' = nothing, None = never answers).
+titres = []
+questions_titre = []
+
+
+def faux_titre(question, sortie):
+    questions_titre.append(lire(question))
+    reponse = titres.pop(0) if titres else ''
+    if reponse is None:
+        return types.SimpleNamespace(poll=lambda: None, pid=None)
+    ecrire(sortie, reponse)
+    return types.SimpleNamespace(poll=lambda: 0, pid=None)
+
+
+a.processus_titre = faux_titre
 a.memoire = True
 os.makedirs(cs.RUNS, exist_ok=True)
 
 
 def capture():
     run = os.path.join(cs.RUNS, 'test-%d' % len(os.listdir(cs.RUNS)))
+    while os.path.exists(run):
+        run += 'b'
     for d in ('images', 'prompts', 'responses'):
         os.makedirs(os.path.join(run, d))
     return dict(run=run, png=os.path.join(run, 'images', 'screenshot-01.png'), fenetre=('gedit', 'Test'), ident=None,
@@ -144,8 +212,19 @@ def repondre(c, texte, nom='task'):
     """The answer of Claude: one word in a text file for the triage, a stream of events for the task."""
     if nom == 'task':
         return ecrire_flux(c, [ev_texte(texte), {'type': 'result', 'subtype': 'success', 'result': texte}] if texte else [])
-    with open(os.path.join(c['run'], 'responses', nom + '.txt'), 'w', encoding='utf-8') as f:
-        f.write(texte)
+    ecrire(os.path.join(c['run'], 'responses', nom + '.txt'), texte)
+
+
+def tache_finie(instruction='', reponse='Done.'):
+    """A whole task, from the shortcut to its end (Claude answers reponse)."""
+    t = capture()
+    a.proc = None
+    a.lancer_tache(t, instruction)
+    open(os.path.join(t['run'], 'mcp-started.txt'), 'w').close()
+    repondre(t, reponse)
+    a.proc = types.SimpleNamespace(returncode=0)
+    a.processus_fini()
+    return t
 
 
 c = capture()
@@ -159,10 +238,11 @@ verifier('prompt: nothing specific to a software, a field or a profile',
          not re.search('Packet Tracer|GNS3|OSPF|subnetting|VLAN|Cisco|BTS|student|course', fixe))
 verifier('prompt: answer in the language of the computer', 'language code: ' + cs.LANGUE in p and 'in French' not in p, cs.LANGUE)
 verifier('prompt: work folder', 'current folder: ' + cs.TRAVAIL in p)
-verifier('prompt: Default context and its text', 'Active context: Default (chosen by the user in the icon menu)' in p
-         and 'General assistant' in p and '<!--' not in p)
-verifier('prompt: context files are not listed as documents', cs.DOSSIER_CONTEXTES not in p)
-verifier('triage: names the context', '\nActive context: Default.\n' in prompt(c, 'triage'))
+verifier('prompt: no specific role: General assistant and its text',
+         'Roles of this session: General assistant (chosen by the user for this session). Work in this role' in p
+         and 'General assistant: the user can be anyone' in p and '<!--' not in p)
+verifier('prompt: role files are not listed as documents', cs.DOSSIER_ROLES not in p)
+verifier('triage: names the roles', '\nRoles of this session: General assistant.\n' in prompt(c, 'triage'))
 a.proc = types.SimpleNamespace(returncode=0)
 repondre(c, 'OPUS', 'triage')
 a.processus_fini()
@@ -188,27 +268,54 @@ mem = memoire.notes(cs.FICHIER_NOTES)
 verifier('memory.md: 2 new notes, duplicate skipped', len(mem.split('\n')) == 5 and '\n- PC0 not addressed yet' in mem, mem)
 verifier('tooltip named Claude-Work', a.icone.title.startswith('Claude-Work - done: '), a.icone.title)
 verifier('instructions.md untouched', lire(cs.FICHIER_INSTRUCTIONS) == avant)
+a.finir_titrage()   # Haiku gave nothing for this session: it keeps its name by date
 
-print('--- contexts')
-noms = cs.lister_contextes()
-verifier('Default comes first in the list', noms[0] == 'Default' and 'Networking' in noms and 'Studies' in noms, noms)
-cs.ecrire_texte(cs.FICHIER_CONTEXTE, 'Networking')
+print('--- roles of a session')
+noms = cs.lister_roles()
+verifier('General assistant comes first, then the roles of the app and those kept from the contexts',
+         noms[0] == 'General assistant' and 'Network engineer' in noms and 'My job' in noms and 'Studies' in noms, noms)
+ident = cs.lire_session()
 a.choix_modele = 'sonnet'
+a.basculer_role(ident, 'Network engineer')
 c = capture()
 a.lancer_tache(c, '')
 p = prompt(c)
-verifier('chosen context replaces Default', 'Active context: Networking' in p and 'addressing' in p and 'General assistant' not in p)
-with open(os.path.join(cs.DOSSIER_CONTEXTES, 'My job.md'), 'w', encoding='utf-8') as f:
-    f.write('<!-- mine -->\nI am an accountant.\n')
-verifier("a file added by the user is listed", 'My job' in cs.lister_contextes())
-cs.ecrire_texte(cs.FICHIER_CONTEXTE, 'My job')
-verifier("the user's own context, without its comment", cs.contexte_actif() == ('My job', 'I am an accountant.'), cs.contexte_actif())
-corbeille(os.path.join(cs.DOSSIER_CONTEXTES, 'My job.md'))
-verifier('active file gone: back to Default', cs.contexte_actif()[0] == 'Default')
-corbeille(os.path.join(cs.DOSSIER_CONTEXTES, 'Default.md'))
+verifier('one role: its text instead of General assistant',
+         'Roles of this session: Network engineer (chosen by the user for this session). Work in this role' in p
+         and 'Network engineer: the user works on networks' in p and 'General assistant: the user' not in p, p[:600])
+verifier('the role is kept with the session', lire(sessions.fichier_roles(cs.DONNEES, ident)) == 'Network engineer\n')
+a.basculer_role(ident, 'My job')
 c = capture()
 a.lancer_tache(c, '')
-verifier('no Default file either: the task still starts', 'Active context: Default (chosen by the user in the icon menu).\n' in prompt(c))
+p = prompt(c)
+verifier('two roles: both named, both texts, without their comments',
+         'Roles of this session: Network engineer, My job (chosen by the user for this session). Work in all of these roles' in p
+         and 'I am an accountant.' in p and 'Network engineer: the user' in p and '<!--' not in p)
+verifier('roles come before the rule that uses them, after the instruction of the user in that rule',
+         p.index('Roles of this session') < p.index('1. Find what')
+         and 'their standing instructions; the roles of this session; your notes of this session; the documents of this session' in p)
+a.basculer_role(ident, 'Network engineer')
+verifier('unticking a role', a.roles_session(ident) == ['My job'])
+a.basculer_role(ident, 'General assistant')
+verifier('General assistant = no specific role: the others unticked, nothing kept',
+         a.roles_session(ident) == [] and not os.path.exists(sessions.fichier_roles(cs.DONNEES, ident)))
+sessions.enregistrer_roles(cs.DONNEES, ident, ['Student', 'A role whose file is gone'])
+verifier('a role whose file is gone is ignored', a.roles_session(ident) == ['Student'])
+sessions.enregistrer_roles(cs.DONNEES, ident, [])
+corbeille(os.path.join(cs.DOSSIER_ROLES, 'General assistant.md'))
+c = capture()
+a.lancer_tache(c, '')
+verifier('no General assistant file either: the task still starts',
+         'Roles of this session: General assistant (chosen by the user for this session).\n' in prompt(c))
+shutil.copyfile(os.path.join(depot, 'roles', 'General assistant.md'), os.path.join(cs.DOSSIER_ROLES, 'General assistant.md'))
+ecrire(os.path.join(cs.DOSSIER_ROLES, 'Long.md'), 'Long role. ' * 500)
+sessions.enregistrer_roles(cs.DONNEES, ident, ['Long'])
+c = capture()
+a.lancer_tache(c, '')
+verifier('a role longer than 4000 characters: its end is cut and the user is told', a.coupes == ['Roles/Long.md'])
+sessions.enregistrer_roles(cs.DONNEES, ident, [])
+os.remove(os.path.join(cs.DOSSIER_ROLES, 'Long.md'))
+a.proc = None
 
 print('--- memory full, then off')
 n, retirees = memoire.ajouter(cs.FICHIER_NOTES, ['note %d %s' % (i, 'x' * 280) for i in range(1, 17)])
@@ -226,34 +333,34 @@ verifier('a task on a full memory: note saved, nothing said to the user',
 verifier('memory off: memory.md emptied, the cleared notes kept once in data, nothing in the trash',
          memoire.vider(cs.FICHIER_NOTES, cs.FICHIER_NOTES_AVANT) and memoire.notes(cs.FICHIER_NOTES) == ''
          and lire(cs.FICHIER_NOTES).startswith('<!--') and 'the newest note' in memoire.notes(cs.FICHIER_NOTES_AVANT)
-         and not any(n.startswith('memory') for n in os.listdir(poubelle)))
+         and not dans_corbeille('memory'))
 verifier('memory off with no notes: the kept notes are not replaced',
          not memoire.vider(cs.FICHIER_NOTES, cs.FICHIER_NOTES_AVANT) and 'the newest note' in memoire.notes(cs.FICHIER_NOTES_AVANT))
 a.memoire = False
 c3 = capture()
 a.lancer_tache(c3, '')
 verifier('memory off: nothing about memory in the prompt', 'MEMORY' not in prompt(c3) and 'Persistent memory' not in prompt(c3))
+a.proc = None
 
 verifier('notes are kept when memory.txt does not exist', memoire.active(os.path.join(bac, 'nothing.txt')) and not os.path.exists(os.path.join(bac, 'nothing.txt')))
 
 print('--- instructions.txt from an old version')
 vieux = os.path.join(bac, 'old')
 os.makedirs(vieux)
-with open(os.path.join(vieux, 'instructions.txt'), 'w', encoding='utf-8') as f:
-    f.write('# Lines starting with # are ignored.\n# Example -- one\nAlways answer briefly.\n')
+ecrire(os.path.join(vieux, 'instructions.txt'), '# Lines starting with # are ignored.\n# Example -- one\nAlways answer briefly.\n')
 verifier('converted, old file to the trash',
          memoire.migrer(os.path.join(vieux, 'instructions.txt'), os.path.join(vieux, 'instructions.md'), corbeille)
          and not os.path.exists(os.path.join(vieux, 'instructions.txt'))
          and lire(os.path.join(vieux, 'instructions.md')) ==
          '<!-- Comments like this one are ignored. Write your instructions below, one per line. -->\n'
          '<!-- Example - - one -->\nAlways answer briefly.\n', repr(lire(os.path.join(vieux, 'instructions.md'))))
-with open(os.path.join(vieux, 'mine.md'), 'w', encoding='utf-8') as f:
-    f.write('My own text.\n\n---------------------\nnot a note of Claude\n')
+ecrire(os.path.join(vieux, 'mine.md'), 'My own text.\n\n---------------------\nnot a note of Claude\n')
 verifier('a dashed line written by the user is left alone',
          not memoire.migrer_memoire(os.path.join(vieux, 'mine.md'), os.path.join(vieux, 'memory.md'))
          and not os.path.exists(os.path.join(vieux, 'memory.md')))
 
 print('--- Claude Code update')
+trouver = cs.trouver_claude
 cs.trouver_claude = lambda: sys.executable  # a fake claude: "python update" fails at once
 a.proc = None
 a.mettre_a_jour_claude()
@@ -283,46 +390,36 @@ print('--- texts longer than 4000 characters')
 a.proc = None
 a.memoire = False
 avant_ins = lire(cs.FICHIER_INSTRUCTIONS)
-with open(cs.FICHIER_INSTRUCTIONS, 'w', encoding='utf-8') as f:
-    f.write('<!-- %s -->\n%s' % ('c' * 5000, 'Always answer briefly. ' * 200))
-c7 = capture()
-a.lancer_tache(c7, '')
-open(os.path.join(c7['run'], 'mcp-started.txt'), 'w').close()
-repondre(c7, 'Done.')
-a.proc = types.SimpleNamespace(returncode=0)
-a.processus_fini()
+ecrire(cs.FICHIER_INSTRUCTIONS, '<!-- %s -->\n%s' % ('c' * 5000, 'Always answer briefly. ' * 200))
+tache_finie()
 verifier('long instructions.md: said in the result', a.coupes == ['instructions.md']
          and re.search(r'Done\.\n\n\(Warning: instructions\.md is longer than 4000 characters, so its end was not sent', a.dernier) is not None, a.dernier)
-with open(cs.FICHIER_INSTRUCTIONS, 'w', encoding='utf-8') as f:
-    f.write(avant_ins)
-c8 = capture()
-a.lancer_tache(c8, '')
-open(os.path.join(c8['run'], 'mcp-started.txt'), 'w').close()
-repondre(c8, 'Done.')
-a.proc = types.SimpleNamespace(returncode=0)
-a.processus_fini()
+ecrire(cs.FICHIER_INSTRUCTIONS, avant_ins)
+tache_finie()
 verifier('shortened again: no warning any more', a.coupes == [] and 'Warning' not in a.dernier, a.dernier)
 
 print('--- the task is worked out from the context')
-with open(os.path.join(cs.TRAVAIL, 'exo7_notes.txt'), 'w') as f:
-    f.write('work in progress')
+ecrire(os.path.join(cs.TRAVAIL, 'exo7_notes.txt'), 'work in progress')
 cz = capture()
 a.proc = None
 a.lancer_tache(cz, '')
 pz = prompt(cz)
 verifier('prompt: never act at random, the order of what to rely on', '1. Find what is being asked before you act: never act at random' in pz
-         and 'their standing instructions; the active context; your notes of this session; the documents and the recent files' in pz
+         and 'their standing instructions; the roles of this session; your notes of this session; the documents of this session, '
+             'then the other documents and the recent files' in pz
          and 'do not guess an action: change nothing' in pz)
 verifier('prompt: the recent files of the work folder, not those of System-Context', 'Most recent files of the work folder' in pz
          and os.path.join(cs.TRAVAIL, 'exo7_notes.txt') + '  (' in pz and 'instructions.md' not in pz[pz.index('Most recent files'):pz.index('1. Find what')])
 a.proc = None
 
-print('--- steps of a task and History')
+print('--- steps of a task and the Sessions window')
 a.memoire = True
 a.choix_modele = 'sonnet'
 shutil.rmtree(cs.RUNS)
 os.makedirs(cs.RUNS)
-verifier('no task in the history yet', cs.historique() == [])
+courante = sessions.choix(cs.DONNEES)[0]
+verifier('no task yet: the session in use is listed first, with no task', courante['courante'] and courante['taches'] == []
+         and courante['id'] == cs.lire_session() and re.search(r' \(current\)  -  .+  -  0 tasks$', courante['titre']), courante)
 c4 = capture()
 a.lancer_tache(c4, 'cable the routers')
 a.proc = types.SimpleNamespace(returncode=0)
@@ -362,77 +459,466 @@ t = lire(os.path.join(c5['run'], 'result.txt'))
 verifier('finished: result.txt = the answer, then the steps, the answer not repeated',
          t == a.dernier + '\n\n----- What Claude did -----\nI fill in the form.\n  > clic 10 20, remplacer Paris', t)
 verifier('the note still went to memory.md', 'form done' in memoire.notes(cs.FICHIER_NOTES))
-h = cs.historique()
-verifier('history: the result files of the 2 tasks, oldest first', h == [os.path.join(c4['run'], 'result.txt'), os.path.join(c5['run'], 'result.txt')], h)
-verifier('History window: the newest result is the last one, no separate last message', a.fichiers_resultat() == h)
-verifier('a task keeps the id of its session, and its instruction', lire(os.path.join(c4['run'], 'session.txt')) == cs.lire_session()
-         and lire(os.path.join(c4['run'], 'instruction.txt')) == 'cable the routers' and not os.path.exists(os.path.join(c5['run'], 'instruction.txt')))
+a.finir_titrage()
+courante = sessions.choix(cs.DONNEES)[0]
+verifier('Sessions window: the 2 tasks of the session in use, oldest first, the newest shown first',
+         [e['fichier'] for e in courante['taches']] == [os.path.join(c4['run'], 'result.txt'), os.path.join(c5['run'], 'result.txt')]
+         and sessions.entrees(courante, None)[-1]['fichier'] == os.path.join(c5['run'], 'result.txt'), courante)
+verifier('a task keeps the id of its session, and its instruction (shown before its result)', lire(os.path.join(c4['run'], 'session.txt')) == cs.lire_session()
+         and sessions.texte_entree(courante['taches'][0]).startswith('Instruction: cable the routers\n\nTask stopped')
+         and not os.path.exists(os.path.join(c5['run'], 'instruction.txt')))
 a.echec('Could not start the task: test')
-f = a.fichiers_resultat()
-verifier('a task that could not start: the kept results, then its message', f == h + [cs.DERNIER] and lire(cs.DERNIER) == 'Could not start the task: test')
+e = a.etat_sessions()
+liste = sessions.entrees(sessions.choix(cs.DONNEES)[0], e['maintenant'], e['titre_maintenant'])
+verifier('a task that could not start: the kept results, then its message', len(liste) == 3
+         and liste[-1] == {'titre': 'last message', 'fichier': None, 'texte': 'Could not start the task: test'}, liste[-1])
 a.proc = types.SimpleNamespace(returncode=0)
 a.etape = 'tri'
-verifier('a task in progress: shown last', a.fichiers_resultat() == h + [cs.DERNIER] and lire(cs.DERNIER) == 'Looking at the screen...')
-verifier('during a task: no new session, no ghost mode', not a.nouvelle_session() and not a.basculer_fantome(True) and not a.fantome)
+e = a.etat_sessions()
+verifier('a task in progress: shown last, the window knows the app is busy', e['occupe'] and e['titre_maintenant'] == 'in progress'
+         and e['maintenant'] == 'Looking at the screen...')
+verifier('during a task: no new session, no ghost mode, no resume', not a.nouvelle_session() and not a.basculer_fantome(True)
+         and not a.fantome and not a.reprendre_session(cs.lire_session()))
 a.proc = None
 for i in range(20):
     d = os.path.join(cs.RUNS, '20261113-16%02d00' % i)
     os.makedirs(d)
     if i != 7:
-        with open(os.path.join(d, 'result.txt'), 'w', encoding='utf-8') as f:
-            f.write('Result number %d' % i)
-h = cs.historique()
-verifier('history: every kept result, the task without a result skipped', len(h) == 21 and h[18].endswith(os.path.join('20261113-161900', 'result.txt'))
-         and os.path.dirname(os.path.dirname(h[18])) == cs.RUNS, h[:3])
-sys.path.insert(0, os.path.join(app, 'outils'))
-import fenetres  # noqa: E402
-verifier('window title: the date of the task, and its session when it has one', fenetres._titre(h[18]) == '13/11/2026 16:19'
-         and fenetres._titre(cs.DERNIER) == 'now' and re.fullmatch(r'.+   \(session of \d\d/\d\d/\d{4} \d\d:\d\d\)', fenetres._titre(os.path.join(c4['run'], 'result.txt'))) is None)
-with open(os.path.join(cs.RUNS, '20261113-161900', 'session.txt'), 'w') as f:
-    f.write('20261113-160000')
-with open(os.path.join(cs.RUNS, '20261113-161900', 'instruction.txt'), 'w') as f:
-    f.write('only question 4')
-verifier('window: session in the title, instruction before the result', fenetres._titre(h[18]) == '13/11/2026 16:19   (session of 13/11/2026 16:00)'
-         and fenetres._texte(h[18]) == 'Instruction: only question 4\n\nResult number 19' and fenetres._texte(h[17]) == 'Result number 18')
+        ecrire(os.path.join(d, 'result.txt'), 'Result number %d' % i)
+anciennes = [s for s in sessions.lister(cs.DONNEES) if not s['id']]
+verifier('tasks of before the sessions: grouped in "Earlier tasks", the task without a result skipped',
+         len(anciennes) == 1 and len(anciennes[0]['taches']) == 19 and anciennes[0]['titre'] == 'Earlier tasks  -  19 tasks'
+         and anciennes[0]['taches'][18]['titre'] == '13/11/2026 16:19', anciennes[:1])
+ecrire(os.path.join(cs.RUNS, '20261113-161900', 'session.txt'), '20261113-160000')
+ecrire(os.path.join(cs.RUNS, '20261113-161900', 'instruction.txt'), 'only question 4')
+s = [s for s in sessions.lister(cs.DONNEES) if s['id'] == '20261113-160000']
+verifier('an earlier session: its own entry, named by number and date, the instruction before the result',
+         len(s) == 1 and s[0]['titre'] == 'Session 1  -  13/11/2026 16:00  -  1 task'
+         and sessions.texte_entree(s[0]['taches'][0]) == 'Instruction: only question 4\n\nResult number 19', s)
+verifier('the list: the session in use first, then the others, newest first',
+         [x['id'] for x in sessions.choix(cs.DONNEES)] == [cs.lire_session(), '20261113-160000', ''])
+shutil.rmtree(os.path.join(cs.RUNS, '20261113-161900'))
 
-print('--- New session and ghost mode')
-with open(cs.FICHIER_NOTES, 'w', encoding='utf-8') as f:
-    f.write(memoire.ENTETE + '- a note of the session\n')
+print('--- New session, resume, roles that follow')
+ecrire(cs.FICHIER_NOTES, memoire.ENTETE + '- a note of the session\n')
 avant = cs.lire_session()
+sessions.enregistrer_roles(cs.DONNEES, avant, ['Student'])
 verifier('New session: notes emptied, those of the session that ended put away with it, a new session id',
          a.nouvelle_session() and memoire.notes(cs.FICHIER_NOTES) == ''
-         and 'a note of the session' in memoire.notes(os.path.join(cs.DOSSIER_SESSIONS, avant + '.md')) and cs.lire_session() != avant
+         and 'a note of the session' in memoire.notes(sessions.fichier_notes(cs.DONNEES, avant)) and cs.lire_session() != avant
          and re.match(r'^\d{8}-\d{6}', cs.lire_session()) is not None)
-with open(cs.FICHIER_NOTES, 'w', encoding='utf-8') as f:
-    f.write(memoire.ENTETE + '- a note of the new session\n')
+nouvelle = cs.lire_session()
+verifier('the new session starts with the roles of the one it follows, which keeps them',
+         a.roles_session(nouvelle) == ['Student'] and a.roles_session(avant) == ['Student'])
+a.nouvelle_session()
+troisieme = cs.lire_session()
+verifier('two new sessions in the same second: never the id of a session that still has something',
+         troisieme not in (avant, nouvelle) and a.roles_session(troisieme) == ['Student'])
+verifier('resume: the session comes back with its notes', a.reprendre_session(avant) and cs.lire_session() == avant
+         and 'a note of the session' in memoire.notes(cs.FICHIER_NOTES))
+verifier('resume: not an id that is not a session', not a.reprendre_session('../x') and cs.lire_session() == avant)
+ecrire(cs.FICHIER_NOTES, memoire.ENTETE + '- a note of the session\n- one more\n')
+a.reprendre_session(nouvelle)
+verifier('resume another one: the notes of the one that ends are put away with it',
+         memoire.notes(cs.FICHIER_NOTES) == '' and 'one more' in memoire.notes(sessions.fichier_notes(cs.DONNEES, avant)))
+ecrire(cs.FICHIER_NOTES, memoire.ENTETE + '- a note of the new session\n')
 verifier('notes are always kept: an old memory.txt (on or off) does not turn them off, only "never" does',
          memoire.active(cs.FICHIER_MEMOIRE) and memoire.active(os.path.join(bac, 'nothing.txt')))
-with open(os.path.join(bac, 'never.txt'), 'w') as f:
-    f.write('never')
+ecrire(os.path.join(bac, 'never.txt'), 'never')
 verifier('memory.txt = never: no notes at all', not memoire.active(os.path.join(bac, 'never.txt')))
+
+print('--- Ghost Mode')
 verifier('ghost mode: off by default, turned on', not a.fantome and a.basculer_fantome(True) and a.fantome and lire(cs.FICHIER_FANTOME) == 'on')
+verifier('ghost: its roles start as those of the persisted session', a.roles_fantome == ['Student'] and a.id_en_cours() == '')
+a.basculer_role('', 'Network engineer')
+verifier('ghost: a role ticked for it stays in memory, the persisted session keeps its own',
+         a.roles_fantome == ['Student', 'Network engineer'] and a.roles_session(nouvelle) == ['Student']
+         and not os.path.exists(sessions.fichier_roles(cs.DONNEES, '')))
 nb = len(os.listdir(cs.RUNS))
+nb_titres = len(questions_titre)
 g = capture()
 a.lancer_tache(g, 'a secret instruction')
 pg = prompt(g)
-verifier('ghost: the notes of the session are not sent, none is asked for', 'MEMORY' not in pg and 'a note of the new session' not in pg and 'a secret instruction' in pg)
+verifier('ghost: its own roles, the notes of the persisted session not sent', 'Roles of this session: Student, Network engineer' in pg
+         and 'a note of the new session' not in pg and 'a secret instruction' in pg and '(no notes yet)' in pg)
 verifier('ghost: no session id, no instruction file', not os.path.exists(os.path.join(g['run'], 'session.txt')) and not os.path.exists(os.path.join(g['run'], 'instruction.txt')))
 open(os.path.join(g['run'], 'mcp-started.txt'), 'w').close()
-repondre(g, 'Secret answer.\nMEMORY: must not be saved')
+repondre(g, 'Secret answer.\nMEMORY: a ghost note')
 a.proc = types.SimpleNamespace(returncode=0)
 a.processus_fini()
-verifier('ghost: the answer is shown, the task folder is gone, no note saved', 'Secret answer.' in a.dernier and not os.path.exists(g['run'])
-         and len(os.listdir(cs.RUNS)) == nb and memoire.notes(cs.FICHIER_NOTES) == '- a note of the new session', a.dernier)
-verifier('ghost: the answer is the last entry of the window', a.fichiers_resultat()[-1] == cs.DERNIER and 'Secret answer.' in lire(cs.DERNIER))
-ident = cs.lire_session()
-verifier('New session in Ghost Mode: still ghost, the answer forgotten, the persisted session untouched', a.nouvelle_session() and a.fantome
-         and a.dernier.startswith('Ghost session') and not os.path.exists(cs.DERNIER) and cs.lire_session() == ident)
-verifier('ghost off: the ghost answer is forgotten', a.basculer_fantome(False) and a.dernier.startswith('No task yet') and not os.path.exists(cs.DERNIER)
-         and a.fichiers_resultat() == cs.historique() and lire(cs.FICHIER_FANTOME) == 'off')
+verifier('ghost: the answer is shown, the task folder is gone, its note only in memory', 'Secret answer.' in a.dernier and not os.path.exists(g['run'])
+         and len(os.listdir(cs.RUNS)) == nb and memoire.notes(cs.FICHIER_NOTES) == '- a note of the new session'
+         and a.notes_fantome == ['- a ghost note'], a.dernier)
+verifier('ghost: never named by Haiku (nothing of it is sent for that)', a.titrage is None and len(questions_titre) == nb_titres)
+choix = sessions.choix(cs.DONNEES, True, a.entrees_fantome)
+verifier('ghost: the window shows the ghost session first, with its task and instruction',
+         choix[0]['fantome'] and choix[0]['titre'] == 'Ghost session (current)  -  1 task'
+         and sessions.texte_entree(choix[0]['taches'][0]).startswith('Instruction: a secret instruction\n\n[sonnet,')
+         and not any(x['courante'] for x in choix[1:]))
+g2 = capture()
+a.lancer_tache(g2, '')
+verifier('ghost: the next task has the note of the ghost session', '- a ghost note' in prompt(g2))
+a.proc = None
+verifier('New session in Ghost Mode: still ghost, everything of the ghost session forgotten, the persisted session untouched',
+         a.nouvelle_session() and a.fantome and a.entrees_fantome == [] and a.notes_fantome == []
+         and a.dernier.startswith('Ghost session') and cs.lire_session() == nouvelle)
+verifier('ghost off: back to the persisted session as it was', a.basculer_fantome(False) and a.dernier.startswith('No task yet')
+         and lire(cs.FICHIER_FANTOME) == 'off' and a.entrees_fantome == [] and cs.lire_session() == nouvelle)
 k = capture()
 a.lancer_tache(k, '')
-verifier('after ghost mode: the notes of the session are sent again', 'a note of the new session' in prompt(k))
+verifier('after ghost mode: the notes and the roles of the session are sent again', 'a note of the new session' in prompt(k)
+         and 'Roles of this session: Student (chosen' in prompt(k))
 a.proc = None
+a.basculer_fantome(True)
+verifier('ghost on again: its roles start again from the persisted session', a.roles_fantome == ['Student'])
+a.basculer_fantome(False)
+a.retirer_runs_fantomes()
+verifier('a ghost task that never reached its end leaves nothing', not os.path.exists(g2['run']))
+
+print('--- documents of a session')
+ident = cs.lire_session()
+src = os.path.join(bac, 'src')
+ecrire(os.path.join(src, 'network course.md'), 'OSPF areas')
+ecrire(os.path.join(src, 'plan.txt'), 'the plan')
+ecrire(os.path.join(cs.CONTEXTE, 'general.txt'), 'for every task')
+autre = '20261101-090000'
+sessions.ajouter_documents(cs.CONTEXTE, autre, [os.path.join(src, 'plan.txt')])
+e = a.commande_sessions({'action': 'ajouter', 'id': ident, 'fichiers': [os.path.join(src, 'network course.md'),
+                                                                       os.path.join(src, 'plan.txt'), os.path.join(src, 'missing.txt')]})
+docs_s = sessions.lister_documents(cs.CONTEXTE, ident)
+verifier('added: copied into the documents of the session, the originals untouched',
+         [os.path.basename(x) for x in docs_s] == ['network course.md', 'plan.txt']
+         and all(os.path.dirname(x) == os.path.join(cs.CONTEXTE, 'Session documents', ident) for x in docs_s)
+         and os.path.exists(os.path.join(src, 'plan.txt')) and e['donnees'] == cs.DONNEES, docs_s)
+a.commande_sessions({'action': 'ajouter', 'id': ident, 'fichiers': [os.path.join(src, 'plan.txt')]})
+docs_s = sessions.lister_documents(cs.CONTEXTE, ident)
+verifier('the same name again: a number is added, nothing replaced', [os.path.basename(x) for x in docs_s] == ['network course.md', 'plan (2).txt', 'plan.txt'])
+c = capture()
+a.lancer_tache(c, '')
+p = prompt(c)
+general = os.path.join(cs.CONTEXTE, 'general.txt')
+verifier('prompt: the documents of the session first, then the other documents of System-Context',
+         'Documents of this session:' in p and p.index('Documents of this session:') < p.index(docs_s[0])
+         < p.index('Context documents provided by the user') < p.index(general))
+verifier('prompt: on top of the standing instructions and the other documents, never instead of them',
+         'on top of the standing instructions and the other documents, never instead of them' in p and p.count(docs_s[0]) == 1)
+verifier('prompt: not the documents of another session', os.path.join(cs.CONTEXTE, 'Session documents', autre) not in p)
+a.proc = None
+e = a.commande_sessions({'action': 'retirer', 'id': ident, 'chemin': docs_s[1]})
+verifier('removed: to the trash (it can be got back)', not os.path.exists(docs_s[1]) and dans_corbeille('plan (2).txt'))
+verifier('never a file outside the documents of that session', not sessions.retirer_document(cs.CONTEXTE, ident, general, corbeille)
+         and not sessions.retirer_document(cs.CONTEXTE, ident, os.path.join(cs.CONTEXTE, 'Session documents', autre, 'plan.txt'), corbeille)
+         and os.path.exists(general))
+verifier('a session that has documents but no task is listed: it can be resumed',
+         [x['taches'] for x in sessions.lister(cs.DONNEES, False, cs.CONTEXTE) if x['id'] == autre] == [[]]
+         and autre not in [x['id'] for x in sessions.lister(cs.DONNEES)])
+expiree = '20250101-090000'
+sessions.ajouter_documents(cs.CONTEXTE, expiree, [os.path.join(src, 'plan.txt')])
+ecrire(sessions.fichier_notes(cs.DONNEES, expiree), memoire.ENTETE + '- an old note\n')
+sessions.enregistrer_roles(cs.DONNEES, expiree, ['Student'])
+vieillir(sessions.dossier_documents(cs.CONTEXTE, expiree), 40)
+a.nettoyer_runs()
+verifier('expired session (no task, documents older than the time kept): its documents in the trash, its notes and roles gone',
+         not os.path.exists(sessions.dossier_documents(cs.CONTEXTE, expiree)) and dans_corbeille(expiree)
+         and not os.path.exists(sessions.fichier_notes(cs.DONNEES, expiree)) and not os.path.exists(sessions.fichier_roles(cs.DONNEES, expiree)))
+verifier('a session with recent documents is kept, the one in use always', os.path.isdir(sessions.dossier_documents(cs.CONTEXTE, autre))
+         and len(sessions.lister_documents(cs.CONTEXTE, ident)) == 2)
+a.basculer_fantome(True)
+a.commande_sessions({'action': 'ajouter', 'id': '', 'fichiers': [os.path.join(src, 'network course.md')]})
+gdocs = sessions.lister_documents(cs.CONTEXTE, '')
+verifier('ghost: its documents go to the "Ghost session" folder', len(gdocs) == 1
+         and os.path.dirname(gdocs[0]) == os.path.join(cs.CONTEXTE, 'Session documents', 'Ghost session'))
+g = capture()
+a.lancer_tache(g, '')
+verifier('ghost: its documents are sent, not those of the persisted session', gdocs[0] in prompt(g) and docs_s[0] not in prompt(g))
+a.proc = None
+nb_bac = len(os.listdir(poubelle))
+a.commande_sessions({'action': 'retirer', 'id': '', 'chemin': gdocs[0]})
+verifier('ghost: a document removed is deleted (it was a copy), not kept in the trash', not os.path.exists(gdocs[0]) and len(os.listdir(poubelle)) == nb_bac)
+a.commande_sessions({'action': 'ajouter', 'id': '', 'fichiers': [os.path.join(src, 'plan.txt')]})
+a.nouvelle_session()
+verifier('ghost: a new ghost session starts with no document', sessions.lister_documents(cs.CONTEXTE, '') == [])
+a.commande_sessions({'action': 'ajouter', 'id': '', 'fichiers': [os.path.join(src, 'plan.txt')]})
+a.basculer_fantome(False)
+verifier('ghost off: its documents are gone, nothing in the trash, the persisted ones untouched',
+         not os.path.exists(sessions.dossier_documents(cs.CONTEXTE, '')) and len(os.listdir(poubelle)) == nb_bac
+         and len(sessions.lister_documents(cs.CONTEXTE, ident)) == 2)
+sessions.ajouter_documents(cs.CONTEXTE, '', [os.path.join(src, 'plan.txt')])
+sessions.vider_documents_fantome(cs.CONTEXTE)
+verifier('at startup: documents left by a ghost session (app closed) are deleted', not os.path.exists(sessions.dossier_documents(cs.CONTEXTE, '')))
+verifier('files of the system are not documents', not sessions.IGNORES.match('notes.md') and sessions.IGNORES.match('~$draft.docx')
+         and sessions.IGNORES.match('.DS_Store') and sessions.IGNORES.match('desktop.ini'))
+
+print('--- the title of a session (Haiku)')
+a.titrage = None
+a.nouvelle_session()
+ident = cs.lire_session()
+verifier('a new session is named by its number and date until it has a title',
+         re.fullmatch(r'Session \d+ \(current\)  -  \d\d/\d\d/\d{4} \d\d:\d\d  -  0 tasks', sessions.choix(cs.DONNEES)[0]['titre']),
+         sessions.choix(cs.DONNEES)[0]['titre'])
+titres.append('"Cabling the routers."\n')
+tache_finie('cable R1', 'Routers cabled.')
+question = a.titrage and a.titrage['question']
+verifier('after the first finished task, Haiku is asked in the background, with what the task was about',
+         a.titrage and a.titrage['id'] == ident and 'cable R1' in questions_titre[-1] and 'Routers cabled.' in questions_titre[-1]
+         and 'language code: ' + cs.LANGUE in questions_titre[-1] and a.dernier.endswith('Routers cabled.'))
+a.finir_titrage()
+verifier('the title is kept and shown first in the list', sessions.lire_titre(cs.DONNEES, ident) == 'Cabling the routers'
+         and sessions.choix(cs.DONNEES)[0]['titre'].startswith('Cabling the routers (current)  -  ')
+         and not os.path.exists(question) and a.titrage is None)
+n = len(questions_titre)
+tache_finie()
+verifier('a session that has its title is not asked again', a.titrage is None and len(questions_titre) == n)
+a.nouvelle_session()
+ident = cs.lire_session()
+titres.append('')
+tache_finie()
+a.finir_titrage()
+verifier('Haiku answers nothing: the session keeps its name by date, the task is not affected',
+         sessions.lire_titre(cs.DONNEES, ident) == '' and sessions.choix(cs.DONNEES)[0]['titre'].startswith('Session ')
+         and a.dernier.endswith('Done.'))
+titres.append(None)
+tache_finie()
+a.titrage['debut'] -= cs.DUREE_TITRAGE + 1
+a.finir_titrage()
+verifier('Haiku takes too long: stopped, the name by date stays', a.titrage is None and sessions.lire_titre(cs.DONNEES, ident) == '')
+titres.append('Here is a title that is far too long to be the title of anything at all, really')
+tache_finie()
+a.finir_titrage()
+verifier('an answer that is not a title is not used', sessions.lire_titre(cs.DONNEES, ident) == '')
+tache_finie()
+verifier('after 3 tries the session is not asked again', a.titrage is None)
+a.nouvelle_session()
+
+
+def ne_demarre_pas(question, sortie):
+    raise RuntimeError('Claude Code not found')
+
+
+a.processus_titre = ne_demarre_pas
+tache_finie('', 'Still done.')
+verifier('Haiku cannot start: the task ends normally, nothing left behind', a.dernier.endswith('Still done.') and a.titrage is None
+         and not any(x.endswith(('.title-prompt.txt', '.title-answer.txt')) for x in os.listdir(cs.DOSSIER_SESSIONS)))
+a.processus_titre = faux_titre
+verifier('titles: one line, no quotes or markup, 3 to 60 characters', sessions.titre_propre('**Title:** "Budget 2026".\nmore') == 'Budget 2026'
+         and sessions.titre_propre('ok') == '' and sessions.titre_propre('') == '')
+
+print('--- how long the sessions are kept')
+verifier('30 days by default', sessions.conservation(cs.DONNEES) == 30 and sessions.choix_proche(30) == '30 days')
+for texte in ('abc', '0', '99999'):
+    ecrire(os.path.join(cs.DONNEES, 'retention.txt'), texte)
+    if sessions.conservation(cs.DONNEES) != 30:
+        break
+verifier('a value that makes no sense: 30 days', sessions.conservation(cs.DONNEES) == 30, texte)
+e = a.commande_sessions({'action': 'conservation', 'jours': 90})
+verifier('chosen in the window: saved, the window shows it', sessions.conservation(cs.DONNEES) == 90
+         and sessions.choix_proche(sessions.conservation(cs.DONNEES)) == '90 days')
+vieille, recente = os.path.join(cs.RUNS, '20250101-100000'), os.path.join(cs.RUNS, '20250901-100000')
+for d, jours in ((vieille, 100), (recente, 20)):
+    ecrire(os.path.join(d, 'result.txt'), 'old result')
+    ecrire(os.path.join(d, 'session.txt'), '20250101-090000')
+    vieillir(d, jours)
+a.nettoyer_runs()
+verifier('90 days: a task of 100 days is deleted, one of 20 days kept', not os.path.exists(vieille) and os.path.exists(recente))
+a.commande_sessions({'action': 'conservation', 'jours': 7})
+a.nettoyer_runs()
+verifier('7 days: the task of 20 days goes too, the tasks of today stay', not os.path.exists(recente) and len(os.listdir(cs.RUNS)) > 3)
+verifier('the choices of the window', [x[0] for x in sessions.CHOIX_CONSERVATION] == ['7 days', '30 days', '90 days', '1 year']
+         and sessions.choix_proche(365) == '1 year' and sessions.choix_proche(8) == '7 days')
+fantome_run = os.path.join(cs.RUNS, '20261117-100000')
+ecrire(os.path.join(fantome_run, 'ghost.txt'), 'on')
+a.commande_sessions({'action': 'conservation', 'jours': 365})
+a.nettoyer_runs()
+verifier('Ghost Mode is never kept, whatever the time chosen', not os.path.exists(fantome_run))
+a.commande_sessions({'action': 'conservation', 'jours': 30})
+
+print('--- the Sessions window talks to the app')
+e = a.etat_sessions()
+verifier('the state sent to the window: everything it needs, as JSON',
+         set(e) == {'donnees', 'contexte', 'socket', 'fantome', 'occupe', 'maintenant', 'titre_maintenant', 'entrees_fantome', 'roles_fantome'}
+         and json.loads(json.dumps(e)) == e)
+verifier('an unknown or broken action changes nothing and still answers', a.commande_sessions({'action': 'fly'})['donnees'] == cs.DONNEES
+         and a.commande_sessions({'action': 'conservation', 'jours': 'abc'})['donnees'] == cs.DONNEES and sessions.conservation(cs.DONNEES) == 30)
+ident = cs.lire_session()
+sessions.enregistrer_roles(cs.DONNEES, ident, [])
+a.commande_sessions({'action': 'role', 'id': ident, 'nom': 'Office assistant'})
+verifier('a role ticked in the window', a.roles_session(ident) == ['Office assistant'], a.roles_session(ident))
+a.commande_sessions({'action': 'role', 'id': ident, 'nom': 'General assistant'})
+e = a.commande_sessions({'action': 'fantome', 'actif': True})
+verifier('Ghost Mode from the window', a.fantome and e['fantome'])
+e = a.commande_sessions({'action': 'fantome', 'actif': False})
+a.commande_sessions({'action': 'nouvelle'})
+verifier('New session from the window', cs.lire_session() != ident)
+a.commande_sessions({'action': 'reprendre', 'id': ident})
+verifier('Resume from the window', cs.lire_session() == ident)
+
+
+class FauxConn:
+    def __init__(self, morceaux):
+        self.morceaux, self.envoye = list(morceaux), b''
+
+    def settimeout(self, _t):
+        pass
+
+    def recv(self, _n):
+        return self.morceaux.pop(0) if self.morceaux else b''
+
+    def sendall(self, donnees):
+        self.envoye += donnees
+
+    def close(self):
+        pass
+
+
+class FauxSocket:
+    def __init__(self, conns):
+        self.conns = list(conns)
+
+    def accept(self):
+        if not self.conns:
+            raise OSError('closed')
+        return self.conns.pop(0), None
+
+
+def controle():
+    # The control thread of the app: the actions of the window are done there.
+    for _ in range(2):
+        try:
+            a.traiter(a.evenements.get(timeout=10))
+        except queue.Empty:
+            return
+
+
+bizarre = os.path.join(src, 'a}b{{.txt')
+ecrire(bizarre, 'braces in the name')
+conns = [FauxConn([b'sessions {"action": "conservation", ', b'"jours": 365}']),
+         FauxConn([b'sessions {not json']),
+         FauxConn([('sessions ' + json.dumps({'action': 'ajouter', 'id': ident, 'fichiers': [bizarre]})).encode()]),
+         FauxConn([b'etat'])]
+fil = threading.Thread(target=controle)
+fil.start()
+a.serveur(FauxSocket(conns))
+fil.join(timeout=15)
+r = [x.envoye.decode() for x in conns]
+verifier('socket: an action in several pieces, done by the control thread, the new state as the answer',
+         sessions.conservation(cs.DONNEES) == 365 and json.loads(r[0])['donnees'] == cs.DONNEES)
+verifier('socket: a broken command does not stop the app, the state still comes back', json.loads(r[1])['donnees'] == cs.DONNEES)
+verifier('socket: a file name with braces', 'a}b{{.txt' in [os.path.basename(x) for x in sessions.lister_documents(cs.CONTEXTE, ident)])
+verifier('socket: the other commands still work', r[3] == 'ready')
+a.commande_sessions({'action': 'conservation', 'jours': 30})
+
+print('--- the Sessions window (Tk)')
+sys.path.insert(0, os.path.join(app, 'outils'))
+import fenetres  # noqa: E402
+try:
+    import tkinter as tk
+    from tkinter import ttk
+    import tkinter.filedialog
+    tk.Tk().destroy()
+    tk_ok = True
+except Exception as ex:
+    tk_ok = False
+    print('  skip  the window itself: Tk cannot start here (%s)' % str(ex).splitlines()[0])
+if tk_ok:
+    fenetres._premier_plan = lambda root: None
+    fenetres.FenetreSessions.placer = lambda self: self.root.geometry('%dx%d-4000-4000' % tuple(self.taille))  # off-screen
+    envoyes = []
+
+    def par_la_fenetre(commande):
+        envoyes.append(commande)
+        return json.loads(json.dumps(a.commande_sessions(commande)))
+
+    ident = cs.lire_session()
+    sessions.enregistrer_roles(cs.DONNEES, ident, ['Student'])
+    f = fenetres.FenetreSessions(json.loads(json.dumps(a.etat_sessions())), par_la_fenetre, tk, ttk)
+    f.root.withdraw()
+    try:
+        n_docs = len(sessions.lister_documents(cs.CONTEXTE, ident))
+        verifier('window: the session in use first, its roles and its documents',
+                 f.liste.current() == 0 and f.choix[0]['id'] == ident and f.bouton_roles.cget('text') == 'Roles: Student'
+                 and f.bouton_documents.cget('text') == 'Documents (%d)' % n_docs and n_docs and f.duree.get() == '30 days',
+                 (f.choix[0]['id'], ident, f.bouton_roles.cget('text'), f.bouton_documents.cget('text'), f.duree.get()))
+        f.remplir_menu_roles()
+        etiquettes = [f.menu_roles.entrycget(i, 'label') for i in range(f.menu_roles.index('end') + 1)
+                      if f.menu_roles.type(i) != 'separator']
+        verifier('window: every role in the Roles menu, then the folder', etiquettes == cs.lister_roles() + ['Open the Roles folder (edit or add a role)']
+                 and f.coches['Student'].get() and not f.coches['General assistant'].get(), etiquettes)
+        f.menu_roles.invoke(cs.lister_roles().index('Network engineer'))
+        verifier('window: ticking a role (one more)', envoyes[-1] == {'action': 'role', 'id': ident, 'nom': 'Network engineer'}
+                 and a.roles_session(ident) == ['Student', 'Network engineer'] and f.bouton_roles.cget('text') == 'Roles: Student, Network engineer')
+        autre_i = [i for i, x in enumerate(f.choix) if x['id'] == autre][0]
+        f.liste.current(autre_i)
+        f.choisir(autre_i)
+        verifier('window: another session shows its own roles and documents', f.bouton_roles.cget('text') == 'Roles: General assistant'
+                 and f.bouton_documents.cget('text') == 'Documents (1)' and str(f.reprendre.cget('state')) == 'normal')
+        f.remplir_menu_roles()
+        f.menu_roles.invoke(cs.lister_roles().index('IT administrator'))
+        verifier('window: a role changed for that session, the window stays on it, the session in use untouched',
+                 f.session_affichee()['id'] == autre and a.roles_session(autre) == ['IT administrator']
+                 and a.roles_session(ident) == ['Student', 'Network engineer'] and f.bouton_roles.cget('text') == 'Roles: IT administrator')
+        tkinter.filedialog.askopenfilenames = lambda **_kw: (os.path.join(src, 'network course.md'),)
+        f.choisir_documents(f.session_affichee())
+        verifier('window: Add documents copies them into that session, the window stays on it',
+                 envoyes[-1]['action'] == 'ajouter' and envoyes[-1]['id'] == autre and f.session_affichee()['id'] == autre
+                 and f.bouton_documents.cget('text') == 'Documents (2)' and not f.dialogue)
+        f.remplir_menu_documents()
+        etiquettes = [f.menu_documents.entrycget(i, 'label') for i in range(f.menu_documents.index('end') + 1)
+                      if f.menu_documents.type(i) != 'separator']
+        verifier('window: the Documents menu lists them, then Add and Open the folder',
+                 etiquettes == ['network course.md', 'plan.txt', 'Add documents...', 'Open the folder'], etiquettes)
+        sous = f.root.nametowidget(f.menu_documents.entrycget(1, 'menu'))
+        sous.invoke(1)
+        verifier('window: Remove sends the document of that session to the trash', envoyes[-1]['action'] == 'retirer'
+                 and not os.path.exists(os.path.join(cs.CONTEXTE, 'Session documents', autre, 'plan.txt'))
+                 and f.bouton_documents.cget('text') == 'Documents (1)')
+        anciennes_i = [i for i, x in enumerate(f.choix) if not x['id'] and not x['fantome']]
+        if anciennes_i:
+            f.liste.current(anciennes_i[0])
+            f.choisir(anciennes_i[0])
+            verifier('window: "Earlier tasks" has no roles or documents', str(f.bouton_roles.cget('state')) == 'disabled'
+                     and str(f.bouton_documents.cget('state')) == 'disabled')
+        f.liste.current(autre_i)
+        f.choisir(autre_i)
+        f.reprendre.invoke()
+        verifier('window: Resume', envoyes[-1] == {'action': 'reprendre', 'id': autre} and cs.lire_session() == autre
+                 and f.choix[0]['id'] == autre and f.liste.current() == 0)
+        f.fantome.invoke()
+        verifier('window: Ghost Mode, the ghost session first with the roles of the persisted one',
+                 envoyes[-1] == {'action': 'fantome', 'actif': True} and f.choix[0]['fantome']
+                 and f.bouton_roles.cget('text') == 'Roles: IT administrator' and f.bouton_documents.cget('text') == 'Documents (0)')
+        f.remplir_menu_roles()
+        f.menu_roles.invoke(cs.lister_roles().index('Student'))
+        verifier('window: a role of the ghost session stays in memory', a.roles_fantome == ['IT administrator', 'Student']
+                 and a.roles_session(autre) == ['IT administrator'] and f.liste.current() == 0 and f.choix[0]['fantome'])
+        f.persiste.invoke()
+        verifier('window: Persisted Memory again', envoyes[-1] == {'action': 'fantome', 'actif': False} and not f.choix[0]['fantome'])
+        f.nouvelle.invoke()
+        verifier('window: New session', envoyes[-1] == {'action': 'nouvelle'} and f.choix[0]['id'] == cs.lire_session() != autre)
+        f.duree.set('90 days')
+        f.duree.event_generate('<<ComboboxSelected>>')
+        verifier('window: the time kept, chosen in the list', envoyes[-1] == {'action': 'conservation', 'jours': 90}
+                 and sessions.conservation(cs.DONNEES) == 90 and f.duree.get() == '90 days')
+        f.etat = dict(f.etat, occupe=True)
+        f.remplir()
+        verifier('window: during a task, no New session, no mode change, no Resume', all(
+            str(b.cget('state')) == 'disabled' for b in (f.nouvelle, f.persiste, f.fantome, f.reprendre)))
+        f.envoyer = lambda _c: None
+        f.action({'action': 'nouvelle'})
+        verifier('window: the app does not answer: said in the window', 'The app did not answer' in f.zone.get('1.0', 'end'))
+        f.redimensionnee(types.SimpleNamespace(widget=f.root, width=520, height=480))
+        f.enregistrer_taille()
+        verifier('window: a new size is kept, the Default size button shows', sessions.taille_fenetre(cs.DONNEES, f.ecran) == (520, 480)
+                 and f.bouton_taille.winfo_manager() == 'pack')
+        f.redimensionnee(types.SimpleNamespace(widget=f.root, width=100, height=90))
+        verifier('window: never smaller than the minimum', tuple(f.taille) == sessions.TAILLE_MIN)
+        f.taille_defaut()
+        verifier('window: Default size', tuple(f.taille) == sessions.TAILLE_DEFAUT and f.bouton_taille.winfo_manager() == ''
+                 and not os.path.exists(os.path.join(cs.DONNEES, 'window.txt')))
+    finally:
+        f.root.destroy()
+    a.commande_sessions({'action': 'conservation', 'jours': 30})
+if hasattr(__import__('socket'), 'AF_UNIX'):
+    verifier('window: the app is not running: no answer, no crash', fenetres.envoyer(os.path.join(bac, 'none.sock'), {'action': 'nouvelle'}) is None)
 
 long = os.path.join(bac, 'long.jsonl')
 with open(long, 'w', encoding='utf-8') as f:
@@ -452,7 +938,7 @@ a.boite = None
 for ident in (cs.raccourcis.NORMAL, cs.raccourcis.CONSIGNE):
     a.dernier_appui = -1e9
     a.traiter(('raccourci', ident))
-verifier('the simple shortcut opens the instruction bar, the longer one is automatic', lances == ['bar', 'auto'], lances)
+verifier('Ctrl+Alt+C opens the instruction bar, Ctrl+Alt+Shift+C is automatic', lances == ['bar', 'auto'], lances)
 del lances[:]
 a.proc = types.SimpleNamespace(returncode=None)
 for ident in (cs.raccourcis.NORMAL, cs.raccourcis.CONSIGNE):
@@ -521,6 +1007,7 @@ except subprocess.TimeoutExpired:
     verifier('the server stops when its input closes', False)
 mcp.stdout.close()
 mcp.stderr.close()
+cs.trouver_claude = trouver
 
 print('=== %d checks, %d failure(s)' % (tests, echecs))
 shutil.rmtree(bac, ignore_errors=True)

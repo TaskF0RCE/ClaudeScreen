@@ -1,40 +1,47 @@
-# Contexts (folder, menu, prompt), Terminal access, finding Claude Code, a failed triage, a PC control tool
+# Roles (folder, menu, prompt), Terminal access, finding Claude Code, a failed triage, a PC control tool
 # that did not start.
 try {
-'--- contexts'
-$fournis = @(Get-ChildItem (Join-Path $Racine 'contexts') -Filter *.md).Count
-Verifier 'Contexts folder created with the files of the app' ((Test-Path $DossierContextes) -and @(Get-ChildItem $DossierContextes -Filter *.md).Count -eq $fournis -and $fournis -ge 9)
-$noms = @(Lister-Contextes)
-Verifier 'Default comes first in the list' ($noms[0] -eq 'Default' -and $noms -contains 'Networking' -and $noms -contains 'Studies') ($noms -join ' | ')
-Verifier 'no choice yet: Default is active' ((Lire-ContexteActif).Nom -eq 'Default' -and -not (Test-Path $FichierContexte))
-Verifier 'menu title names the active context' ($menuContexte.Text -eq 'Context: Default') $menuContexte.Text
-$items = @($menuContexte.DropDownItems | Where-Object { $_.Tag })
-Verifier 'menu: one item per file, Default checked' ($items.Count -eq $fournis -and @($items | Where-Object Checked).Count -eq 1 -and ($items | Where-Object Checked).Text -eq 'Default')
-Verifier 'menu: Open the Contexts folder' (@($menuContexte.DropDownItems | ForEach-Object { $_.Text }) -contains 'Open the Contexts folder')
+'--- roles'
+$fournis = @(Get-ChildItem (Join-Path $Racine 'roles') -Filter *.md).Count
+Verifier 'Roles folder created with the files of the app' ((Test-Path $DossierRoles) -and @(Get-ChildItem $DossierRoles -Filter *.md).Count -eq $fournis -and $fournis -ge 9 -and -not (Test-Path $AncienDossierContextes))
+$noms = @(Lister-Roles)
+Verifier 'General assistant comes first in the list' ($noms[0] -eq 'General assistant' -and $noms -contains 'Network engineer' -and $noms -contains 'Student') ($noms -join ' | ')
+Verifier 'no choice yet: General assistant, nothing saved' ((Lire-RolesActifs).Noms -eq 'General assistant' -and -not (Test-Path (Fichier-RolesSession (Lire-Session))))
+Verifier 'menu title names the roles' ($menuRoles.Text -eq 'Roles: General assistant') $menuRoles.Text
+$items = @($menuRoles.DropDownItems | Where-Object { $_.Tag })
+Verifier 'menu: one item per file, General assistant checked' ($items.Count -eq $fournis -and @($items | Where-Object Checked).Count -eq 1 -and ($items | Where-Object Checked).Text -eq 'General assistant')
+Verifier 'menu: Open the Roles folder' (@($menuRoles.DropDownItems | ForEach-Object { $_.Text }) -contains 'Open the Roles folder')
 $script:ChoixModele = 'auto'
 $c = Fausse-Capture; Lancer-Tache $c ''
 $p = Lire-Prompt $c
-Verifier 'prompt: Default context and its text' ($p -match 'Active context: Default \(chosen by the user in the icon menu\)' -and $p -match 'General assistant' -and $p -notmatch '<!--')
-Verifier 'prompt: the context says how to find the task' ($p -match 'their standing instructions; the active context; your notes of this session')
-Verifier 'prompt: context files are not listed as documents' ($p -notmatch [regex]::Escape($DossierContextes))
-Verifier 'triage: names the context' ((Lire-Prompt $c 'triage') -match '(?m)^Active context: Default\.')
-($items | Where-Object { $_.Text -eq 'Networking' }).PerformClick()
-Verifier 'click: choice saved, title and check updated' ((Get-Content $FichierContexte -Raw).Trim() -eq 'Networking' -and $menuContexte.Text -eq 'Context: Networking' -and ($menuContexte.DropDownItems | Where-Object Checked).Text -eq 'Networking')
+Verifier 'prompt: General assistant and its text' ($p -match 'Roles of this session: General assistant \(chosen by the user for this session\)\. Work in this role; it says who the user is' -and $p -match 'General assistant: the user can be anyone' -and $p -notmatch '<!--')
+Verifier 'prompt: the roles say how to find the task' ($p -match 'their standing instructions; the roles of this session; your notes of this session; the documents of this session, then the other documents')
+Verifier 'prompt: role files are not listed as documents' ($p -notmatch [regex]::Escape($DossierRoles))
+Verifier 'triage: names the roles' ((Lire-Prompt $c 'triage') -match '(?m)^Roles of this session: General assistant\.')
+($items | Where-Object { $_.Text -eq 'Network engineer' }).PerformClick()
+Verifier 'click: role saved for the session, title and check updated' ((Get-Content (Fichier-RolesSession (Lire-Session)) -Raw).Trim() -eq 'Network engineer' -and $menuRoles.Text -eq 'Roles: Network engineer' -and ($menuRoles.DropDownItems | Where-Object Checked).Text -eq 'Network engineer')
 $c = Fausse-Capture; Lancer-Tache $c ''
 $p = Lire-Prompt $c
-Verifier 'prompt: Networking context replaces Default' ($p -match 'Active context: Networking' -and $p -match 'addressing' -and $p -notmatch 'General assistant')
-[IO.File]::WriteAllText((Join-Path $DossierContextes 'My job.md'), "<!-- mine -->`r`nI am an accountant.`r`n")
-Remplir-MenuContexte
-$mien = $menuContexte.DropDownItems | Where-Object { $_.Text -eq 'My job' }
+Verifier 'prompt: Network engineer replaces General assistant' ($p -match 'Roles of this session: Network engineer \(' -and $p -match 'addressing' -and $p -notmatch 'General assistant')
+($menuRoles.DropDownItems | Where-Object { $_.Text -eq 'Student' }).PerformClick()
+$c = Fausse-Capture; Lancer-Tache $c ''
+$p = Lire-Prompt $c
+Verifier 'a second role: both, in the menu and in the prompt' ($menuRoles.Text -eq 'Roles: Network engineer, Student' -and @($menuRoles.DropDownItems | Where-Object Checked).Count -eq 2 -and $p -match 'Roles of this session: Network engineer, Student \(chosen by the user for this session\)\. Work in all of these roles' -and $p -match 'addressing' -and $p -match 'Student: the user is studying') $menuRoles.Text
+[IO.File]::WriteAllText((Join-Path $DossierRoles 'My job.md'), "<!-- mine -->`r`nI am an accountant.`r`n")
+Remplir-MenuRoles
+$mien = $menuRoles.DropDownItems | Where-Object { $_.Text -eq 'My job' }
 Verifier 'a file added by the user shows in the menu' ($null -ne $mien)
-$mien.PerformClick()
+($menuRoles.DropDownItems | Where-Object { $_.Text -eq 'General assistant' }).PerformClick()
+Verifier 'General assistant unticks the others' ($menuRoles.Text -eq 'Roles: General assistant' -and -not (Test-Path (Fichier-RolesSession (Lire-Session))))
+($menuRoles.DropDownItems | Where-Object { $_.Text -eq 'My job' }).PerformClick()
 $c = Fausse-Capture; Lancer-Tache $c ''
-Verifier 'prompt: the user''s own context, without its comment' ((Lire-Prompt $c) -match "Active context: My job .*`nI am an accountant\.")
-Move-Item (Join-Path $DossierContextes 'My job.md') (Join-Path $global:FauxBac 'My job.md')
-Verifier 'active file gone: back to Default' ((Lire-ContexteActif).Nom -eq 'Default')
-Move-Item (Join-Path $DossierContextes 'Default.md') (Join-Path $global:FauxBac 'Default.md')
+Verifier 'prompt: the user''s own role, without its comment' ((Lire-Prompt $c) -match "Roles of this session: My job .*`nI am an accountant\.")
+Move-Item (Join-Path $DossierRoles 'My job.md') (Join-Path $global:FauxBac 'My job.md')
+Verifier 'its file gone: back to General assistant' ((Lire-RolesActifs).Noms -eq 'General assistant')
+Move-Item (Join-Path $DossierRoles 'General assistant.md') (Join-Path $global:FauxBac 'General assistant.md')
 $c = Fausse-Capture; Lancer-Tache $c ''
-Verifier 'no Default file either: the task still starts' ((Lire-Prompt $c) -match 'Active context: Default \(chosen by the user in the icon menu\)\.\r?\n')
+Verifier 'no General assistant file either: the task still starts' ((Lire-Prompt $c) -match 'Roles of this session: General assistant \(chosen by the user for this session\)\.\r?\n')
+Move-Item (Get-ChildItem $global:FauxBac -Filter 'General assistant.md').FullName (Join-Path $DossierRoles 'General assistant.md')
 
 '--- Terminal access'
 Verifier 'off by default, nothing saved yet' (-not $script:Terminal -and -not $menuTerminal.Checked -and -not (Test-Path $FichierTerminal))
@@ -75,13 +82,13 @@ Verifier 'long instructions.md: 4000 characters are sent, comments not counted' 
 Ecrire-Reponse $c 'Done.'
 $script:Proc = Faux-Proc 0; Processus-Fini
 Verifier 'long instructions.md: said in the result and in the log' ($script:Dernier -match 'Done\.\s+\(Warning: instructions\.md is longer than 4000 characters, so its end was not sent' -and [bool]((Get-Content $Journal -Encoding UTF8) -match 'instructions\.md is longer than 4000 characters')) $script:Dernier
-[IO.File]::WriteAllText((Join-Path $DossierContextes 'Default.md'), ('General assistant. ' * 300))
+[IO.File]::WriteAllText((Join-Path $DossierRoles 'General assistant.md'), ('General assistant. ' * 300))
 $c = Fausse-Capture; Lancer-Tache $c ''
 Ecrire-Reponse $c 'Done.'
 $script:Proc = Faux-Proc 0; Processus-Fini
-Verifier 'long context too: both are named' ($script:Dernier -match 'Warning: Contexts\\Default\.md and instructions\.md is longer') $script:Dernier
+Verifier 'long role too: both are named' ($script:Dernier -match 'Warning: Roles\\General assistant\.md and instructions\.md is longer') $script:Dernier
 [IO.File]::WriteAllText($FichierInstructions, $avantInstructions)
-[IO.File]::WriteAllText((Join-Path $DossierContextes 'Default.md'), 'General assistant.')
+[IO.File]::WriteAllText((Join-Path $DossierRoles 'General assistant.md'), 'General assistant.')
 $c = Fausse-Capture; Lancer-Tache $c ''
 Ecrire-Reponse $c 'Done.'
 $script:Proc = Faux-Proc 0; Processus-Fini

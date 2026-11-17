@@ -23,7 +23,7 @@ try {
 
     $cible = Join-Path $Bac 'install here\ClaudeScreen'
     Verifier 'first install: done' ((Installer $cible) -eq 0)
-    $manque = @('ClaudeScreen.ps1', 'Installer-Demarrage.ps1', 'LICENSE', 'outils\mcp.ps1', 'outils\natif.cs', 'outils\garde.ps1', 'outils\deroule.ps1', 'contexts\Default.md', 'examples\packet-tracer.md') |
+    $manque = @('ClaudeScreen.ps1', 'Installer-Demarrage.ps1', 'LICENSE', 'outils\mcp.ps1', 'outils\natif.cs', 'outils\garde.ps1', 'outils\deroule.ps1', 'roles\General assistant.md', 'examples\packet-tracer.md') |
         Where-Object { -not (Test-Path (Join-Path $cible $_)) }
     Verifier 'the files of the app are there' (-not $manque) ($manque -join ', ')
     Verifier 'same content as the repository' ((Get-FileHash (Join-Path $cible 'ClaudeScreen.ps1')).Hash -eq (Get-FileHash (Join-Path $depot 'ClaudeScreen.ps1')).Hash)
