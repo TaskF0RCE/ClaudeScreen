@@ -165,7 +165,7 @@ Wayland deliberately prevents apps from listening to the keyboard, reading the s
 ./lancer.sh declencher    # same as Ctrl+Alt+C: the instruction bar
 ./lancer.sh consigne      # same as Ctrl+Alt+Shift+C: automatic task
 ./lancer.sh arreter       # stops the current task
-./lancer.sh resultat      # shows the last result
+./lancer.sh resultat      # opens the Sessions window (results of the tasks)
 ./lancer.sh etat          # ready / working
 ./lancer.sh quitter       # quits
 ./lancer.sh diagnostic    # checks screenshot, permissions, Claude Code, modules...
