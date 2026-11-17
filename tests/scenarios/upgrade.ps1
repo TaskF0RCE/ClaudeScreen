@@ -108,7 +108,7 @@ Verifier 'failed task: error shown' ((Sans-Duree $script:Dernier) -match '^The t
 $cap4 = Fausse-Capture
 Lancer-Tache $cap4 ''
 $p4 = Lire-Prompt $cap4
-Verifier 'prompt: never act at random, the order of what to rely on' ($p4 -match '1\. Find what is being asked before you act: never act at random' -and $p4 -match 'their standing instructions; the active context; your notes of this session; the documents and the recent files' -and $p4 -match 'do not guess an action: change nothing')
+Verifier 'prompt: never act at random, the order of what to rely on' ($p4 -match '1\. Find what is being asked before you act: never act at random' -and $p4 -match 'their standing instructions; the roles of this session; your notes of this session; the documents of this session, then the other documents and the recent files' -and $p4 -match 'do not guess an action: change nothing')
 Verifier 'prompt: the recent files of the work folder, not those of System-Context' ($p4 -match 'Most recent files of the work folder' -and $p4 -match [regex]::Escape((Join-Path $Travail 'exo7_notes.txt') + '  (') -and ($p4.Substring($p4.IndexOf('Most recent files'))) -notmatch 'System-Context\\instructions\.md')
 Ecrire-Reponse $cap4 'Done.'; $script:Proc = Faux-Proc 0; Processus-Fini
 } catch { Verifier 'scenario ran to the end' $false ($_.Exception.Message + ' ' + $_.InvocationInfo.PositionMessage) }

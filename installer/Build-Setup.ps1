@@ -15,7 +15,7 @@ $version = (Get-Content (Join-Path $depot '.release-please-manifest.json') -Raw 
 if ("$version" -notmatch '^\d+\.\d+\.\d+$') { throw "Unexpected version in .release-please-manifest.json: $version" }
 
 # What a Windows user needs, and nothing else.
-$inclus = @('ClaudeScreen.ps1', 'Installer-Demarrage.ps1', 'Lancer.vbs', 'Lancer.lnk', 'LICENSE', 'README.md', 'CHANGELOG.md', 'outils', 'contexts', 'examples')
+$inclus = @('ClaudeScreen.ps1', 'Installer-Demarrage.ps1', 'Lancer.vbs', 'Lancer.lnk', 'LICENSE', 'README.md', 'CHANGELOG.md', 'outils', 'roles', 'examples')
 $fichiers = @(& git -C $depot ls-files -- $inclus)
 if ($LASTEXITCODE -ne 0 -or $fichiers.Count -lt 10) { throw 'git ls-files did not list the files of the app' }
 

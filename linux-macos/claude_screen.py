@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """ClaudeScreen for macOS and Linux: icon in the menu bar (macOS) or the notification area (Linux).
 
-Ctrl+Alt+C (⌃⌥C on a Mac) -> screenshot -> Claude does the task. Pressing it again during a task stops it.
-Ctrl+Alt+Shift+C (⌃⌥⇧C) -> screenshot, then a small bar to type an instruction.
+Ctrl+Alt+C (⌃⌥C on a Mac) -> screenshot, then a small bar to say what Claude should do.
+Ctrl+Alt+Shift+C (⌃⌥⇧C) -> screenshot -> Claude works the task out by itself. Either one, during a task, stops it.
 
 Commands (for desktop shortcuts on Wayland, or scripts):
   claude_screen.py                 starts the app
-  claude_screen.py declencher      same as Ctrl+Alt+C
-  claude_screen.py consigne        same as Ctrl+Alt+Shift+C
+  claude_screen.py declencher      same as Ctrl+Alt+C: the instruction bar
+  claude_screen.py consigne        same as Ctrl+Alt+Shift+C: automatic task
   claude_screen.py arreter         stops the current task
-  claude_screen.py resultat        shows the History window (the last result first)
+  claude_screen.py resultat        shows the Sessions window
   claude_screen.py quitter         closes the app
   claude_screen.py diagnostic      checks the installation (screenshot, permissions, Claude Code...)
 """
@@ -36,9 +36,10 @@ import time
 RACINE = os.path.dirname(os.path.abspath(__file__))
 OUTILS = os.path.join(RACINE, 'outils')
 # Everything generated goes to data/, never next to the program (same layout as the Windows version):
-#   data/runs/<date>/  one folder per task: images/, prompts/, responses/ + screen.json, result.txt (History window)
-#   data/context-cache/, data/log.txt, data/settings.json, data/model.txt, data/smooth.txt, data/memory.txt
-#   + here: data/last-result.txt, data/memory-previous.md, data/icon.png, data/.venv/, data/cache/
+#   data/runs/<date>/  one folder per task: images/, prompts/, responses/ + screen.json, result.txt (Sessions window)
+#   data/context-cache/, data/log.txt, data/settings.json, data/model.txt, data/smooth.txt, data/memory.txt,
+#   data/session.txt, data/ghost.txt, data/sessions/, data/window.txt, data/retention.txt
+#   + here: data/icon.png, data/.venv/, data/cache/
 DONNEES = os.path.join(RACINE, 'data')
 os.makedirs(DONNEES, exist_ok=True)
 os.environ['PYTHONPYCACHEPREFIX'] = os.path.join(DONNEES, 'cache')  # for the processes we start (mcp, windows...)
@@ -50,6 +51,7 @@ import memoire  # noqa: E402
 import natif  # noqa: E402
 import pdf  # noqa: E402
 import raccourcis  # noqa: E402
+import sessions  # noqa: E402
 
 MAC = natif.MAC
 RUNS = os.path.join(DONNEES, 'runs')
@@ -59,12 +61,11 @@ FICHIER_SMOOTH = os.path.join(DONNEES, 'smooth.txt')  # smooth mode: "on" or "of
 FICHIER_MEMOIRE = os.path.join(DONNEES, 'memory.txt')  # Claude's notes are always kept, unless this file says "never"
 FICHIER_SESSION = os.path.join(DONNEES, 'session.txt')  # id of the current session (see New session)
 FICHIER_FANTOME = os.path.join(DONNEES, 'ghost.txt')    # ghost mode: "on" or "off" (default)
-DOSSIER_SESSIONS = os.path.join(DONNEES, 'sessions')   # the notes of the persisted sessions that ended
-FICHIER_CONTEXTE = os.path.join(DONNEES, 'context.txt')  # name of the active context (Context menu); none = Default
-# Contexts shipped with the app (at the root of the repository), copied once into System-Context/Contexts.
-CONTEXTES_FOURNIS = os.path.join(os.path.dirname(RACINE), 'contexts')
+DOSSIER_SESSIONS = sessions.dossier(DONNEES)   # per session: <id>.md (notes, when not current), <id>.title.txt, <id>.roles.txt
+# Roles shipped with the app (at the root of the repository), copied once into System-Context/Roles.
+ROLES_FOURNIS = os.path.join(os.path.dirname(RACINE), 'roles')
 REGLAGES = os.path.join(DONNEES, 'settings.json')
-DERNIER = os.path.join(DONNEES, 'last-result.txt')
+DERNIER = os.path.join(DONNEES, 'last-result.txt')  # versions before 1.0 (the last result, for the History window)
 FICHIER_NOTES_AVANT = os.path.join(DONNEES, 'memory-previous.md')  # the notes cleared by the last New session
 MCP_SCRIPT = os.path.join(OUTILS, 'mcp.py')  # the MCP server Claude controls the computer through
 GARDE = os.path.join(OUTILS, 'garde.py')
@@ -82,20 +83,23 @@ def definir_dossiers(travail):
     see outils/memoire.py) and documents (courses, notes, documentation...).
     """
     global TRAVAIL, CONTEXTE, FICHIER_INSTRUCTIONS, FICHIER_NOTES, ANCIEN_INSTRUCTIONS, FICHIER_LISEZMOI
-    global DOSSIER_CONTEXTES
+    global DOSSIER_ROLES, ANCIEN_DOSSIER_CONTEXTES, DOSSIER_DOCUMENTS_SESSIONS
     TRAVAIL = travail
     CONTEXTE = os.path.join(TRAVAIL, 'System-Context')
     FICHIER_INSTRUCTIONS = os.path.join(CONTEXTE, 'instructions.md')
     FICHIER_NOTES = os.path.join(CONTEXTE, 'memory.md')
     ANCIEN_INSTRUCTIONS = os.path.join(CONTEXTE, 'instructions.txt')  # older versions
     FICHIER_LISEZMOI = os.path.join(CONTEXTE, 'README.md')
-    DOSSIER_CONTEXTES = os.path.join(CONTEXTE, 'Contexts')  # one .md file per context, chosen in the icon menu
+    DOSSIER_ROLES = os.path.join(CONTEXTE, 'Roles')  # one .md file per role; each session has its own
+    ANCIEN_DOSSIER_CONTEXTES = os.path.join(CONTEXTE, 'Contexts')  # versions before 1.0: replaced by Roles
+    DOSSIER_DOCUMENTS_SESSIONS = os.path.join(CONTEXTE, 'Session documents')  # <id>/: the documents of one session
 
 
 definir_dossiers(os.path.join(natif.dossier_documents(), NOM))
 CACHE_CONTEXTE = os.path.join(DONNEES, 'context-cache')  # text extracted from the context PDFs
 DUREE_MAX = 20 * 60
-JOURS_CONSERVES = 30
+DUREE_TITRAGE = 90       # seconds Haiku has to give a session its title
+ESSAIS_TITRE_MAX = 3     # per session, while the app runs
 ANTI_REBOND = 0.7  # two presses less than 0.7 s apart = one (desktop shortcut + X11 listener)
 SOCKET = os.path.join(tempfile.gettempdir(), 'claude-screen-%d.sock' % os.getuid())
 VERROU = SOCKET + '.lock'
@@ -133,6 +137,9 @@ NOMS_RACCOURCIS = raccourcis.noms()
 AIDE_RACCOURCIS = ('Put the task on screen, then:\n  %s: type what you want Claude to do.\n'
                    '  %s: automatic. Claude works the task out from the screen and your context.' % (
                        NOMS_RACCOURCIS[raccourcis.NORMAL], NOMS_RACCOURCIS[raccourcis.CONSIGNE]))
+ACCUEIL = 'No task yet.\n\n' + AIDE_RACCOURCIS
+ACCUEIL_FANTOME = 'Ghost session: nothing is kept.\n\n' + AIDE_RACCOURCIS
+LANGUE_NOM = 'the language of this computer (language code: %s)' % LANGUE
 
 
 def noter(texte):
@@ -197,8 +204,8 @@ def dessiner(angle=0.0, pastille=None, taille=64):
 
 # ------------------------------------------------------------------ instructions for Claude
 
-def texte_consigne(png, largeur, hauteur, fenetre, precision, instructions='', documents='', memoire_active=False,
-                   contexte=''):
+def texte_consigne(png, largeur, hauteur, fenetre, precision, instructions='', documents='', bloc_memoire='',
+                   roles=''):
     if MAC:
         note_touches = ("  On macOS, editing shortcuts use cmd (cmd+a, cmd+c, cmd+v, cmd+s, cmd+z); "
                         "ctrl stays ctrl (useful in a terminal: ctrl+c, ctrl+z).\n")
@@ -206,13 +213,12 @@ def texte_consigne(png, largeur, hauteur, fenetre, precision, instructions='', d
     else:
         note_touches = ''
         zone_interdite = 'Do not touch the taskbar or the desktop panel.'
-    bloc_memoire = texte_memoire() if memoire_active else ''
     return f"""You were started by a keyboard shortcut: the user just pressed it so that you do the task visible on their screen ({SYSTEME}). Nobody can answer you while you work: do not ask any questions.
 
 Screenshot: {png} ({largeur} x {hauteur} px). Start by reading it with the Read tool.
 Active window: {fenetre[0]} - "{fenetre[1]}"
-{contexte}{instructions}{bloc_memoire}{documents}{precision}
-1. Find what is being asked before you act: never act at random. Work it out from everything you were given, in this order: the user's instruction for this task, if there is one; their standing instructions; the active context; your notes of this session; the documents and the recent files listed above (read the ones that relate to what is on screen); then the screen itself. Together they tell you who the user is, what they are working on and how they want it done: the task is what the screen calls for in that light, most often the next step of that work. If all of this still does not tell you what to do, do not guess an action: change nothing, and say in your final answer what you see and what you would need to know.
+{roles}{instructions}{bloc_memoire}{documents}{precision}
+1. Find what is being asked before you act: never act at random. Work it out from everything you were given, in this order: the user's instruction for this task, if there is one; their standing instructions; the roles of this session; your notes of this session; the documents of this session, then the other documents and the recent files listed above (read the ones that relate to what is on screen); then the screen itself. Together they tell you who the user is, what they are working on and how they want it done: the task is what the screen calls for in that light, most often the next step of that work. If all of this still does not tell you what to do, do not guess an action: change nothing, and say in your final answer what you see and what you would need to know.
 2. Do the whole task, from start to finish.
    - If the answer must go on the screen (ticking boxes, filling in fields, clicking, writing in an open document, typing commands in a console), control the computer with the tool below. After each important action, take a new screenshot to check. One clic is enough for a button, a tab, a link or an item of a tool; keep doubleclic for what only opens with a double-click (a file or a desktop icon). If a click seems to have done nothing, look at a new screenshot before clicking again: a second click on the same spot often closes what the first one opened. If there is more further down (other questions), scroll and continue. You may click Next or Submit on a form, quiz or exercise once everything asked is filled in.
    - If the task asks you to produce something (diagram, document, code, summary, HTML page, SVG...), create the files with the Write tool in the current folder: {TRAVAIL}
@@ -247,9 +253,9 @@ Strict rules:
 """
 
 
-def texte_tri(png, fenetre, precision, instructions='', nom_contexte='Default'):
+def texte_tri(png, fenetre, precision, instructions='', noms_roles=sessions.ROLE_PAR_DEFAUT):
     return f"""Read the image {png} with the Read tool. Active window: {fenetre[0]} - "{fenetre[1]}".
-Active context: {nom_contexte}.
+Roles of this session: {noms_roles}.
 {instructions}{precision}
 What is the task visible on screen? Answer OPUS if it requires calculations (maths, physics, conversions...), programming, technical configuration (network, servers, software), data processing, a diagram to design or long reasoning.
 Answer SONNET for a knowledge question, multiple-choice questions, a simple form, a short text to write, a few clicks, or if it is unclear.
@@ -258,7 +264,7 @@ Answer with a single word: OPUS or SONNET.
 
 
 # Files never listed as documents (system, hidden, Word/LibreOffice temporary files).
-IGNORES = re.compile(r'^(\.|~\$|desktop\.ini$|thumbs\.db$|icon\r$)', re.IGNORECASE)
+IGNORES = sessions.IGNORES
 MAX_DOCUMENTS = 50
 
 
@@ -315,37 +321,42 @@ def preparer_contexte():
             shutil.copyfile(guide, FICHIER_LISEZMOI)
     except Exception as ex:
         noter('System-Context guide: %s' % ex)
-    # Contexts: copied once from the app's contexts folder. After that the files belong to the user.
+    # Roles: copied once from the app's roles folder. After that the files belong to the user.
     try:
-        if not os.path.exists(DOSSIER_CONTEXTES) and os.path.isdir(CONTEXTES_FOURNIS):
-            shutil.copytree(CONTEXTES_FOURNIS, DOSSIER_CONTEXTES)
-            noter('Contexts folder created')
+        if not os.path.exists(DOSSIER_ROLES) and os.path.isdir(ROLES_FOURNIS):
+            shutil.copytree(ROLES_FOURNIS, DOSSIER_ROLES)
+            noter('Roles folder created')
     except Exception as ex:
-        noter('Contexts folder: %s' % ex)
-
-
-def lister_contextes():
-    """Names of the contexts (System-Context/Contexts/<name>.md), Default first."""
+        noter('Roles folder: %s' % ex)
+    # Before 1.0: contexts instead of roles (once).
     try:
-        noms = sorted(n[:-3] for n in os.listdir(DOSSIER_CONTEXTES)
-                      if n.lower().endswith('.md') and os.path.isfile(os.path.join(DOSSIER_CONTEXTES, n)))
-    except OSError:
-        noms = []
-    return [n for n in noms if n == 'Default'] + [n for n in noms if n != 'Default']
+        sessions.migrer_contextes(DONNEES, ANCIEN_DOSSIER_CONTEXTES, DOSSIER_ROLES, natif.corbeille, noter)
+    except Exception as ex:
+        noter('Contexts to roles: %s' % ex)
 
 
-def contexte_actif():
-    """(name, text) of the active context: the one chosen in the menu, Default if none or if its file is gone."""
-    nom = lire_texte(FICHIER_CONTEXTE)
-    if not nom or not os.path.isfile(os.path.join(DOSSIER_CONTEXTES, nom + '.md')):
-        nom = 'Default'
-    return nom, memoire.instructions(os.path.join(DOSSIER_CONTEXTES, nom + '.md'))
+def lister_roles():
+    return sessions.lister_roles(DOSSIER_ROLES)
 
 
-def texte_contexte(nom, texte):
-    bloc = "\nActive context: %s (chosen by the user in the icon menu)." % nom
-    if texte:
-        bloc += " It says who the user is and how to work for them:\n%s" % texte
+def roles_actifs(ident, roles_fantome=()):
+    """The roles of a session as a task gets them: their names ("General assistant" when none is ticked) and,
+    for each one whose file is there, (name, text without comments)."""
+    noms = sessions.lire_roles(DONNEES, DOSSIER_ROLES, ident, roles_fantome)
+    roles = [(n, memoire.instructions(os.path.join(DOSSIER_ROLES, n + '.md')))
+             for n in (noms or [sessions.ROLE_PAR_DEFAUT]) if os.path.isfile(os.path.join(DOSSIER_ROLES, n + '.md'))]
+    return sessions.nom_roles(noms), roles
+
+
+def texte_roles(noms, roles):
+    """The roles of the session in the prompt: who the user is and how to work for them, on top of the
+    standing instructions."""
+    textes = [t for _n, t in roles if t]
+    bloc = "\nRoles of this session: %s (chosen by the user for this session)." % noms
+    if len(textes) > 1:
+        bloc += " Work in all of these roles; together they say who the user is and how to work for them:\n" + '\n\n'.join(textes)
+    elif textes:
+        bloc += " Work in this role; it says who the user is and how to work for them:\n" + textes[0]
     return bloc + "\n"
 
 
@@ -355,13 +366,14 @@ def lire_instructions():
     return ("\nStanding instructions from the user (follow them):\n%s\n" % texte) if texte else ''
 
 
-def texte_memoire():
-    """Persistent memory block of the prompt: Claude's notes from the previous tasks (memory.md) and how to add some.
+def texte_memoire(notes):
+    """Persistent memory block of the prompt: Claude's notes from the previous tasks of the session (memory.md, or
+    those of the ghost session, in memory) and how to add some.
 
     The new ones come back as "MEMORY: ..." lines at the end of the final answer and the app saves them
     (see processus_fini): no tool call, and Claude never writes in System-Context.
     """
-    notes = memoire.notes(FICHIER_NOTES) or '(no notes yet)'
+    notes = notes or '(no notes yet)'
     return ("\nPersistent memory is ON: the tasks of one session follow each other. Your notes from the previous tasks of this session:\n"
             "%s\n"
             "They may be outdated: the screen and the user's instructions take priority. To save what will help "
@@ -399,28 +411,30 @@ def fichiers_recents():
                                        for m, c in recents))
 
 
-def lister_documents():
-    """List of the documents in System-Context (except instructions.md, memory.md, README.md and system files)."""
+def lister_documents(propres=()):
+    """The documents of the session (propres), then those of System-Context for every task (except
+    instructions.md, memory.md, README.md, the roles, the documents of the sessions and system files)."""
     with _verrou_documents:  # the warm-up at startup and a task can arrive at the same time
-        return _lister_documents()
+        return _lister_documents(list(propres))
 
 
-def _lister_documents():
+def _lister_documents(propres):
+    exclus = (DOSSIER_ROLES, ANCIEN_DOSSIER_CONTEXTES, DOSSIER_DOCUMENTS_SESSIONS)
     fichiers = []
     for dossier, sous, noms in os.walk(CONTEXTE):
-        sous[:] = sorted(d for d in sous if not d.startswith('.') and os.path.join(dossier, d) != DOSSIER_CONTEXTES)
+        sous[:] = sorted(d for d in sous if not d.startswith('.') and os.path.join(dossier, d) not in exclus)
         for nom in sorted(noms):
             chemin = os.path.join(dossier, nom)
             if (chemin in (FICHIER_INSTRUCTIONS, FICHIER_NOTES, ANCIEN_INSTRUCTIONS, FICHIER_LISEZMOI)
                     or IGNORES.match(nom) or not os.path.isfile(chemin)):
                 continue
             fichiers.append(chemin)
-    if not fichiers:
+    if not fichiers and not propres:
         return ''
     # PDF: text extracted by the app (Claude Code needs pdftoppm to read a PDF itself).
     extraits, gardes = {}, []
     if pdf.disponible():
-        for c in fichiers:
+        for c in propres + fichiers:
             if c.lower().endswith('.pdf'):
                 try:
                     extraits[c] = pdf.extraire(c, CACHE_CONTEXTE)
@@ -428,51 +442,47 @@ def _lister_documents():
                 except Exception as ex:
                     noter('Unreadable PDF (%s): %s' % (c, ex))
         pdf.nettoyer(CACHE_CONTEXTE, gardes)
-    lignes = []
-    for c in fichiers[:MAX_DOCUMENTS]:
-        ligne = '  %s  (%d KB)' % (c, max(1, -(-os.path.getsize(c) // 1024)))
-        if c in extraits:
-            txt, pages, scanne = extraits[c]
-            if scanne:
-                ligne += ': scanned PDF, %d page(s), no text; look at its pages with "page-pdf"' % pages
-            else:
-                ligne += ': PDF, %d page(s), text extracted to %s' % (pages, txt)
-        elif c.lower().endswith('.pdf') and not pdf.disponible():
-            ligne += ': PDF not readable here (pypdfium2 module missing), ignore it'
-        lignes.append(ligne)
-    if len(fichiers) > MAX_DOCUMENTS:
-        lignes.append('  ... and %d more files in %s (find them with Glob or Grep)'
-                      % (len(fichiers) - MAX_DOCUMENTS, CONTEXTE))
-    return ("\nContext documents provided by the user (courses, notes, documentation, sources...). "
-            "They are more reliable than your general knowledge: before answering, use Read on the ones "
-            "related to the task (same subject, same course, same hardware or software), and rely on them "
-            "first. Ignore the ones that are unrelated.\n"
-            "For a PDF, read its extracted text (the .txt file shown, with page numbers) rather than the PDF "
-            "itself; for a long document, search that .txt with Grep first. To see a diagram, a "
-            "figure or a scanned page, use the \"page-pdf\" action of the control tool, then read the image.\n"
-            "%s\n\n" % '\n'.join(lignes))
 
+    def liste(chemins, dossier):
+        lignes = []
+        for c in chemins[:MAX_DOCUMENTS]:
+            ligne = '  %s  (%d KB)' % (c, max(1, -(-os.path.getsize(c) // 1024)))
+            if c in extraits:
+                txt, pages, scanne = extraits[c]
+                if scanne:
+                    ligne += ': scanned PDF, %d page(s), no text; look at its pages with "page-pdf"' % pages
+                else:
+                    ligne += ': PDF, %d page(s), text extracted to %s' % (pages, txt)
+            elif c.lower().endswith('.pdf') and not pdf.disponible():
+                ligne += ': PDF not readable here (pypdfium2 module missing), ignore it'
+            lignes.append(ligne)
+        if len(chemins) > MAX_DOCUMENTS:
+            lignes.append('  ... and %d more files in %s (find them with Glob or Grep)' % (len(chemins) - MAX_DOCUMENTS, dossier))
+        return '\n'.join(lignes)
 
-def historique():
-    """The results of the earlier tasks (result.txt of each task folder), oldest first."""
-    try:
-        return [os.path.join(RUNS, n, 'result.txt') for n in sorted(os.listdir(RUNS))
-                if os.path.isfile(os.path.join(RUNS, n, 'result.txt'))]
-    except OSError:
-        return []
+    texte = ''
+    if propres:
+        texte += ("\nDocuments of this session: the user added them for the work of this session (on top of the "
+                  "standing instructions and the other documents, never instead of them). Before answering, use Read "
+                  "on the ones related to the task, and rely on them before anything else.\n%s\n\n"
+                  % liste(propres, os.path.dirname(propres[0])))
+    if fichiers:
+        texte += ("\nContext documents provided by the user (courses, notes, documentation, sources...). "
+                  "They are more reliable than your general knowledge: before answering, use Read on the ones "
+                  "related to the task (same subject, same course, same hardware or software), and rely on them "
+                  "first. Ignore the ones that are unrelated.\n%s\n\n" % liste(fichiers, CONTEXTE))
+    return texte + ("For a PDF, read its extracted text (the .txt file shown, with page numbers) rather than the PDF "
+                    "itself; for a long document, search that .txt with Grep first. To see a diagram, a "
+                    "figure or a scanned page, use the \"page-pdf\" action of the control tool, then read the image.\n")
 
 
 def lire_session():
-    """Id of the current session (the date it started), created when there is none.
+    """Id of the current persisted session (the date it started), created when there is none.
 
     A session is a run of tasks that belong together: Claude keeps its notes (memory.md) from one task to the
-    next. "New session" starts again from nothing. Every task folder holds the id of its session (session.txt).
+    next. Every task folder holds the id of its session (session.txt). See outils/sessions.py.
     """
-    ident = lire_texte(FICHIER_SESSION)
-    if not re.match(r'^\d{8}-\d{6}(-\d+)?$', ident):
-        ident = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
-        ecrire_texte(FICHIER_SESSION, ident)
-    return ident
+    return sessions.lire_session(DONNEES)
 
 
 def preparer_outils():
@@ -515,7 +525,6 @@ class Appli:
         self.tuer_a = None       # time of the SIGKILL if SIGTERM is not enough
         self.image = 0
         self.boite = None        # pending screenshot while the instruction bar is open
-        self.fenetre_resultat = None
         self.dernier_appui = 0.0
         self.dernier_nettoyage = 0.0
         self.maj = None          # "claude update" process, see mettre_a_jour_claude
@@ -527,9 +536,18 @@ class Appli:
         self.smooth = lire_texte(FICHIER_SMOOTH).lower() == 'on'
         self.memoire = memoire.active(FICHIER_MEMOIRE)
         self.fantome = lire_texte(FICHIER_FANTOME).lower() == 'on'
-        self.dernier = 'No task yet.\n\n' + AIDE_RACCOURCIS
+        self.dernier = ACCUEIL_FANTOME if self.fantome else ACCUEIL
         self.dernier_hors_historique = False  # self.dernier is a message that no task folder holds
         self.coupes = []  # files of System-Context whose end was left out of the current task (too long)
+        # The ghost session only lives here: its results, its notes and its roles (its documents are copies,
+        # deleted when it ends).
+        self.entrees_fantome = []
+        self.notes_fantome = []
+        self.roles_fantome = []
+        self.instruction_tache = ''
+        self.titrage = None      # the title of a session being asked to Haiku: proc, id, sortie, question, debut
+        self.essais_titre = {}
+        self.fenetre_sessions = None
 
     # -------------------------------------------------- interface (main thread on macOS)
 
@@ -552,7 +570,7 @@ class Appli:
     def poster(self, *evenement):
         self.evenements.put(evenement)
 
-    # -------------------------------------------------- History window
+    # -------------------------------------------------- Sessions window
 
     def texte_resultat(self):
         """What a click on the icon shows: the last result, or the steps so far while a task is running
@@ -566,80 +584,232 @@ class Appli:
             self.modele, int(round(time.monotonic() - self.debut)),
             'What Claude did so far:\n' + etapes if etapes else 'Nothing to show yet.')
 
-    def fichiers_resultat(self):
-        """What the History window can show, oldest first: the results of the kept tasks, then what is going on
-        now when no task folder holds it (a task in progress, a ghost answer, a task that could not start)."""
-        anciens = historique()
-        if self.proc or self.dernier_hors_historique or not anciens:
-            ecrire_texte(DERNIER, self.texte_resultat())
-            return anciens + [DERNIER]
-        return anciens
+    def id_en_cours(self):
+        """The session in use: its id, '' for the ghost session."""
+        return '' if self.fantome else lire_session()
+
+    def roles_session(self, ident):
+        return sessions.lire_roles(DONNEES, DOSSIER_ROLES, ident, self.roles_fantome)
+
+    def basculer_role(self, ident, nom):
+        """Ticks or unticks a role of a session ('' = the ghost session, in memory only)."""
+        roles = sessions.basculer_role(self.roles_session(ident), nom)
+        if ident:
+            sessions.enregistrer_roles(DONNEES, ident, roles)
+        else:
+            self.roles_fantome = roles
+        noter('Roles of %s: %s' % ('session ' + ident if ident else 'the ghost session', sessions.nom_roles(roles)))
+
+    def oublier_fantome(self):
+        """Forgets the ghost session: its notes and results only ever were in memory, its documents were copies."""
+        del self.entrees_fantome[:]
+        del self.notes_fantome[:]
+        sessions.vider_documents_fantome(CONTEXTE)
+
+    def sauver_notes(self, ident):
+        """The notes of a session that stops being the current one wait in data/sessions/<id>.md."""
+        if not ident or not os.path.exists(FICHIER_NOTES):
+            return
+        garde = sessions.fichier_notes(DONNEES, ident)
+        if memoire.notes(FICHIER_NOTES):
+            os.makedirs(DOSSIER_SESSIONS, exist_ok=True)
+            shutil.copyfile(FICHIER_NOTES, garde)
+        elif os.path.exists(garde):
+            os.remove(garde)
+
+    def charger_notes(self, ident):
+        garde = sessions.fichier_notes(DONNEES, ident) if ident else ''
+        if garde and os.path.exists(garde):
+            shutil.copyfile(garde, FICHIER_NOTES)
+        else:
+            memoire.ecrire(FICHIER_NOTES, memoire.ENTETE)
 
     def nouvelle_session(self):
         """New session, in the mode that is selected. Not during a task.
 
-        Persisted Memory: the notes of the session that ends are put away in data/sessions/<id>.md (they go away
-        with its last task), and the next tasks start a new history with no notes.
-        Ghost Mode: the last ghost answer is forgotten; the mode stays on.
+        Persisted Memory: the notes of the session that ends are put away (it can be resumed later), and the next
+        tasks start a new history with no notes and no documents.
+        Ghost Mode: the ghost session is forgotten and another one starts, empty.
+        Either way the new session starts with the roles of the one it follows.
         """
         if self.proc:
             noter('New session: not during a task')
             return False
         self.dernier_hors_historique = False
         if self.fantome:
-            self.dernier = 'Ghost session: nothing is kept.\n\n' + AIDE_RACCOURCIS
-            try:
-                os.remove(DERNIER)
-            except OSError:
-                pass
+            self.oublier_fantome()
+            self.dernier = ACCUEIL_FANTOME
             noter('New ghost session')
             return True
         ancienne = lire_session()
         try:
-            if memoire.notes(FICHIER_NOTES):
-                os.makedirs(DOSSIER_SESSIONS, exist_ok=True)
-                shutil.copyfile(FICHIER_NOTES, os.path.join(DOSSIER_SESSIONS, ancienne + '.md'))
-            memoire.ecrire(FICHIER_NOTES, memoire.ENTETE)
+            self.sauver_notes(ancienne)
+            self.charger_notes('')
         except OSError as ex:
             noter('memory.md: %s' % ex)
-        ident = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
-        if ident == ancienne:
-            ident += '-2'
+        ident = sessions.nouvel_id(DONNEES, ancienne, CONTEXTE)
         ecrire_texte(FICHIER_SESSION, ident)
+        try:
+            sessions.enregistrer_roles(DONNEES, ident, self.roles_session(ancienne))
+        except OSError as ex:
+            noter('Roles: %s' % ex)
         self.dernier = 'New session.\n\n' + AIDE_RACCOURCIS
         noter('New session: %s' % ident)
         return True
 
+    def reprendre_session(self, ident):
+        """Goes back to an earlier persisted session: it becomes the current one again, with the notes it had.
+        Persisted Memory is selected again if ghost mode was on. Not during a task."""
+        if self.proc or not sessions.ID_SESSION.match(ident or ''):
+            return False
+        if self.fantome:
+            self.basculer_fantome(False)
+        courante = lire_session()
+        if ident != courante:
+            try:
+                self.sauver_notes(courante)
+                self.charger_notes(ident)
+            except OSError as ex:
+                noter('memory.md: %s' % ex)
+            ecrire_texte(FICHIER_SESSION, ident)
+        self.dernier = 'Session resumed: Claude has the notes it had.\n\n' + AIDE_RACCOURCIS
+        self.dernier_hors_historique = False
+        noter('Session resumed: %s' % ident)
+        return True
+
     def basculer_fantome(self, actif):
-        """Ghost mode on or off: no notes are read or written, and the task folder is deleted when the task ends.
-        Not during a task. Turning it off forgets the last ghost answer."""
+        """Ghost Mode on (a ghost session starts, empty, with the roles of the persisted one) or off (back to
+        Persisted Memory, in the session that was current, as it was). Either way the ghost session that was
+        there is forgotten. Not during a task."""
         if self.proc:
             return False
+        if actif == self.fantome:
+            return True
+        self.oublier_fantome()
+        if actif:
+            self.roles_fantome = self.roles_session(lire_session())
         self.fantome = actif
         ecrire_texte(FICHIER_FANTOME, 'on' if actif else 'off')
-        if actif:
-            self.dernier = 'Ghost session: nothing is kept.\n\n' + AIDE_RACCOURCIS
-            self.dernier_hors_historique = False
-        else:
-            # Back to Persisted Memory: the ghost answer is forgotten.
-            self.dernier = 'No task yet.\n\n' + AIDE_RACCOURCIS
-            self.dernier_hors_historique = False
-            try:
-                os.remove(DERNIER)
-            except OSError:
-                pass
+        self.dernier = ACCUEIL_FANTOME if actif else ACCUEIL
+        self.dernier_hors_historique = False
         noter('Mode: %s' % ('Ghost Mode' if actif else 'Persisted Memory'))
         return True
 
+    def etat_sessions(self):
+        """What the Sessions window (a separate process) needs and no file holds."""
+        maintenant, titre = None, ''
+        if self.proc:
+            maintenant, titre = self.texte_resultat(), 'in progress'
+        elif self.dernier_hors_historique:
+            maintenant, titre = self.dernier, 'last message'
+        elif not self.fantome or not self.entrees_fantome:
+            maintenant = self.dernier   # the message of a session with no task yet
+        return {'donnees': DONNEES, 'contexte': CONTEXTE, 'socket': SOCKET, 'fantome': self.fantome,
+                'occupe': bool(self.proc), 'maintenant': maintenant, 'titre_maintenant': titre,
+                'entrees_fantome': list(self.entrees_fantome), 'roles_fantome': list(self.roles_fantome)}
+
+    def commande_sessions(self, commande):
+        """An action of the Sessions window (in the control thread); returns the new state for the window."""
+        action, ident = commande.get('action'), commande.get('id') or ''
+        try:
+            if action == 'nouvelle':
+                self.nouvelle_session()
+            elif action == 'reprendre':
+                self.reprendre_session(ident)
+            elif action == 'fantome':
+                self.basculer_fantome(bool(commande.get('actif')))
+            elif action == 'conservation':
+                sessions.enregistrer_conservation(DONNEES, int(commande.get('jours')))
+                noter('Sessions kept for %d days' % sessions.conservation(DONNEES))
+            elif action == 'role':
+                self.basculer_role(ident, commande.get('nom', ''))
+            elif action == 'ajouter':
+                n = sessions.ajouter_documents(CONTEXTE, ident, commande.get('fichiers') or [])
+                noter('%d document(s) added to %s' % (n, 'session ' + ident if ident else 'the ghost session'))
+            elif action == 'retirer':
+                if sessions.retirer_document(CONTEXTE, ident, commande.get('chemin', ''), natif.corbeille):
+                    noter('Document removed from %s: %s' % ('session ' + ident if ident else 'the ghost session',
+                                                            os.path.basename(commande.get('chemin', ''))))
+        except Exception as ex:
+            noter('Sessions window (%s): %s' % (action, ex))
+        return self.etat_sessions()
+
     def montrer_resultat(self):
-        """The History window: the newest result or the task in progress, with arrows to the earlier ones."""
-        if self.fenetre_resultat and self.fenetre_resultat.poll() is None:
-            self.fenetre_resultat.terminate()
-        self.fenetre_resultat = subprocess.Popen([sys.executable, FENETRES, 'resultat'] + self.fichiers_resultat(),
-                                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                                                 stderr=subprocess.DEVNULL, start_new_session=True)
+        """The Sessions window: the sessions (the one in use first, on its newest task), with arrows to the earlier
+        tasks. A separate process: the state of the app goes to it as JSON on stdin."""
+        if self.fenetre_sessions and self.fenetre_sessions.poll() is None:
+            self.fenetre_sessions.terminate()
+        self.fenetre_sessions = subprocess.Popen([sys.executable, FENETRES, 'sessions'], stdin=subprocess.PIPE,
+                                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                                 start_new_session=True)
+        try:
+            self.fenetre_sessions.stdin.write(json.dumps(self.etat_sessions()).encode('utf-8'))
+            self.fenetre_sessions.stdin.close()
+        except OSError:
+            pass
         if self.proc is None:
             self.mettre_icone(ICONE_REPOS)
+
+    # -------------------------------------------------- the title of a session (Haiku, in the background)
+
+    def processus_titre(self, question, sortie):
+        """claude -p with Haiku, the question on stdin, the answer in a file. Replaced by the tests."""
+        claude = trouver_claude()
+        if not claude:
+            raise RuntimeError('Claude Code not found')
+        env = {k: v for k, v in os.environ.items() if not k.startswith(('CLAUDE', 'ANTHROPIC'))}
+        with open(question, 'rb') as entree, open(sortie, 'wb') as fichier:
+            return subprocess.Popen([claude, '-p', '--model', 'haiku'] + OPTIONS_CLAUDE + OPTIONS_TRI
+                                    + ['--settings', REGLAGES, '--output-format', 'text'],
+                                    stdin=entree, stdout=fichier, stderr=subprocess.DEVNULL, cwd=TRAVAIL, env=env,
+                                    start_new_session=True)
+
+    def demarrer_titrage(self, ident, instruction, resultat):
+        """A session gets a short title from its content, like a conversation: after its first finished task,
+        Haiku is asked for one in the background. Until the title is there, and if Haiku fails or answers
+        nonsense, the session keeps its name by number and date: nothing ever waits for the title."""
+        if self.titrage or not ident or self.essais_titre.get(ident, 0) >= ESSAIS_TITRE_MAX:
+            return
+        self.essais_titre[ident] = self.essais_titre.get(ident, 0) + 1
+        os.makedirs(DOSSIER_SESSIONS, exist_ok=True)
+        question = os.path.join(DOSSIER_SESSIONS, ident + '.title-prompt.txt')
+        sortie = os.path.join(DOSSIER_SESSIONS, ident + '.title-answer.txt')
+        ecrire_texte(question, sessions.texte_titrage(LANGUE_NOM, instruction, resultat))
+        try:
+            proc = self.processus_titre(question, sortie)
+        except Exception:
+            for f in (question, sortie):
+                try:
+                    os.remove(f)
+                except OSError:
+                    pass
+            raise
+        self.titrage = {'proc': proc, 'id': ident, 'sortie': sortie, 'question': question, 'debut': time.monotonic()}
+
+    def finir_titrage(self):
+        """Called by tic: the answer of Haiku is in, or it took too long."""
+        t = self.titrage
+        if not t:
+            return
+        if t['proc'].poll() is None:
+            if time.monotonic() - t['debut'] < DUREE_TITRAGE:
+                return
+            try:
+                os.killpg(t['proc'].pid, signal.SIGKILL)
+            except (OSError, AttributeError, TypeError):
+                pass
+        self.titrage = None
+        titre = sessions.titre_propre(lire_texte(t['sortie']))
+        for f in (t['sortie'], t['question']):
+            try:
+                os.remove(f)
+            except OSError:
+                pass
+        if titre:
+            ecrire_texte(sessions.fichier_titre(DONNEES, t['id']), titre)
+            noter('Session %s named: %s' % (t['id'], titre))
+        else:
+            noter('Session %s: no title from Haiku, it keeps its name by date' % t['id'])
 
     # -------------------------------------------------- tasks
 
@@ -731,26 +901,34 @@ class Appli:
             self.debut = time.monotonic()
             self.arret = None
             precision = ("\nUser instruction for this task (takes priority over everything else): %s\n" % instruction) if instruction else ''
-            # Re-read for every task: a change to instructions.md or to the documents applies right away.
+            # Re-read for every task: a change to instructions.md, to the roles or to the documents applies right away.
             instructions = lire_instructions()
+            ident = self.id_en_cours()
+            noms_roles, roles = roles_actifs(ident, self.roles_fantome)
             # Texts cut at 4000 characters: said in the result, so that the user does not think Claude ignored the end.
-            self.coupes = [nom for nom, chemin in (
-                ('Contexts/%s.md' % contexte_actif()[0], os.path.join(DOSSIER_CONTEXTES, contexte_actif()[0] + '.md')),
-                ('instructions.md', FICHIER_INSTRUCTIONS)) if memoire.coupe(chemin)]
+            self.coupes = [nom for nom, chemin in [('Roles/%s.md' % n, os.path.join(DOSSIER_ROLES, n + '.md')) for n, _t in roles]
+                           + [('instructions.md', FICHIER_INSTRUCTIONS)] if memoire.coupe(chemin)]
             for nom in self.coupes:
                 noter('%s is longer than 4000 characters: its end was not sent to Claude' % nom)
             self.fantome_tache = self.fantome
-            self.memoire_tache = self.memoire and not self.fantome
-            if not self.fantome_tache:
-                # What the History window needs to put this task back in its session.
+            self.instruction_tache = instruction
+            self.memoire_tache = self.memoire
+            if self.fantome_tache:
+                # Marks the folder: if the app stops before the end of the task, it is deleted at the next start.
+                ecrire_texte(os.path.join(run, 'ghost.txt'), 'on')
+            else:
+                # What the Sessions window needs to put this task back in its session.
                 ecrire_texte(os.path.join(run, 'session.txt'), lire_session())
                 if instruction:
                     ecrire_texte(os.path.join(run, 'instruction.txt'), instruction)
-            nom_contexte, contenu_contexte = contexte_actif()
+            # A ghost session has its notes too, but only in the memory of the app.
+            bloc_memoire = ''
+            if self.memoire_tache:
+                bloc_memoire = texte_memoire('\n'.join(self.notes_fantome) if self.fantome_tache else memoire.notes(FICHIER_NOTES))
+            documents = lister_documents(sessions.lister_documents(CONTEXTE, ident)) + fichiers_recents()
             ecrire_texte(os.path.join(run, 'prompts', 'task.txt'),
                          texte_consigne(png, capture['largeur'], capture['hauteur'], fenetre, precision,
-                                        instructions, lister_documents() + fichiers_recents(), self.memoire_tache,
-                                        texte_contexte(nom_contexte, contenu_contexte)))
+                                        instructions, documents, bloc_memoire, texte_roles(noms_roles, roles)))
 
             modele = self.choix_modele
             if modele == 'auto' and fenetre[0] and APPS_OPUS.search(fenetre[0]):
@@ -760,7 +938,7 @@ class Appli:
             if modele != 'auto':
                 self.lancer_travail(modele)
                 return
-            ecrire_texte(os.path.join(run, 'prompts', 'triage.txt'), texte_tri(png, fenetre, precision, instructions, nom_contexte))
+            ecrire_texte(os.path.join(run, 'prompts', 'triage.txt'), texte_tri(png, fenetre, precision, instructions, noms_roles))
             self.etape = 'tri'
             self.demarrer_claude('haiku', 'triage', OPTIONS_TRI)
             self.infobulle('looking at the screen...')
@@ -834,10 +1012,24 @@ class Appli:
             self.tuer_a = time.monotonic() + 3
             noter('Stop requested (%s): %s' % (raison, self.run))
 
+    def retirer_runs_fantomes(self):
+        """A ghost task leaves nothing: its folder is deleted at the end of the task, and here when the task never
+        reached its end (the app was closed, the task could not start)."""
+        if self.proc:
+            return
+        try:
+            for nom in os.listdir(RUNS):
+                if os.path.exists(os.path.join(RUNS, nom, 'ghost.txt')):
+                    shutil.rmtree(os.path.join(RUNS, nom), ignore_errors=True)
+        except OSError:
+            pass
+
     def nettoyer_runs(self):
-        """Deletes tasks older than a month (the app's internal screenshots) and trims the log."""
+        """Deletes the tasks older than the time chosen in the Sessions window (30 days by default), what goes
+        with their sessions, and trims the log."""
+        self.retirer_runs_fantomes()
         self.dernier_nettoyage = time.monotonic()
-        limite = time.time() - JOURS_CONSERVES * 86400
+        limite = time.time() - sessions.conservation(DONNEES) * 86400
         try:
             for nom in os.listdir(RUNS):
                 chemin = os.path.join(RUNS, nom)
@@ -845,6 +1037,9 @@ class Appli:
                     shutil.rmtree(chemin, ignore_errors=True)
         except OSError:
             pass
+        # A session lives as long as it has a task, or documents added within that time; the one in use always.
+        garder = [lire_session()] + ([self.titrage['id']] if self.titrage else [])
+        sessions.nettoyer(DONNEES, garder, CONTEXTE, limite, natif.corbeille, noter)
         try:
             with open(JOURNAL, encoding='utf-8', errors='replace') as f:
                 lignes = f.readlines()
@@ -855,8 +1050,8 @@ class Appli:
             pass
 
     def enregistrer_resultat(self, texte, etapes=''):
-        """Keeps what the user is shown at the end of a task, with the steps, in the task folder: the History
-        window goes through these files. They go away with the task folder, after a month."""
+        """Keeps what the user is shown at the end of a task, with the steps, in the task folder: the Sessions
+        window goes through these files. They go away with the task folder."""
         try:
             ecrire_texte(os.path.join(self.run, 'result.txt'),
                          texte + ('\n\n----- What Claude did -----\n' + etapes if etapes else ''))
@@ -865,10 +1060,15 @@ class Appli:
             noter('History: %s' % ex)
 
     def finir_run(self, etapes=''):
-        """End of a task. Ghost mode: its folder (screenshots, prompt, answer) is deleted, and the answer only
-        stays in memory. Otherwise the result is kept with its steps."""
+        """End of a task. Ghost Mode: the result joins the ghost session, in memory only, and the folder of the
+        task (screenshots, prompt, answer) is deleted. Otherwise the result is kept with its steps."""
         if self.fantome_tache:
-            self.dernier_hors_historique = True
+            texte = self.dernier + ('\n\n----- What Claude did -----\n' + etapes if etapes else '')
+            if self.instruction_tache:
+                texte = 'Instruction: %s\n\n%s' % (self.instruction_tache, texte)
+            self.entrees_fantome.append({'titre': datetime.datetime.now().strftime('%d/%m/%Y %H:%M'), 'fichier': None,
+                                         'texte': texte})
+            self.dernier_hors_historique = False
             shutil.rmtree(self.run, ignore_errors=True)
             return
         self.enregistrer_resultat(self.dernier, etapes)
@@ -902,7 +1102,11 @@ class Appli:
             # Persistent memory: the "MEMORY: ..." lines go to memory.md, not to the user.
             reponse, nouvelles = memoire.extraire(reponse)
             reponse = reponse or '(done, no summary)'
-            if nouvelles:
+            if nouvelles and self.fantome_tache:
+                self.notes_fantome += ['- ' + n for n in nouvelles]
+                while len('\n'.join(self.notes_fantome)) > memoire.MAX_MEMOIRE and len(self.notes_fantome) > 1:
+                    del self.notes_fantome[0]
+            elif nouvelles:
                 try:
                     ajoutees, retirees = memoire.ajouter(FICHIER_NOTES, nouvelles)
                     noter('Persistent memory: %d note(s) saved' % ajoutees
@@ -927,8 +1131,18 @@ class Appli:
                 code, self.modele, duree, self.lire_run(os.path.join('responses', 'task-errors.txt')), reponse)).strip()
             self.mettre_icone(ICONE_ERREUR)
             self.infobulle('error (click to see)')
+        fini = code == 0 and bool(reponse)
         self.finir_run(deroule.texte(etapes, omises))
         noter('Task finished (code %s, %d s): %s' % (code, duree, self.run))
+        # The first finished task of a session gives it its title (asked to Haiku in the background).
+        # A ghost session is never named: nothing of it is sent or written for that.
+        if fini and not self.fantome_tache:
+            ident = lire_session()
+            if not sessions.lire_titre(DONNEES, ident):
+                try:
+                    self.demarrer_titrage(ident, self.instruction_tache, reponse)
+                except Exception as ex:
+                    noter('Session title: %s' % ex)
         self.nettoyer_runs()
 
     # -------------------------------------------------- control loop (separate thread)
@@ -958,6 +1172,9 @@ class Appli:
             self.arreter_tache(ev[1] if len(ev) > 1 else 'menu')
         elif genre == 'consigne':
             self.consigne_finie(*ev[1:])
+        elif genre == 'sessions':
+            # An action of the Sessions window: done here, the new state goes back to it.
+            ev[2].put(self.commande_sessions(ev[1]))
 
     def tic(self):
         maintenant = time.monotonic()
@@ -970,6 +1187,8 @@ class Appli:
                 self.maj.kill()  # stuck update: the next try is in 24 h
             except OSError:
                 pass
+        if self.titrage:
+            self.finir_titrage()
         if not self.proc:
             return
         if self.proc.poll() is not None:
@@ -1015,8 +1234,15 @@ class Appli:
             except OSError:
                 return
             try:
-                conn.settimeout(2)
-                commande = conn.recv(256).decode('utf-8', 'replace').strip()
+                conn.settimeout(5)
+                recu = conn.recv(65536)
+                # The Sessions window sends "sessions" then a JSON command, and closes its side when done.
+                while recu.startswith(b'sessions ') and len(recu) < 1 << 20:
+                    morceau = conn.recv(65536)
+                    if not morceau:
+                        break
+                    recu += morceau
+                commande = recu.decode('utf-8', 'replace').strip()
                 reponse = 'OK'
                 # The desktop shortcuts installed on Linux call these two commands: each one does what its
                 # key does (see traiter), whatever its name says.
@@ -1030,6 +1256,21 @@ class Appli:
                     self.poster('resultat')
                 elif commande == 'quitter':
                     self.quitter()
+                elif commande.startswith('sessions '):
+                    try:
+                        action = json.loads(commande[len('sessions '):])
+                    except ValueError:
+                        action = None
+                    retour = queue.Queue()
+                    if isinstance(action, dict):
+                        self.poster('sessions', action, retour)
+                    else:
+                        noter('Sessions window: unreadable command')
+                        retour.put(self.etat_sessions())
+                    try:
+                        reponse = json.dumps(retour.get(timeout=10))
+                    except queue.Empty:
+                        reponse = json.dumps(self.etat_sessions())
                 elif commande == 'etat':
                     reponse = 'working (%s)' % (self.modele or self.etape) if self.proc else 'ready'
                 else:
@@ -1076,20 +1317,25 @@ class Appli:
             self.basculer_fantome(not self.fantome)
             icone.update_menu()
 
-        def choisir_contexte(nom):
+        def basculer_role(nom):
             def action(icone, _item):
-                ecrire_texte(FICHIER_CONTEXTE, nom)
-                noter('Context: %s' % nom)
+                self.basculer_role(self.id_en_cours(), nom)
                 icone.update_menu()
             return action
 
-        def menu_contextes():
-            # Read again each time the menu is built: a file added or removed by the user shows at once.
-            actif = contexte_actif()[0]
-            for nom in lister_contextes():
-                yield M(nom, choisir_contexte(nom), checked=lambda _item, n=nom: n == actif, radio=True)
+        def coche_role(nom):
+            def coche(_item):
+                roles = self.roles_session(self.id_en_cours())
+                return not roles if nom == sessions.ROLE_PAR_DEFAUT else nom in roles
+            return coche
+
+        def menu_roles():
+            # The roles of the session in use, as in the Sessions window. Read again each time the menu is built:
+            # a file added or removed by the user shows at once.
+            for nom in lister_roles():
+                yield M(nom, basculer_role(nom), checked=coche_role(nom))
             yield pystray.Menu.SEPARATOR
-            yield M('Open the Contexts folder', lambda: natif.ouvrir(DOSSIER_CONTEXTES))
+            yield M('Open the Roles folder', lambda: natif.ouvrir(DOSSIER_ROLES))
 
         return pystray.Menu(
             M('Sessions', lambda: self.poster('resultat'), default=True),
@@ -1100,7 +1346,7 @@ class Appli:
             M('Smooth mode', basculer_smooth, checked=lambda _item: self.smooth),
             M('New session', nouvelle_session),
             M('Ghost mode', basculer_fantome, checked=lambda _item: self.fantome),
-            M(lambda _item: 'Context: %s' % contexte_actif()[0], pystray.Menu(menu_contextes)),
+            M(lambda _item: 'Roles: %s' % sessions.nom_roles(self.roles_session(self.id_en_cours())), pystray.Menu(menu_roles)),
             M('Open the %s folder' % NOM, lambda: natif.ouvrir(TRAVAIL)),
             pystray.Menu.SEPARATOR,
             M('Quit', lambda: self.quitter()),
@@ -1114,6 +1360,15 @@ class Appli:
         renommer_travail()
         os.makedirs(TRAVAIL, exist_ok=True)
         preparer_contexte()
+        # The ghost session of the last run is gone: its documents too. The last result of the versions before 1.0
+        # (a copy, and it could hold a ghost answer) is not needed any more.
+        sessions.vider_documents_fantome(CONTEXTE)
+        try:
+            os.remove(DERNIER)
+        except OSError:
+            pass
+        if self.fantome:
+            self.roles_fantome = self.roles_session(lire_session())
         # Extracts the text of the context PDFs now, so the first task does not wait for it.
         threading.Thread(target=lister_documents, daemon=True).start()
         if MAC:

@@ -46,8 +46,13 @@ function Write-FichierMemoire([string]$chemin, [string]$texte) {
 # Sends a file to the Recycle Bin (never a permanent deletion).
 function Send-Corbeille([string]$chemin) {
     Add-Type -AssemblyName Microsoft.VisualBasic
-    [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($chemin,
-        [Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs, [Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin)
+    if (Test-Path -LiteralPath $chemin -PathType Container) {
+        [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory($chemin,
+            [Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs, [Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin)
+    } else {
+        [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($chemin,
+            [Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs, [Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin)
+    }
 }
 
 # Claude's notes are always kept, unless the user wrote "never" in data/memory.txt.

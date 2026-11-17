@@ -13,7 +13,7 @@ $Outils = Join-Path $Racine 'outils'
 # Everything the app generates goes to data/ (same layout as the macOS/Linux version):
 #   data/runs/<date>/  one folder per task: images/, prompts/, responses/ + screen.json, result.txt (History window)
 #   data/context-cache/, data/log.txt, data/settings.json, data/model.txt, data/smooth.txt, data/memory.txt,
-#   data/context.txt, data/terminal.txt, data/terminal-accepted.txt, data/session.txt, data/ghost.txt, data/sessions/, data/window.txt
+#   data/terminal.txt, data/terminal-accepted.txt, data/session.txt, data/ghost.txt, data/sessions/, data/window.txt, data/retention.txt
 $Donnees = Join-Path $Racine 'data'
 $Runs = Join-Path $Donnees 'runs'
 $Journal = Join-Path $Donnees 'log.txt'
@@ -22,9 +22,10 @@ $FichierSmooth = Join-Path $Donnees 'smooth.txt'   # smooth mode: 'on' or 'off',
 $FichierMemoire = Join-Path $Donnees 'memory.txt'  # Claude's notes are always kept, unless this file says 'never'
 $FichierSession = Join-Path $Donnees 'session.txt'  # id of the current session (see New session)
 $FichierFantome = Join-Path $Donnees 'ghost.txt'    # ghost mode: 'on' or 'off' (default)
-$DossierSessions = Join-Path $Donnees 'sessions'    # the notes of the persisted sessions that are not the current one
+$DossierSessions = Join-Path $Donnees 'sessions'    # per session: <id>.md (notes, when not current), <id>.title.txt, <id>.roles.txt
 $FichierFenetre = Join-Path $Donnees 'window.txt'   # size of the Sessions window, when the user changed it
-$FichierContexte = Join-Path $Donnees 'context.txt'   # name of the active context (Context menu); none = Default
+$FichierConservation = Join-Path $Donnees 'retention.txt'   # days the tasks of the persisted sessions are kept (default: 30)
+$FichierContexte = Join-Path $Donnees 'context.txt'   # versions before 1.0: the active context (now the roles of the session)
 $FichierTerminal = Join-Path $Donnees 'terminal.txt'  # terminal access (PowerShell tool): 'on' or 'off' (default)
 $FichierTerminalAccepte = Join-Path $Donnees 'terminal-accepted.txt'  # the user answered Yes once: not asked again
 $CacheContexte = Join-Path $Donnees 'context-cache'   # text extracted from the context PDFs
@@ -82,7 +83,9 @@ $FichierNotes = Join-Path $Contexte 'memory.md'
 $FichierNotesAvant = Join-Path $Donnees 'memory-previous.md'   # the notes cleared by New session in the versions before data\sessions
 $AnciennesInstructions = Join-Path $Contexte 'instructions.txt'   # older versions
 $FichierLisezMoi = Join-Path $Contexte 'README.md'
-$DossierContextes = Join-Path $Contexte 'Contexts'   # one .md file per context, chosen in the icon menu
+$DossierRoles = Join-Path $Contexte 'Roles'   # one .md file per role; each session has its own (Sessions window)
+$AncienDossierContextes = Join-Path $Contexte 'Contexts'   # versions before 1.0: replaced by Roles
+$DossierDocumentsSessions = Join-Path $Contexte 'Session documents'   # <id>\: the documents of one session
 New-Item -ItemType Directory -Force $Runs, $Travail, $Contexte | Out-Null
 # Older versions: instructions.txt (# = comment), then Claude's notes at the end of instructions.md.
 # Converted once; after that, instructions.md is never changed again.
@@ -102,13 +105,13 @@ try {
         Copy-Item $guide $FichierLisezMoi
     }
 } catch { Noter "System-Context guide: $($_.Exception.Message)" }
-# Contexts: copied once from the app's contexts folder. After that the files belong to the user (edit, add, remove).
+# Roles: copied once from the app's roles folder. After that the files belong to the user (edit, add, remove).
 try {
-    if (-not (Test-Path -LiteralPath $DossierContextes)) {
-        Copy-Item -LiteralPath (Join-Path $Racine 'contexts') -Destination $DossierContextes -Recurse
-        Noter 'Contexts folder created'
+    if (-not (Test-Path -LiteralPath $DossierRoles)) {
+        Copy-Item -LiteralPath (Join-Path $Racine 'roles') -Destination $DossierRoles -Recurse
+        Noter 'Roles folder created'
     }
-} catch { Noter "Contexts folder: $($_.Exception.Message)" }
+} catch { Noter "Roles folder: $($_.Exception.Message)" }
 # Claude Code permission rule for the context folder: POSIX-style path
 # (C:\Users\x -> //c/Users/x), as Claude Code does before comparing paths.
 $RegleContexte = $Contexte.Replace('\', '/')
@@ -190,16 +193,88 @@ function Infobulle([string]$texte) {
     $icone.Text = $texte
 }
 
+# --- Names of the sessions ---
+# A session gets a short title from its content, like a conversation: after its first finished task, Haiku is
+# asked for one in the background (a few seconds, a few hundred tokens). Until the title is there, and if Haiku
+# fails or answers nonsense, the session keeps its name by number and date: nothing ever waits for the title.
+# A ghost session is never named: nothing of it is sent or written for that.
+$DureeTitrage = [TimeSpan]::FromSeconds(90)
+$EssaisTitreMax = 3              # per session, while the app runs
+$script:Titrage = $null         # the title being asked for: Proc, Id, Sortie, Debut
+$script:EssaisTitre = @{}
+function Fichier-TitreSession([string]$id) { Join-Path $DossierSessions "$id.title.txt" }
+function Lire-TitreSession([string]$id) {
+    $f = Fichier-TitreSession $id
+    if ($id -and (Test-Path -LiteralPath $f)) { Format-TitreSession ([IO.File]::ReadAllText($f, [Text.Encoding]::UTF8)) } else { '' }
+}
+# What Haiku answered, as a title: one line, no quotes, no markup, 3 to 60 characters. '' when it is not one.
+function Format-TitreSession([string]$texte) {
+    $ligne = @(("$texte" -split '\r?\n') | ForEach-Object { $_.Trim() } | Where-Object { $_ }) | Select-Object -First 1
+    # Markup and quotes first, then a leading list mark or "Title:".
+    $ligne = ("$ligne" -replace '[*_`"#«»“”]', '' -replace '^\s*-\s+', '' -replace '^\s*(?i:title)\s*:\s*', '' -replace '\s+', ' ').Trim().TrimEnd('.').Trim()
+    if ($ligne.Length -lt 3 -or $ligne.Length -gt 60) { '' } else { $ligne }
+}
+# The question put to Haiku: what the first task of the session was about.
+function Texte-Titrage([string]$instruction, [string]$resultat) {
+    if ($resultat.Length -gt 1500) { $resultat = $resultat.Substring(0, 1500) }
+    "Give a title to this work session, like the title of a conversation: 2 to 6 words, in $Langue, saying what the user is working on. Answer with the title only: one line, no quotes, no final period.`n`n" +
+    $(if ($instruction) { "What the user asked: $instruction`n`n" } else { '' }) + "What was done in the first task of the session:`n$resultat`n"
+}
+function Demarrer-Titrage([string]$id, [string]$instruction, [string]$resultat) {
+    if ($script:Titrage -or -not $id -or [int]$script:EssaisTitre[$id] -ge $EssaisTitreMax) { return }
+    $script:EssaisTitre[$id] = [int]$script:EssaisTitre[$id] + 1
+    New-Item -ItemType Directory -Force $DossierSessions | Out-Null
+    $question = Join-Path $DossierSessions "$id.title-prompt.txt"
+    $sortie = Join-Path $DossierSessions "$id.title-answer.txt"
+    [IO.File]::WriteAllText($question, (Texte-Titrage $instruction $resultat), (New-Object System.Text.UTF8Encoding $false))
+    $ligne = "`"`"$Claude`" -p --model haiku $OptionsClaude --tools Read --effort low --settings `"$Reglages`" --output-format text < `"$question`" > `"$sortie`" 2> nul`""
+    $psi = New-Object System.Diagnostics.ProcessStartInfo 'cmd.exe', "/d /s /c $ligne"
+    $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.WorkingDirectory = $Travail
+    foreach ($cle in @($psi.EnvironmentVariables.Keys)) { if ($cle -match '^(CLAUDE|ANTHROPIC)') { $psi.EnvironmentVariables.Remove($cle) } }
+    $script:Titrage = [pscustomobject]@{ Proc = [System.Diagnostics.Process]::Start($psi); Id = $id; Sortie = $sortie; Question = $question; Debut = Get-Date }
+}
+# Called by the timer: the answer of Haiku is in, or it took too long.
+function Finir-Titrage {
+    $t = $script:Titrage
+    if (-not $t) { return }
+    if (-not $t.Proc.HasExited) {
+        if (((Get-Date) - $t.Debut) -lt $DureeTitrage) { return }
+        # Never a system process: only the cmd.exe that this app started.
+        if ([int]$t.Proc.Id -gt 4) { try { & taskkill.exe /PID $t.Proc.Id /T /F 2>$null | Out-Null } catch { } }
+    }
+    $script:Titrage = $null
+    $titre = ''
+    try { if (Test-Path -LiteralPath $t.Sortie) { $titre = Format-TitreSession ([IO.File]::ReadAllText($t.Sortie, [Text.Encoding]::UTF8)) } } catch { }
+    Remove-Item -LiteralPath $t.Sortie, $t.Question -Force -ErrorAction SilentlyContinue
+    if ($titre) {
+        [IO.File]::WriteAllText((Fichier-TitreSession $t.Id), $titre, (New-Object System.Text.UTF8Encoding $false))
+        Noter "Session $($t.Id) named: $titre"
+    } else { Noter "Session $($t.Id): no title from Haiku, it keeps its name by date" }
+}
+
+# --- How long the tasks of the persisted sessions are kept (Sessions window) ---
+$ChoixConservation = [ordered]@{ '7 days' = 7; '30 days' = 30; '90 days' = 90; '1 year' = 365 }
+function Lire-Conservation {
+    $jours = 0
+    if ((Test-Path -LiteralPath $FichierConservation) -and [int]::TryParse("$(Get-Content -LiteralPath $FichierConservation -Raw)".Trim(), [ref]$jours) -and $jours -ge 1 -and $jours -le 3650) { $jours } else { $JoursConserves }
+}
+function Enregistrer-Conservation([int]$jours) {
+    Set-Content -Path $FichierConservation -Value $jours -Encoding ASCII
+    Noter "Sessions kept for $jours days"
+}
+
 # --- Sessions window (a click on the icon, or Sessions in the menu) ---
 # A session is a run of tasks that belong together: Claude keeps its notes from one task to the next, and
 # the window shows them as one history. There are two modes:
 #   Persisted Memory (the default): every task folder holds the id of its session (session.txt), its
 #     instruction and its result. The notes of the current session are in System-Context\memory.md; those of
 #     the other sessions wait in data\sessions\<id>.md, so a session can be resumed with its context.
-#     Everything goes away after a month, with the task folders.
+#     Everything goes away with the task folders, after the time chosen at the bottom of the window (30 days).
+#     Each session also has its roles and its documents (see Roles and Documents of a session).
 #   Ghost Mode: a session that only lives in the memory of the app. Its notes and its results are never
 #     written anywhere, and the folder of each task (screenshots, prompt, answer) is deleted when the task ends.
 #     It ends when a new session is started, when Persisted Memory is chosen again, or when the app stops.
+#     Its roles are in memory too, and its documents (copies) are deleted when it ends.
 # The two ways to start a task, said wherever the app waits for one.
 $script:AideRaccourcis = "Put the task on screen, then:`n  Ctrl+Alt+C: type what you want Claude to do.`n  Ctrl+Alt+Shift+C: automatic. Claude works the task out from the screen and your context."
 $script:Accueil = "No task yet.`n`n$script:AideRaccourcis"
@@ -236,6 +311,9 @@ $script:Choix = @()        # what the drop-down list offers, in its order
 $script:Entrees = @()
 $script:Position = 0
 $script:Remplissage = $false
+$script:DialogueOuvert = $false
+$script:IdMenu = ''           # the session whose roles or documents a menu of the window changes ('' = ghost)
+$script:FermerMenu = $false
 
 # Id of the current persisted session (the date it started), created when there is none.
 function Lire-Session {
@@ -280,13 +358,24 @@ function Lister-Sessions {
         $taches[$id].Add([pscustomobject]@{ Titre = ('{0:g}' -f (Date-Dossier $dossier.Name $dossier.LastWriteTime)); Fichier = $fichier; Texte = $null })
     }
     if (-not $taches.ContainsKey($courante)) { $taches[$courante] = New-Object System.Collections.Generic.List[object] }
+    # A session that has documents but no task yet (or no more) is listed too: it can be resumed.
+    foreach ($d in @(Get-ChildItem -LiteralPath $DossierDocumentsSessions -Directory -ErrorAction SilentlyContinue)) {
+        if ($d.Name -match '^\d{8}-\d{6}(-\d+)?$' -and -not $taches.ContainsKey($d.Name) -and @(Lister-DocumentsSession $d.Name).Count) {
+            $taches[$d.Name] = New-Object System.Collections.Generic.List[object]
+        }
+    }
     $numero = 0
     $sessions = foreach ($id in ($taches.Keys | Sort-Object)) {
         $n = $taches[$id].Count
         # In ghost mode no persisted session is the one in use.
         $enCours = ($id -eq $courante) -and -not $script:Fantome
         # What matters comes first: the end of the title is cut in a narrow window.
-        if ($id) { $numero++; $titre = "Session $numero" + $(if ($enCours) { ' (current)' } else { '' }) + ('  -  {0:g}' -f (Date-Dossier $id (Get-Date))) } else { $titre = 'Earlier tasks' }
+        if ($id) {
+            $numero++
+            # Its title when Haiku gave one, its number until then.
+            $nom = Lire-TitreSession $id
+            $titre = $(if ($nom) { $nom } else { "Session $numero" }) + $(if ($enCours) { ' (current)' } else { '' }) + ('  -  {0:g}' -f (Date-Dossier $id (Get-Date)))
+        } else { $titre = 'Earlier tasks' }
         $titre += '  -  ' + $(if ($n -eq 1) { '1 task' } else { "$n tasks" })
         [pscustomobject]@{ Id = $id; Courante = $enCours; Fantome = $false; Titre = $titre; Taches = $taches[$id].ToArray() }
     }
@@ -334,16 +423,18 @@ function Texte-Entree($entree) {
     $texte
 }
 
-# Forgets the ghost session: its notes and its results only ever were in memory.
+# Forgets the ghost session: its notes and its results only ever were in memory, its documents were copies.
 function Oublier-Fantome {
     $script:NotesFantome.Clear()
     $script:EntreesFantome.Clear()
+    Vider-DocumentsFantome
 }
 
 # New session, in the mode that is selected. Not during a task.
 #   Persisted Memory: the notes of the session that ends are put away (it can be resumed later), and the
-#     next tasks start a new history with no notes.
+#     next tasks start a new history with no notes and no documents.
 #   Ghost Mode: the ghost session is forgotten and another one starts, empty.
+# Either way the new session starts with the roles of the one it follows.
 function Nouvelle-Session {
     if ($script:Proc) { return $false }
     $script:DernierHorsHistorique = $false
@@ -357,8 +448,11 @@ function Nouvelle-Session {
     try { Sauver-NotesSession $ancienne; Charger-NotesSession '' } catch { Noter "memory.md: $($_.Exception.Message)" }
     $base = Get-Date -Format 'yyyyMMdd-HHmmss'
     $id = $base; $n = 2
-    while ($id -eq $ancienne -or (Test-Path -LiteralPath (Fichier-NotesSession $id))) { $id = "$base-$n"; $n++ }
+    # Never the id of a session that still has something (two new sessions in the same second).
+    while ($id -eq $ancienne -or (Test-Path -LiteralPath (Fichier-NotesSession $id)) -or (Test-Path -LiteralPath (Fichier-TitreSession $id)) -or
+           (Test-Path -LiteralPath (Fichier-RolesSession $id)) -or (Test-Path -LiteralPath (Dossier-DocumentsSession $id))) { $id = "$base-$n"; $n++ }
     Set-Content -Path $FichierSession -Value $id -Encoding ASCII
+    try { Enregistrer-RolesSession $id (Lire-RolesSession $ancienne) } catch { Noter "Roles: $($_.Exception.Message)" }
     $script:Dernier = "New session.`n`n$script:AideRaccourcis"
     Noter "New session: $id"
     $true
@@ -386,6 +480,8 @@ function Basculer-Fantome([bool]$actif) {
     if ($script:Proc) { return $false }
     if ($actif -eq $script:Fantome) { return $true }
     Oublier-Fantome
+    # The ghost session starts with the roles of the persisted session it comes from.
+    if ($actif) { $script:RolesFantome = @(Lire-RolesSession (Lire-Session)) }
     $script:Fantome = $actif
     Set-Content -Path $FichierFantome -Value $(if ($actif) { 'on' } else { 'off' }) -Encoding ASCII
     $script:Dernier = if ($actif) { $script:AccueilFantome } else { $script:Accueil }
@@ -425,7 +521,90 @@ function Choisir-Session([int]$index) {
     $script:Entrees = Lister-Entrees $session
     $script:Position = $script:Entrees.Count - 1
     $script:BoutonReprendre.Enabled = [bool]$session.Id -and -not $session.Courante -and -not $script:Proc
+    Afficher-Extras
     Afficher-Entree
+}
+
+# The session shown in the window, whose roles and documents the two buttons change.
+function Session-Affichee { $script:Choix[[math]::Max(0, $script:ListeSessions.SelectedIndex)] }
+
+# The roles and the number of documents of the session shown. "Earlier tasks" (before sessions) has neither.
+function Afficher-Extras {
+    $s = Session-Affichee
+    $possible = [bool]$s.Id -or $s.Fantome
+    $script:BoutonRoles.Enabled = $possible; $script:BoutonDocuments.Enabled = $possible
+    if (-not $possible) { $script:BoutonRoles.Text = 'Roles: -'; $script:BoutonDocuments.Text = 'Documents'; return }
+    $script:BoutonRoles.Text = 'Roles: ' + (Nom-Roles (Lire-RolesSession $s.Id))
+    # The whole list, when the window is too narrow for it.
+    $script:BullesFenetre.SetToolTip($script:BoutonRoles, "$($script:BoutonRoles.Text)`nWho Claude works as in this session: one or more roles. Each session has its own; a new session starts with those of the previous one.")
+    $script:BoutonDocuments.Text = "Documents ($(@(Lister-DocumentsSession $s.Id).Count))"
+}
+
+# Roles button: one item per role of System-Context\Roles, ticked when the session has it. The menu stays open
+# so that several roles can be ticked; General assistant (no specific role) unticks the others.
+function Montrer-MenuRoles {
+    $s = Session-Affichee
+    if (-not $s.Id -and -not $s.Fantome) { return }
+    $script:IdMenu = $s.Id
+    $m = New-Object System.Windows.Forms.ContextMenuStrip
+    $m.add_Closing({ if ($_.CloseReason -eq 'ItemClicked' -and -not $script:FermerMenu) { $_.Cancel = $true } })
+    $script:FermerMenu = $false
+    foreach ($nom in (Lister-Roles)) {
+        $item = New-Object System.Windows.Forms.ToolStripMenuItem $nom
+        $item.Tag = $nom
+        $item.add_Click({
+            Basculer-Role $script:IdMenu $this.Tag
+            $choisis = @(Lire-RolesSession $script:IdMenu)
+            foreach ($x in $this.Owner.Items) { if ($x.Tag) { $x.Checked = $(if ($x.Tag -eq $RoleParDefaut) { -not $choisis.Count } else { $choisis -contains $x.Tag }) } }
+            Afficher-Extras
+        })
+        [void]$m.Items.Add($item)
+    }
+    $choisis = @(Lire-RolesSession $s.Id)
+    foreach ($x in $m.Items) { $x.Checked = $(if ($x.Tag -eq $RoleParDefaut) { -not $choisis.Count } else { $choisis -contains $x.Tag }) }
+    [void]$m.Items.Add('-')
+    [void]$m.Items.Add('Open the Roles folder (edit or add a role)', $null, { $script:FermerMenu = $true; $this.Owner.Close(); Start-Process explorer.exe $DossierRoles })
+    $script:MenuFenetre = $m
+    $m.Show($script:BoutonRoles, (New-Object System.Drawing.Point 0, $script:BoutonRoles.Height))
+}
+
+# Documents button: the documents of the session (open, remove), and adding some.
+function Montrer-MenuDocuments {
+    $s = Session-Affichee
+    if (-not $s.Id -and -not $s.Fantome) { return }
+    $script:IdMenu = $s.Id
+    $m = New-Object System.Windows.Forms.ContextMenuStrip
+    $docs = @(Lister-DocumentsSession $s.Id)
+    foreach ($d in $docs) {
+        $item = New-Object System.Windows.Forms.ToolStripMenuItem $d.Name
+        $ouvrir = $item.DropDownItems.Add('Open')
+        $ouvrir.Tag = $d.FullName
+        $ouvrir.add_Click({ Start-Process -FilePath $this.Tag })
+        $retirer = $item.DropDownItems.Add($(if ($s.Fantome) { 'Remove from this session' } else { 'Remove from this session (to the Recycle Bin)' }))
+        $retirer.Tag = $d.FullName
+        $retirer.add_Click({ Retirer-DocumentSession $script:IdMenu $this.Tag; Afficher-Extras })
+        [void]$m.Items.Add($item)
+    }
+    if (-not $docs.Count) { $vide = $m.Items.Add('No document in this session yet'); $vide.Enabled = $false }
+    [void]$m.Items.Add('-')
+    [void]$m.Items.Add('Add documents...', $null, { Choisir-Documents })
+    if ($docs.Count) { [void]$m.Items.Add('Open the folder', $null, { Start-Process explorer.exe (Dossier-DocumentsSession $script:IdMenu) }) }
+    $script:MenuFenetre = $m
+    $m.Show($script:BoutonDocuments, (New-Object System.Drawing.Point 0, $script:BoutonDocuments.Height))
+}
+
+# Picks files to copy into the documents of the session (the originals are not touched).
+function Choisir-Documents {
+    $d = New-Object System.Windows.Forms.OpenFileDialog
+    $d.Multiselect = $true
+    $d.Title = "$Nom - documents for this session"
+    $d.Filter = 'Documents|*.md;*.txt;*.pdf;*.docx;*.doc;*.odt;*.rtf;*.csv;*.xlsx;*.xls;*.pptx;*.html;*.htm;*.json;*.xml;*.yaml;*.yml;*.png;*.jpg;*.jpeg|All files|*.*'
+    # The window hides when it loses the focus: not for this dialog.
+    $script:DialogueOuvert = $true
+    try { $ok = ($d.ShowDialog($script:Fenetre) -eq 'OK') } finally { $script:DialogueOuvert = $false }
+    if ($ok) { try { [void](Ajouter-DocumentsSession $script:IdMenu $d.FileNames) } catch { Noter "Documents: $($_.Exception.Message)" } }
+    Afficher-Extras
+    $script:Fenetre.Activate()
 }
 
 # Reads everything again and shows the session in use (the first of the list).
@@ -435,6 +614,10 @@ function Remplir-Fenetre {
     $script:ListeSessions.Items.Clear()
     foreach ($s in $script:Choix) { [void]$script:ListeSessions.Items.Add($s.Titre) }
     $script:ListeSessions.SelectedIndex = 0
+    # The chosen time, or the closest choice when the file holds another number of days.
+    $jours = Lire-Conservation
+    $proche = @($ChoixConservation.Keys | Sort-Object { [math]::Abs($ChoixConservation[$_] - $jours) })[0]
+    $script:ListeConservation.SelectedItem = $proche
     $script:ModePersiste.Checked = -not $script:Fantome
     $script:ModeFantome.Checked = $script:Fantome
     foreach ($c in $script:BoutonSession, $script:ModePersiste, $script:ModeFantome) { $c.Enabled = -not $script:Proc }
@@ -492,10 +675,23 @@ function Montrer-Resultat {
             $this.Visible = $false
         })
         $bulles = New-Object System.Windows.Forms.ToolTip
-        $bulles.SetToolTip($persiste, 'The session is kept: its tasks stay in the list for 30 days and it can be resumed.')
-        $bulles.SetToolTip($fantome, 'Nothing is kept: no notes, and the folder of each task is deleted when the task ends.')
+        $bulles.SetToolTip($persiste, 'The session is kept: its tasks stay in the list for the time chosen at the bottom, and it can be resumed.')
+        $bulles.SetToolTip($fantome, 'Nothing is kept: no notes, the folder of each task is deleted when the task ends, and the documents added to the session are deleted when it ends.')
         $bulles.SetToolTip($taille, 'Back to the normal size of this window.')
         $modes.Controls.AddRange(@($fantome, $persiste, $taille))
+        # Row 3: the roles and the documents of the session shown. They apply to its next tasks.
+        $extras = New-Object System.Windows.Forms.Panel
+        $extras.Dock = 'Top'; $extras.Height = 30; $extras.Padding = New-Object System.Windows.Forms.Padding 3, 2, 3, 2
+        $roles = New-Object System.Windows.Forms.Button
+        $roles.Dock = 'Fill'; $roles.TextAlign = 'MiddleLeft'; $roles.Font = $police
+        $roles.add_Click({ Montrer-MenuRoles })
+        $documents = New-Object System.Windows.Forms.Button
+        $documents.Dock = 'Right'; $documents.Font = $police
+        $documents.Width = [System.Windows.Forms.TextRenderer]::MeasureText('Documents (99)', $police).Width + 24
+        $documents.add_Click({ Montrer-MenuDocuments })
+        $script:BullesFenetre = $bulles
+        $bulles.SetToolTip($documents, 'Documents for this session only (copies of your files): Claude reads them for its tasks, on top of System-Context.')
+        $extras.Controls.AddRange(@($roles, $documents))
         # Row 3: the tasks of the session, older on the left, newer on the right.
         $barre = New-Object System.Windows.Forms.Panel
         $barre.Dock = 'Top'; $barre.Height = 28
@@ -508,15 +704,35 @@ function Montrer-Resultat {
         $titre = New-Object System.Windows.Forms.Label
         $titre.Dock = 'Fill'; $titre.TextAlign = 'MiddleCenter'; $titre.Font = $police
         $barre.Controls.AddRange(@($titre, $ancien, $recent))
+        # Bottom row, the one setting: how long the tasks of the kept sessions stay.
+        $bas = New-Object System.Windows.Forms.Panel
+        $bas.Dock = 'Bottom'; $bas.Height = 28; $bas.Padding = New-Object System.Windows.Forms.Padding 6, 3, 3, 3
+        $libelle = New-Object System.Windows.Forms.Label
+        $libelle.Text = 'Persisted sessions are kept for'; $libelle.Dock = 'Fill'; $libelle.TextAlign = 'MiddleLeft'; $libelle.Font = $police
+        $duree = New-Object System.Windows.Forms.ComboBox
+        $duree.DropDownStyle = 'DropDownList'; $duree.Dock = 'Right'; $duree.Width = 84; $duree.Font = $police
+        foreach ($nom in $ChoixConservation.Keys) { [void]$duree.Items.Add($nom) }
+        $duree.add_SelectedIndexChanged({
+            if ($script:Remplissage -or $this.SelectedIndex -lt 0) { return }
+            Enregistrer-Conservation ($ChoixConservation[[string]$this.SelectedItem])
+        })
+        $aide = 'Each task of a persisted session is deleted after this time, with its screenshots; a session goes when its last task goes. A shorter time applies at the next cleanup (after the next task, or within 6 hours). Ghost Mode keeps nothing, whatever this says.'
+        $bulles.SetToolTip($libelle, $aide)
+        $bulles.SetToolTip($duree, $aide)
+        $bas.Controls.AddRange(@($libelle, $duree))
         $f.Controls.Add($t)
+        $f.Controls.Add($bas)
         $f.Controls.Add($barre)
+        $f.Controls.Add($extras)
         $f.Controls.Add($modes)
         $f.Controls.Add($haut)
-        $f.add_Deactivate({ $this.Hide() })
+        $script:ListeConservation = $duree
+        $f.add_Deactivate({ if (-not $script:DialogueOuvert) { $this.Hide() } })
         $script:Fenetre = $f; $script:ZoneResultat = $t; $script:TitreResultat = $titre
         $script:BoutonAncien = $ancien; $script:BoutonRecent = $recent
         $script:ListeSessions = $liste; $script:BoutonSession = $nouvelle; $script:BoutonReprendre = $reprendre
         $script:ModePersiste = $persiste; $script:ModeFantome = $fantome; $script:BoutonTaille = $taille
+        $script:BoutonRoles = $roles; $script:BoutonDocuments = $documents
     }
     Remplir-Fenetre
     $script:BoutonTaille.Visible = ($script:Fenetre.Size -ne $TailleDefaut)
@@ -552,18 +768,153 @@ $OptionsTri = '--tools Read --effort low'
 $OptionsTache = '--tools Read,Write,Edit,Glob,Grep'
 $McpScript = Join-Path $Outils 'mcp.ps1'
 
-# Contexts (System-Context\Contexts\<name>.md): who the user is and how to work for them. One is active at a
-# time (Context menu, data/context.txt); "Default" when none is chosen or when the chosen file is gone.
-function Lister-Contextes {
-    $noms = @(Get-ChildItem -LiteralPath $DossierContextes -Filter *.md -File -ErrorAction SilentlyContinue |
-        ForEach-Object { $_.BaseName } | Sort-Object)
-    @($noms | Where-Object { $_ -eq 'Default' }) + @($noms | Where-Object { $_ -ne 'Default' })
+# --- Roles of a session ---
+# A role (System-Context\Roles\<name>.md) says who the user is and how to work for them: Network engineer,
+# Student... Each session has its own, one or more, ticked in the Sessions window or the icon menu (Roles):
+# data\sessions\<id>.roles.txt, one name per line; those of the ghost session only live in the memory of the app.
+# A new session starts with the roles of the one it follows. No role ticked (or none of their files left):
+# "General assistant". The roles come on top of the user's standing instructions, never instead of them.
+$RoleParDefaut = 'General assistant'
+$script:RolesFantome = @()
+function Lister-Roles {
+    $noms = @(Get-ChildItem -LiteralPath $DossierRoles -Filter *.md -File -ErrorAction SilentlyContinue | ForEach-Object { $_.BaseName } | Sort-Object)
+    @($noms | Where-Object { $_ -eq $RoleParDefaut }) + @($noms | Where-Object { $_ -ne $RoleParDefaut })
 }
-function Lire-ContexteActif {
-    $nom = if (Test-Path -LiteralPath $FichierContexte) { "$(Get-Content -LiteralPath $FichierContexte -Raw -Encoding UTF8)".Trim() } else { '' }
-    if (-not $nom -or -not (Test-Path -LiteralPath (Join-Path $DossierContextes "$nom.md"))) { $nom = 'Default' }
-    $texte = Get-InstructionUtilisateur (Join-Path $DossierContextes "$nom.md")
-    [pscustomobject]@{ Nom = $nom; Texte = $texte; Coupe = (Test-InstructionCoupee (Join-Path $DossierContextes "$nom.md")) }
+function Fichier-RolesSession([string]$id) { Join-Path $DossierSessions "$id.roles.txt" }
+# The roles ticked for a session ('' = the ghost session): only those whose file is still there.
+function Lire-RolesSession([string]$id) {
+    $noms = if (-not $id) { @($script:RolesFantome) }
+            elseif (Test-Path -LiteralPath (Fichier-RolesSession $id)) { @([IO.File]::ReadAllLines((Fichier-RolesSession $id), [Text.Encoding]::UTF8)) }
+            else { @() }
+    $existants = @(Lister-Roles)
+    # Callers wrap the result in @(): it can be one name, or nothing.
+    $noms | ForEach-Object { "$_".Trim() } | Where-Object { $_ -and $_ -ne $RoleParDefaut -and $existants -contains $_ } | Select-Object -Unique
+}
+function Enregistrer-RolesSession([string]$id, [string[]]$noms) {
+    $noms = @($noms | Where-Object { $_ -and $_ -ne $RoleParDefaut } | Select-Object -Unique)
+    if (-not $id) { $script:RolesFantome = $noms; return }
+    New-Item -ItemType Directory -Force $DossierSessions | Out-Null
+    if ($noms.Count) { [IO.File]::WriteAllLines((Fichier-RolesSession $id), [string[]]$noms, (New-Object System.Text.UTF8Encoding $false)) }
+    else { Remove-Item -LiteralPath (Fichier-RolesSession $id) -Force -ErrorAction SilentlyContinue }
+}
+function Nom-Roles([string[]]$roles) { if (@($roles).Count) { @($roles) -join ', ' } else { $RoleParDefaut } }
+# Ticks or unticks one role of a session. General assistant means no specific role: it unticks the others.
+function Basculer-Role([string]$id, [string]$nom) {
+    $roles = @(Lire-RolesSession $id)
+    if ($nom -eq $RoleParDefaut) { $roles = @() }
+    elseif ($roles -contains $nom) { $roles = @($roles | Where-Object { $_ -ne $nom }) }
+    else { $roles += $nom }
+    Enregistrer-RolesSession $id $roles
+    Noter ('Roles of ' + $(if ($id) { "session $id" } else { 'the ghost session' }) + ': ' + (Nom-Roles $roles))
+}
+# The session in use: its id, '' for the ghost session.
+function Id-SessionEnCours { if ($script:Fantome) { '' } else { Lire-Session } }
+# The roles of the session in use, as a task gets them: their names, and for each one its text (without
+# comments) and whether it was cut at 4000 characters.
+function Lire-RolesActifs {
+    $noms = @(Lire-RolesSession (Id-SessionEnCours))
+    $roles = foreach ($nom in $(if ($noms.Count) { $noms } else { @($RoleParDefaut) })) {
+        $f = Join-Path $DossierRoles "$nom.md"
+        if (Test-Path -LiteralPath $f) { [pscustomobject]@{ Nom = $nom; Texte = (Get-InstructionUtilisateur $f); Coupe = (Test-InstructionCoupee $f) } }
+    }
+    [pscustomobject]@{ Noms = (Nom-Roles $noms); Roles = @($roles) }
+}
+
+# Versions before 1.0 had contexts (System-Context\Contexts, one active for all tasks, data\context.txt) instead
+# of roles. Once: a context file the user wrote or changed becomes a role, the context that was active becomes
+# the role of the current session, and the old folder goes to the Recycle Bin.
+$EmpreintesContextes = @(   # the context files as versions 0.6 to 0.9 installed them (SHA-256, LF, trimmed)
+    '270dec11454d1fecaea7e3716c12fa16998458de3ad47ff0f2897089cbcb8490', '49f15cbade41b1a643d27d6a88cd119231039fc9ae18aadbaabb2df40f0cac51',
+    'ed3a61232513c0fc8bc74da2b4154c322c021cdb7541300023681a6fe9d41c89', '1332bd0e1cfdf93ccb9b37e3b044ff3c036876a1328b01f7d7174ac5a0219a81',
+    '7b2c3b2848ebf525bf7511c7cbe34f72af9d1fabea7f2d4dff3ff9eec0cc1533', 'cca023a7451218628ad5ec98f442a0de6b855b75fc9610dc6967cd4f57c15b4a',
+    'cdbc40011a089a85a3cbb90e15c4200104ffe3811ab7ac6f641095d824f864f9', '79e6c3d4108e0682525f29af6692627c9cb6fb896d32435205f6667d4e621640',
+    '96731d63e414cb092f909475b01dc34131cbbe2544109193a2f376acdbbc8afc')
+$RolesDesContextes = @{ 'Default' = 'General assistant'; 'Networking' = 'Network engineer'; 'Software development' = 'Software developer'
+    'Studies' = 'Student'; 'IT administration' = 'IT administrator'; 'Defensive security' = 'Security analyst'
+    'Business and management' = 'Business professional'; 'Office productivity' = 'Office assistant'; 'Personal use' = 'Personal assistant' }
+function Empreinte-Texte([string]$chemin) {
+    $texte = [IO.File]::ReadAllText($chemin, [Text.Encoding]::UTF8).Replace("`r`n", "`n").Trim()
+    -join ([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($texte)) | ForEach-Object { $_.ToString('x2') })
+}
+function Migrer-Contextes {
+    $actif = if (Test-Path -LiteralPath $FichierContexte) { "$(Get-Content -LiteralPath $FichierContexte -Raw -Encoding UTF8)".Trim() } else { '' }
+    $role = ''
+    if (Test-Path -LiteralPath $AncienDossierContextes) {
+        foreach ($f in @(Get-ChildItem -LiteralPath $AncienDossierContextes -Filter *.md -File)) {
+            if ($EmpreintesContextes -contains (Empreinte-Texte $f.FullName)) { continue }   # as installed: its role replaces it
+            $cible = Join-Path $DossierRoles $f.Name
+            if (Test-Path -LiteralPath $cible) { $cible = Join-Path $DossierRoles "$($f.BaseName) (context).md" }
+            if (-not (Test-Path -LiteralPath $cible)) { Copy-Item -LiteralPath $f.FullName -Destination $cible; Noter "Context $($f.BaseName) kept as the role $([IO.Path]::GetFileNameWithoutExtension($cible))" }
+            if ($f.BaseName -eq $actif) { $role = [IO.Path]::GetFileNameWithoutExtension($cible) }
+        }
+        Send-Corbeille $AncienDossierContextes
+        Noter 'Contexts replaced by Roles: the old Contexts folder is in the Recycle Bin'
+    }
+    if (Test-Path -LiteralPath $FichierContexte) {
+        if (-not $role) { $role = $(if ($RolesDesContextes.ContainsKey($actif)) { $RolesDesContextes[$actif] } else { $actif }) }
+        $id = Lire-Session
+        if ($role -and $role -ne $RoleParDefaut -and (Test-Path -LiteralPath (Join-Path $DossierRoles "$role.md")) -and -not (Test-Path -LiteralPath (Fichier-RolesSession $id))) {
+            Enregistrer-RolesSession $id @($role)
+            Noter "Context $actif`: the current session has the role $role"
+        }
+        Remove-Item -LiteralPath $FichierContexte -Force
+    }
+}
+
+# --- Documents of a session ---
+# On top of the documents of System-Context (read for every task), each session can have its own: copies of
+# files the user adds in the Sessions window, in System-Context\Session documents\<id> (read-only for Claude, like
+# the rest of System-Context). They go with their session: to the Recycle Bin when it expires. Those of the ghost
+# session are in "Ghost session", and are deleted when it ends: they are only copies, the originals stay.
+$NomDocumentsFantome = 'Ghost session'
+# A file that counts as a document: not hidden, not a system or temporary file.
+function Est-Document($f) {
+    [int]($f.Attributes -band ([IO.FileAttributes]::Hidden -bor [IO.FileAttributes]::System)) -eq 0 -and $f.Name -notmatch '^(\.|~\$|desktop\.ini$|thumbs\.db$)'
+}
+function Dossier-DocumentsSession([string]$id) { Join-Path $DossierDocumentsSessions $(if ($id) { $id } else { $NomDocumentsFantome }) }
+function Lister-DocumentsSession([string]$id) {
+    # Callers wrap the result in @(): it can be one file, or nothing.
+    Get-ChildItem -LiteralPath (Dossier-DocumentsSession $id) -File -Recurse -ErrorAction SilentlyContinue | Where-Object { Est-Document $_ } | Sort-Object Name
+}
+# Copies files into the documents of a session; a name already there gets a number. Returns how many were added.
+function Ajouter-DocumentsSession([string]$id, [string[]]$fichiers) {
+    $dossier = Dossier-DocumentsSession $id
+    New-Item -ItemType Directory -Force $dossier | Out-Null
+    $n = 0
+    foreach ($f in $fichiers) {
+        if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { continue }
+        $base = [IO.Path]::GetFileNameWithoutExtension($f); $ext = [IO.Path]::GetExtension($f)
+        $cible = Join-Path $dossier "$base$ext"; $i = 2
+        while (Test-Path -LiteralPath $cible) { $cible = Join-Path $dossier "$base ($i)$ext"; $i++ }
+        Copy-Item -LiteralPath $f -Destination $cible
+        $n++
+    }
+    Noter ("$n document(s) added to " + $(if ($id) { "session $id" } else { 'the ghost session' }))
+    $n
+}
+# Removes one document of a session: to the Recycle Bin, or deleted for a ghost session (a copy).
+function Retirer-DocumentSession([string]$id, [string]$chemin) {
+    if (-not $chemin.StartsWith((Dossier-DocumentsSession $id) + '\', [StringComparison]::OrdinalIgnoreCase)) { return }
+    if ($id) { Send-Corbeille $chemin } else { Remove-Item -LiteralPath $chemin -Force }
+    Noter ('Document removed from ' + $(if ($id) { "session $id" } else { 'the ghost session' }) + ": $(Split-Path $chemin -Leaf)")
+}
+function Vider-DocumentsFantome {
+    $dossier = Dossier-DocumentsSession ''
+    if (Test-Path -LiteralPath $dossier) { Remove-Item -LiteralPath $dossier -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+# One line per document for the prompt: path and size, and for a PDF where its extracted text is.
+function Lister-Fichiers([object[]]$fichiers, $extraits, [string]$dossier) {
+    $liste = ($fichiers | Select-Object -First 50 | ForEach-Object {
+        $ligne = '  {0}  ({1:N0} KB)' -f $_.FullName, [math]::Max(1, [math]::Ceiling($_.Length / 1KB))
+        $e = $extraits[$_.FullName]
+        if ($e -and $e.Scanne) { $ligne += ": scanned PDF, $($e.Pages) page(s), no text; look at its pages with ""page-pdf""" }
+        elseif ($e) { $ligne += ": PDF, $($e.Pages) page(s), text extracted to $($e.Txt)" }
+        elseif ($_.Extension -eq '.pdf' -and -not (Test-Poppler)) { $ligne += ': PDF not readable yet (Poppler is being installed), ignore it' }
+        $ligne
+    }) -join "`n"
+    if ($fichiers.Count -gt 50) { $liste += "`n  ... and $($fichiers.Count - 50) more files in $dossier (find them with Glob or Grep)" }
+    $liste
 }
 
 # Claude Code update: at startup, then once a day. The app only runs "claude -p", which may never update it,
@@ -654,15 +1005,18 @@ function Lancer-Tache($capture, [string]$instruction) {
         if (-not (Test-Path -LiteralPath $Claude)) { $script:Claude = Trouver-Claude }
         if (-not (Test-Path -LiteralPath $Claude)) { throw "Claude Code not found ($Claude). Install it, log in once, then try again: see the README." }
         $script:TerminalTache = $script:Terminal
-        $actif = Lire-ContexteActif
+        $actifs = Lire-RolesActifs
         # Texts cut at 4000 characters: said in the result, so that the user does not think Claude ignored the end.
         $script:Coupes = @()
-        if ($actif.Coupe) { $script:Coupes += "Contexts\$($actif.Nom).md" }
+        foreach ($r in $actifs.Roles) { if ($r.Coupe) { $script:Coupes += "Roles\$($r.Nom).md" } }
         if (Test-InstructionCoupee $FichierInstructions) { $script:Coupes += 'instructions.md' }
         foreach ($coupe in $script:Coupes) { Noter "$coupe is longer than 4000 characters: its end was not sent to Claude" }
-        $contexteActif = "`nActive context: $($actif.Nom) (chosen by the user in the icon menu)."
-        if ($actif.Texte) { $contexteActif += " It says who the user is and how to work for them:`n$($actif.Texte)" }
-        $contexteActif += "`n"
+        # The roles of the session: who the user is and how to work for them, on top of the standing instructions.
+        $textes = @($actifs.Roles | Where-Object { $_.Texte } | ForEach-Object { $_.Texte })
+        $roles = "`nRoles of this session: $($actifs.Noms) (chosen by the user for this session)."
+        if ($textes.Count -gt 1) { $roles += " Work in all of these roles; together they say who the user is and how to work for them:`n" + ($textes -join "`n`n") }
+        elseif ($textes.Count) { $roles += " Work in this role; it says who the user is and how to work for them:`n$($textes[0])" }
+        $roles += "`n"
         $precision = if ($instruction) { "`nUser instruction for this task (takes priority over everything else): $instruction`n" } else { '' }
 
         # Optional context from System-Context: instructions.md (user's part, without comments) + list of documents.
@@ -696,42 +1050,45 @@ They may be outdated: the screen and the user's instructions take priority. To s
 
 "@
         }
-        # Documents: everything except instructions.md, memory.md, the folder's README, the Contexts folder and
+        # Documents: those of this session (Sessions window), then those of System-Context for every task: everything
+        # except instructions.md, memory.md, the folder's README, the roles, the documents of the sessions and
         # system/hidden/temporary files.
         $documents = ''
+        $propres = @(Lister-DocumentsSession (Id-SessionEnCours))
         $tous = @(Get-ChildItem $Contexte -File -Recurse -ErrorAction SilentlyContinue | Where-Object {
             $_.FullName -ne $FichierInstructions -and $_.FullName -ne $FichierNotes -and
-            -not $_.FullName.StartsWith($DossierContextes + '\', [StringComparison]::OrdinalIgnoreCase) -and
-            $_.FullName -ne $AnciennesInstructions -and $_.FullName -ne $FichierLisezMoi -and
-            [int]($_.Attributes -band ([IO.FileAttributes]::Hidden -bor [IO.FileAttributes]::System)) -eq 0 -and
-            $_.Name -notmatch '^(\.|~\$|desktop\.ini$|thumbs\.db$)'
+            -not $_.FullName.StartsWith($DossierRoles + '\', [StringComparison]::OrdinalIgnoreCase) -and
+            -not $_.FullName.StartsWith($AncienDossierContextes + '\', [StringComparison]::OrdinalIgnoreCase) -and
+            -not $_.FullName.StartsWith($DossierDocumentsSessions + '\', [StringComparison]::OrdinalIgnoreCase) -and
+            $_.FullName -ne $AnciennesInstructions -and $_.FullName -ne $FichierLisezMoi -and (Est-Document $_)
         })
-        if ($tous.Count) {
+        if ($propres.Count -or $tous.Count) {
             # PDF: text extracted by the app (Claude Code needs pdftoppm to read a PDF by itself).
             $extraits = @{}
             if (Test-Poppler) {
-                foreach ($pdf in ($tous | Where-Object { $_.Extension -eq '.pdf' })) {
+                foreach ($pdf in (@($propres) + @($tous) | Where-Object { $_.Extension -eq '.pdf' })) {
                     try { $extraits[$pdf.FullName] = Export-PdfTexte $pdf.FullName $CacheContexte }
                     catch { Noter "Unreadable PDF ($($pdf.FullName)): $($_.Exception.Message)" }
                 }
                 Clear-PdfCache $CacheContexte @($extraits.Values | ForEach-Object { $_.Txt })
             }
-            $liste = ($tous | Select-Object -First 50 | ForEach-Object {
-                $ligne = '  {0}  ({1:N0} KB)' -f $_.FullName, [math]::Max(1, [math]::Ceiling($_.Length / 1KB))
-                $e = $extraits[$_.FullName]
-                if ($e -and $e.Scanne) { $ligne += ": scanned PDF, $($e.Pages) page(s), no text; look at its pages with ""page-pdf""" }
-                elseif ($e) { $ligne += ": PDF, $($e.Pages) page(s), text extracted to $($e.Txt)" }
-                elseif ($_.Extension -eq '.pdf' -and -not (Test-Poppler)) { $ligne += ': PDF not readable yet (Poppler is being installed), ignore it' }
-                $ligne
-            }) -join "`n"
-            if ($tous.Count -gt 50) { $liste += "`n  ... and $($tous.Count - 50) more files in $Contexte (find them with Glob or Grep)" }
-            $documents = @"
+            if ($propres.Count) {
+                $documents += @"
 
-Context documents provided by the user (courses, notes, documentation, sources...). They are more reliable than your general knowledge: before answering, use Read on the ones related to the task (same subject, same course, same hardware or software), and rely on them first. Ignore the ones that are unrelated.
-For a PDF, read its extracted text (the .txt file shown, with page numbers) rather than the PDF itself; for a long document, search that .txt with Grep first. To see a diagram, a figure or a scanned page, use the "page-pdf" action of the control tool, then read the image.
-$liste
+Documents of this session: the user added them for the work of this session (on top of the standing instructions and the other documents, never instead of them). Before answering, use Read on the ones related to the task, and rely on them before anything else.
+$(Lister-Fichiers $propres $extraits (Dossier-DocumentsSession (Id-SessionEnCours)))
 
 "@
+            }
+            if ($tous.Count) {
+                $documents += @"
+
+Context documents provided by the user (courses, notes, documentation, sources...). They are more reliable than your general knowledge: before answering, use Read on the ones related to the task (same subject, same course, same hardware or software), and rely on them first. Ignore the ones that are unrelated.
+$(Lister-Fichiers $tous $extraits $Contexte)
+
+"@
+            }
+            $documents += "For a PDF, read its extracted text (the .txt file shown, with page numbers) rather than the PDF itself; for a long document, search that .txt with Grep first. To see a diagram, a figure or a scanned page, use the `"page-pdf`" action of the control tool, then read the image.`n"
         }
 
         # What was worked on lately in the work folder: it often tells what the screen is about.
@@ -760,8 +1117,8 @@ You were started by a keyboard shortcut: the user just pressed it so that you do
 
 Screenshot: $png ($largeur x $hauteur px). Start by reading it with the Read tool.
 Active window: $($fenetre[0]) - "$($fenetre[1])"
-$contexteActif$instructions$memoire$documents$precision
-1. Find what is being asked before you act: never act at random. Work it out from everything you were given, in this order: the user's instruction for this task, if there is one; their standing instructions; the active context; your notes of this session; the documents and the recent files listed above (read the ones that relate to what is on screen); then the screen itself. Together they tell you who the user is, what they are working on and how they want it done: the task is what the screen calls for in that light, most often the next step of that work. If all of this still does not tell you what to do, do not guess an action: change nothing, and say in your final answer what you see and what you would need to know.
+$roles$instructions$memoire$documents$precision
+1. Find what is being asked before you act: never act at random. Work it out from everything you were given, in this order: the user's instruction for this task, if there is one; their standing instructions; the roles of this session; your notes of this session; the documents of this session, then the other documents and the recent files listed above (read the ones that relate to what is on screen); then the screen itself. Together they tell you who the user is, what they are working on and how they want it done: the task is what the screen calls for in that light, most often the next step of that work. If all of this still does not tell you what to do, do not guess an action: change nothing, and say in your final answer what you see and what you would need to know.
 2. Do the whole task, from start to finish.
    - If the answer must go on the screen (ticking boxes, filling in fields, clicking, writing in an open document, typing commands in a console), control the PC with the tool below. After each important action, take a new screenshot to check. One clic is enough for a button, a tab, a link or an item of a tool; keep doubleclic for what only opens with a double-click (a file or a desktop icon). If a click seems to have done nothing, look at a new screenshot before clicking again: a second click on the same spot often closes what the first one opened. If there is more further down (other questions), scroll and continue. You may click Next or Submit on a form, quiz or exercise once everything asked is filled in.
    - If the task asks you to produce something (diagram, document, code, summary, HTML page, SVG...), create the files in the current folder: $Travail
@@ -804,7 +1161,7 @@ Strict rules:
 
         $tri = @"
 Read the image $png with the Read tool. Active window: $($fenetre[0]) - "$($fenetre[1])".
-Active context: $($actif.Nom).
+Roles of this session: $($actifs.Noms).
 $instructions$precision
 What is the task visible on screen? Answer OPUS if it requires calculations (maths, physics, conversions...), programming, technical configuration (network, servers, software), data processing, a diagram to design or long reasoning.
 Answer SONNET for a knowledge question, multiple-choice questions, a simple form, a short text to write, a few clicks, or if it is unclear.
@@ -918,14 +1275,23 @@ function Retirer-RunsFantomes {
 
 function Nettoyer-Runs {
     Retirer-RunsFantomes
-    # Deletes tasks older than a month (the app's internal screenshots) and trims the log.
+    # Deletes the tasks older than the time chosen in the Sessions window (30 days by default) and trims the log.
     $script:DernierNettoyage = Get-Date
-    $limite = (Get-Date).AddDays(-$JoursConserves)
+    $limite = (Get-Date).AddDays(-(Lire-Conservation))
     Get-ChildItem $Runs -Directory | Where-Object { $_.LastWriteTime -lt $limite } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-    # The notes of a session go away with its last task.
+    # A session lives as long as it has a task, or documents added within that time. When it ends, its notes,
+    # title and roles go away, and its documents go to the Recycle Bin. The session in use is always kept.
+    $vivantes = @(Get-ChildItem $Runs -Directory | ForEach-Object { $m = Join-Path $_.FullName 'session.txt'; if (Test-Path -LiteralPath $m) { "$(Get-Content -LiteralPath $m -Raw)".Trim() } })
+    $vivantes += Lire-Session
+    if ($script:Titrage) { $vivantes += $script:Titrage.Id }
+    $dossiersDocs = @(Get-ChildItem -LiteralPath $DossierDocumentsSessions -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^\d{8}-\d{6}(-\d+)?$' })
+    $vivantes += @($dossiersDocs | Where-Object { $_.LastWriteTime -ge $limite } | ForEach-Object { $_.Name })
     if (Test-Path $DossierSessions) {
-        $vivantes = @(Get-ChildItem $Runs -Directory | ForEach-Object { $m = Join-Path $_.FullName 'session.txt'; if (Test-Path -LiteralPath $m) { "$(Get-Content -LiteralPath $m -Raw)".Trim() } })
-        Get-ChildItem $DossierSessions -Filter '*.md' | Where-Object { $vivantes -notcontains $_.BaseName } | Remove-Item -Force -ErrorAction SilentlyContinue
+        Get-ChildItem $DossierSessions -File | Where-Object { $vivantes -notcontains ($_.Name -replace '\..*$', '') } | Remove-Item -Force -ErrorAction SilentlyContinue
+    }
+    foreach ($d in ($dossiersDocs | Where-Object { $vivantes -notcontains $_.Name })) {
+        try { Send-Corbeille $d.FullName; Noter "Session $($d.Name) expired: its documents are in the Recycle Bin" }
+        catch { Noter "Documents of session $($d.Name): $($_.Exception.Message)" }
     }
     if (Test-Path $Journal) {
         $lignes = Get-Content $Journal -Encoding UTF8
@@ -1022,11 +1388,21 @@ function Processus-Fini {
         $script:Dernier = "The task failed (code $code, $script:Modele, $duree s).`n$(Lire-Run 'responses\task-errors.txt')`n$reponse".Trim()
         $icone.Icon = $IconeErreur; Infobulle 'error (click to see)'
     }
+    $fini = ($code -eq 0 -and $reponse)
     Finir-Run (Format-Deroule $deroule)
     Noter "Task finished (code $code, $duree s): $script:Run"
+    # The first finished task of a session gives it its title (asked to Haiku in the background).
+    if ($fini -and -not $script:FantomeTache) {
+        $id = Lire-Session
+        if (-not (Lire-TitreSession $id)) { try { Demarrer-Titrage $id $script:InstructionTache $reponse } catch { Noter "Session title: $($_.Exception.Message)" } }
+    }
     Nettoyer-Runs
 }
 
+# Before 1.0: contexts instead of roles (once). The ghost session of the last run is gone: its documents too.
+try { Migrer-Contextes } catch { Noter "Contexts to roles: $($_.Exception.Message)" }
+Vider-DocumentsFantome
+if ($script:Fantome) { $script:RolesFantome = @(Lire-RolesSession (Lire-Session)) }
 Nettoyer-Runs
 
 # Animation + task monitoring, cleanup every 6 h, Claude Code update at startup then every 24 h.
@@ -1039,6 +1415,7 @@ $minuteur.add_Tick({
         if ($script:Maj -and -not $script:Maj.HasExited -and ((Get-Date) - $script:DerniereMaj).TotalMinutes -ge 10) {
             try { & taskkill.exe /PID $script:Maj.Id /T /F | Out-Null } catch { }   # stuck update: the next try is in 24 h
         }
+        if ($script:Titrage) { Finir-Titrage }
         if (-not $script:Proc) { return }
         if ($script:Proc.HasExited) { Processus-Fini; return }
         $script:Image = ($script:Image + 1) % $IconesTravail.Count
@@ -1114,30 +1491,27 @@ $menuTerminal.add_Click({
     Noter "Terminal access: $etat"
 })
 $menu.Items.Add($menuTerminal) | Out-Null
-# Context: one .md file of System-Context\Contexts is active. The list is read again each time the menu opens,
-# so a file added, renamed or removed by the user shows at once. The active one is in the menu title.
-$menuContexte = New-Object System.Windows.Forms.ToolStripMenuItem 'Context'
-function Remplir-MenuContexte {
-    $actif = (Lire-ContexteActif).Nom
-    $menuContexte.Text = "Context: $actif"
-    $menuContexte.DropDownItems.Clear()
-    foreach ($nom in (Lister-Contextes)) {
+# Roles of the session in use (the same as in the Sessions window): one item per .md file of System-Context\Roles,
+# ticked when the session has it. The list is read again each time the menu opens, so a file added, renamed or
+# removed by the user shows at once. The roles ticked are in the menu title.
+$menuRoles = New-Object System.Windows.Forms.ToolStripMenuItem 'Roles'
+function Remplir-MenuRoles {
+    $choisis = @(Lire-RolesSession (Id-SessionEnCours))
+    $menuRoles.Text = "Roles: $(Nom-Roles $choisis)"
+    $menuRoles.DropDownItems.Clear()
+    foreach ($nom in (Lister-Roles)) {
         $item = New-Object System.Windows.Forms.ToolStripMenuItem $nom
         $item.Tag = $nom
-        $item.Checked = ($nom -eq $actif)
-        $item.add_Click({
-            [IO.File]::WriteAllText($FichierContexte, $this.Tag, (New-Object System.Text.UTF8Encoding $false))
-            Noter "Context: $($this.Tag)"
-            Remplir-MenuContexte
-        })
-        $menuContexte.DropDownItems.Add($item) | Out-Null
+        $item.Checked = $(if ($nom -eq $RoleParDefaut) { -not $choisis.Count } else { $choisis -contains $nom })
+        $item.add_Click({ Basculer-Role (Id-SessionEnCours) $this.Tag; Remplir-MenuRoles })
+        $menuRoles.DropDownItems.Add($item) | Out-Null
     }
-    $menuContexte.DropDownItems.Add('-') | Out-Null
-    $menuContexte.DropDownItems.Add('Open the Contexts folder', $null, { Start-Process explorer.exe $DossierContextes }) | Out-Null
+    $menuRoles.DropDownItems.Add('-') | Out-Null
+    $menuRoles.DropDownItems.Add('Open the Roles folder', $null, { Start-Process explorer.exe $DossierRoles }) | Out-Null
 }
-Remplir-MenuContexte
-$menu.add_Opening({ try { Remplir-MenuContexte } catch { Noter "Context menu: $($_.Exception.Message)" } })
-$menu.Items.Add($menuContexte) | Out-Null
+Remplir-MenuRoles
+$menu.add_Opening({ try { Remplir-MenuRoles } catch { Noter "Roles menu: $($_.Exception.Message)" } })
+$menu.Items.Add($menuRoles) | Out-Null
 $menu.Items.Add("Open the $Nom folder", $null, { Start-Process explorer.exe $Travail }) | Out-Null
 $menu.Items.Add('-') | Out-Null
 $menu.Items.Add('Quit', $null, {
