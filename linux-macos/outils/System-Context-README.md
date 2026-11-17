@@ -20,7 +20,7 @@ This file is yours: neither ClaudeScreen nor Claude ever changes it.
 
 ## Roles: who you are and how to work for you
 
-The `Roles` folder holds one small file per role: General assistant, Student, Software developer,
+The `Roles` folder holds one small file per role: General assistant, Professor, Software developer,
 Network engineer, Office assistant... Each session has its own roles, one or more: tick them with the
 **Roles** button of the Sessions window, or in the icon menu (**Roles: ...**). General assistant is used
 when no other role is ticked. The roles come on top of `instructions.md`, never instead of it.

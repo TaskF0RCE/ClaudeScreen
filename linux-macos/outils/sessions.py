@@ -142,9 +142,8 @@ EMPREINTES_CONTEXTES = {
     '96731d63e414cb092f909475b01dc34131cbbe2544109193a2f376acdbbc8afc'}
 ROLES_DES_CONTEXTES = {
     'Default': 'General assistant', 'Networking': 'Network engineer', 'Software development': 'Software developer',
-    'Studies': 'Student', 'IT administration': 'IT administrator', 'Defensive security': 'Security analyst',
-    'Business and management': 'Business professional', 'Office productivity': 'Office assistant',
-    'Personal use': 'Personal assistant'}
+    'IT administration': 'IT administrator', 'Defensive security': 'Security analyst',
+    'Business and management': 'Business professional', 'Office productivity': 'Office assistant'}
 
 
 def empreinte(chemin):
