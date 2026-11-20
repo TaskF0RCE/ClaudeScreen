@@ -355,9 +355,11 @@ Automatic cleanup: at startup and then every 6 hours, the app permanently delete
 - Precise mouse work (drag and drop, cabling in a simulator) is slow and not always reliable.
 - For websites, the Claude in Chrome extension is often more reliable: it reads the page content directly instead of going through screenshots.
 - Only one screen is captured: the one the mouse is on when you press the shortcut.
-- The macOS/Linux port has the Sessions window, the roles, the session documents and the MCP server, but no Terminal access (see its README). It has not been tried on as many machines as the Windows version.
+- The macOS/Linux port has the same features (Sessions window, roles, session documents, MCP server, Terminal access with the same guard), with shell commands instead of PowerShell (see its README). It has not been tried on as many machines as the Windows version.
 
 ## Contributing and versions
 
 The workflow (issue → branch → PR → review → merge) is described in [CONTRIBUTING.md](CONTRIBUTING.md), with how to run the tests; the easiest way is through the [VeD Opps dashboard](https://taskf0rce.github.io/VeD_Opps/).
 Versions are published automatically (the dashboard's « Nouvelle release » button): see the [releases](../../releases) and `CHANGELOG.md`.
+
+The macOS/Linux fixes, file access limits and Terminal access of the port are by [ninis25](https://github.com/ninis25).

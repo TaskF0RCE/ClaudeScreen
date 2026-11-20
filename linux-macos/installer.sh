@@ -109,7 +109,33 @@ if [ "$OS" != Darwin ] && [ "$OS" != Linux ]; then
     exit 1
 fi
 
-PYSYS="${PYTHON:-python3}"
+assez_recent() {
+    "$1" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' 2>/dev/null
+}
+a_tk() {
+    "$1" -c 'import tkinter' 2>/dev/null
+}
+
+if [ -n "${PYTHON:-}" ]; then
+    PYSYS="$PYTHON"
+elif [ "$OS" = Darwin ]; then
+    # python3 of the PATH if it has Tk (the instruction bar and the Sessions window are then real windows);
+    # otherwise the first Python with Tk among python.org and Homebrew; otherwise python3 of the PATH anyway
+    # (macOS dialog boxes then stand in for the windows).
+    PYSYS="python3"
+    if ! { command -v python3 >/dev/null 2>&1 && a_tk python3; }; then
+        candidats=()
+        for v in $(ls -d /Library/Frameworks/Python.framework/Versions/3.* 2>/dev/null | sort -t. -k2 -n -r); do
+            candidats+=("$v/bin/python3")
+        done
+        candidats+=(/opt/homebrew/bin/python3 /usr/local/bin/python3)
+        for c in "${candidats[@]}"; do
+            if [ -x "$c" ] && assez_recent "$c" && a_tk "$c"; then PYSYS="$c"; break; fi
+        done
+    fi
+else
+    PYSYS="python3"
+fi
 if ! command -v "$PYSYS" >/dev/null 2>&1; then
     if [ "$OS" = Darwin ]; then
         echo "python3 not found. Install Python 3 from https://www.python.org/downloads/macos/ and run this again." >&2
@@ -127,8 +153,13 @@ info "Python : $("$PYSYS" --version) ($(command -v "$PYSYS"))"
 MANQUE=()
 if ! "$PYSYS" -c 'import tkinter' 2>/dev/null; then
     if [ "$OS" = Darwin ]; then
-        avert "Tk missing: windows will use macOS dialog boxes. For real windows:"
-        avert "  brew install python-tk   (Homebrew Python)   or   Python from python.org (Tk included)"
+        avert "Tk missing: the instruction bar and the Sessions window will be macOS dialog boxes. For real windows:"
+        case "$("$PYSYS" -c 'import sys; print(sys.prefix)')" in
+            */homebrew/*|*/Homebrew/*|/usr/local/*)
+                avert "  brew install python-tk@$("$PYSYS" -c 'import sys; print("%d.%d" % sys.version_info[:2])')   then ./installer.sh again" ;;
+            *)
+                avert "  install Python from https://www.python.org/downloads/macos/ (Tk included), then ./installer.sh again" ;;
+        esac
     else
         MANQUE+=("tk")
     fi
@@ -194,6 +225,12 @@ rm -rf "$DIR/outils/pc" "$DIR/outils/icone.png" "$DIR/__pycache__" "$DIR/outils/
        "$DIR/reglages.json" "$DIR/donnees"
 
 # ------------------------------------------------------------------ virtual environment
+# macOS: an environment made without Tk (older install) is rebuilt when the Python found now has Tk.
+if [ "$OS" = Darwin ] && [ -x "$PY" ] && ! a_tk "$PY" && a_tk "$PYSYS"; then
+    info "Rebuilding the Python environment with $PYSYS (it has Tk: real windows)..."
+    "$PY" "$DIR/claude_screen.py" quitter >/dev/null 2>&1 && sleep 2 || true
+    rm -rf "$VENV"
+fi
 if [ ! -x "$PY" ]; then
     info "Creating the Python environment (data/.venv)..."
     if [ "$OS" = Linux ]; then
@@ -322,7 +359,11 @@ if ! "$PY" -c 'import sys; sys.path.insert(0, "'"$DIR"'"); import claude_screen;
     avert "then run \"claude\" once to log in with your account, and type /exit."
 fi
 if [ "$OS" = Darwin ]; then
-    info "Done. Open ClaudeScreen from ~/Applications (or: open \"$APP\")."
+    # Restart the app with the new files (lancer.sh starts Python directly: on macOS 26 the menu bar icon
+    # showed this way, and not when the app was started with "open ClaudeScreen.app").
+    "$PY" "$DIR/claude_screen.py" quitter >/dev/null 2>&1 && sleep 2 || true
+    "$DIR/lancer.sh" || true
+    info "Done. ClaudeScreen is running (menu bar). Next time: Spotlight -> ClaudeScreen, or open \"$APP\"."
     echo "On first launch, macOS asks for two permissions: \"Screen Recording\" and"
     echo "\"Accessibility\". Allow them, then quit and relaunch ClaudeScreen (see README)."
 else

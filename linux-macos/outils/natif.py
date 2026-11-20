@@ -718,6 +718,49 @@ def ouvrir(chemin):
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
 
 
+def confirmer(titre, message):
+    """Yes / No question (No by default). True only on an explicit Yes; False if no dialog can be shown."""
+    try:
+        if MAC:
+            r = subprocess.run(['osascript', '-e', 'on run argv',
+                                '-e', 'display dialog (item 2 of argv) with title (item 1 of argv) with icon caution '
+                                      'buttons {"No", "Yes"} default button "No" cancel button "No"',
+                                '-e', 'end run', titre, message], capture_output=True, text=True, timeout=600)
+            return r.returncode == 0 and 'Yes' in r.stdout
+        if shutil.which('zenity'):
+            return subprocess.run(['zenity', '--question', '--default-cancel', '--title=' + titre, '--text=' + message],
+                                  timeout=600).returncode == 0
+        if shutil.which('kdialog'):
+            return subprocess.run(['kdialog', '--title', titre, '--warningyesno', message], timeout=600).returncode == 0
+        code = ('import sys, tkinter, tkinter.messagebox as m; r = tkinter.Tk(); r.withdraw(); '
+                'sys.exit(0 if m.askyesno(sys.argv[1], sys.argv[2], icon="warning", default="no") else 1)')
+        return subprocess.run([sys.executable, '-c', code, titre, message], timeout=600).returncode == 0
+    except Exception:
+        return False
+
+
+def notifier(titre, texte):
+    """System notification (Notification Center on macOS, notify-send on Linux). Never blocks, never fails:
+    it is the visible sign that a task started or ended, even when the menu bar icon is hidden (notch)."""
+    texte = ' '.join(str(texte).split())
+    if len(texte) > 200:
+        texte = texte[:197] + '...'
+    try:
+        if MAC:
+            # Texts passed as arguments, not put into the script: no quoting problem, no injection.
+            commande = ['osascript', '-e', 'on run argv',
+                        '-e', 'display notification (item 2 of argv) with title (item 1 of argv)',
+                        '-e', 'end run', titre, texte]
+        elif shutil.which('notify-send'):
+            commande = ['notify-send', '-a', titre, titre, texte]
+        else:
+            return
+        subprocess.Popen(commande, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+    except Exception:
+        pass
+
+
 def dossier_documents():
     if LINUX and shutil.which('xdg-user-dir'):
         try:

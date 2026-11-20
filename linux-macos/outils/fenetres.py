@@ -409,11 +409,11 @@ def _resultat_sans_tk(fichier):
 
 # ------------------------------------------------------------------ instruction bar
 
-def consigne(x, y):
+def consigne(x, y, brouillon=''):
     try:
         import tkinter as tk
     except ImportError:
-        return _consigne_sans_tk()
+        return _consigne_sans_tk(brouillon)
 
     root = tk.Tk()
     etat = {'fini': False, 'valide': False}
@@ -436,6 +436,9 @@ def consigne(x, y):
     champ = tk.Entry(fond, relief='flat', bd=0, highlightthickness=0, bg='white', fg='#1f1f1f',
                      insertbackground='#1f1f1f', font=('Helvetica' if MAC else 'TkDefaultFont', 12 if MAC else 9))
     champ.pack(fill='both', expand=True, padx=4)
+    if brouillon:  # what was typed in the last bar closed without Enter
+        champ.insert(0, brouillon)
+        champ.icursor('end')
     indice = tk.Label(fond, text='Consigne...', bg='white', fg='#9a9a9a',
                       font=('Helvetica' if MAC else 'TkDefaultFont', 12 if MAC else 9))
     indice.place(x=5, rely=0.5, anchor='w')
@@ -461,6 +464,8 @@ def consigne(x, y):
     root.bind('<Escape>', lambda _e: finir(False))
     root.protocol('WM_DELETE_WINDOW', lambda: finir(False))
     _fermer_si_quitte(root, lambda: finir(False))
+    if brouillon:
+        root.after(0, maj_indice)
 
     def focus():
         _premier_plan(root)
@@ -470,21 +475,20 @@ def consigne(x, y):
     root.after(250, focus)  # second try: some window managers are slow
     root.mainloop()
 
-    if etat['valide']:
-        sys.stdout.write(etat.get('texte', ''))
-        sys.stdout.flush()
-        return 0
-    return 1
+    # Cancelled: the text still goes out (code 1), so that the app shows it again in the next bar.
+    sys.stdout.write(etat.get('texte', ''))
+    sys.stdout.flush()
+    return 0 if etat['valide'] else 1
 
 
-def _consigne_sans_tk():
+def _consigne_sans_tk(brouillon=''):
     if MAC:
-        script = ('try\n'
-                  'set r to display dialog "Instruction for Claude:" default answer "" with title "Claude" '
+        script = ('on run argv\ntry\n'
+                  'set r to display dialog "Instruction for Claude:" default answer (item 1 of argv) with title "Claude" '
                   'buttons {"Annuler", "OK"} default button "OK" cancel button "Annuler"\n'
                   'return text returned of r\n'
-                  'on error\nreturn "\u0001ANNULE"\nend try')
-        r = subprocess.run(['osascript', '-e', script], capture_output=True, text=True)
+                  'on error\nreturn "\u0001ANNULE"\nend try\nend run')
+        r = subprocess.run(['osascript', '-e', script, brouillon], capture_output=True, text=True)
     elif shutil.which('zenity'):
         r = subprocess.run(['zenity', '--entry', '--title=Claude-Work', '--text=Instruction for Claude:'],
                            capture_output=True, text=True)
@@ -505,7 +509,7 @@ def main(argv):
     if len(argv) >= 1 and argv[0] == 'sessions':
         return fenetre_sessions(json.loads(sys.stdin.buffer.read().decode('utf-8')))
     if len(argv) >= 3 and argv[0] == 'consigne':
-        return consigne(float(argv[1]), float(argv[2]))
+        return consigne(float(argv[1]), float(argv[2]), argv[3] if len(argv) > 3 else '')
     sys.stderr.write(__doc__)
     return 2
 
