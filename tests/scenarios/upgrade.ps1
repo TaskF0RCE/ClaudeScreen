@@ -29,7 +29,7 @@ Verifier 'hooks: commands and file writes go through garde.ps1' (@($r.hooks.PreT
 Copy-Item (Join-Path $Racine 'examples\packet-tracer.md') $Contexte
 $cap = Fausse-Capture
 Lancer-Tache $cap 'connect R0 and R1'
-Verifier 'triage started with the light options' ($global:Appels[-1] -eq 'haiku|triage|--tools Read --effort low') ($global:Appels[-1])
+Verifier 'triage started with the light options' ($global:Appels[-1] -eq 'haiku|triage|--tools Read --effort low --no-session-persistence') ($global:Appels[-1])
 $p = Lire-Prompt $cap
 Verifier 'prompt: chained clicks only on what was already seen' ($p -match 'Chain only clicks on things you have already seen' -and $p -match 'says at which action another window came to the front')
 Verifier 'prompt: pc tool (MCP)' ($p -match 'the "pc" tool \(mcp__pc__pc\)' -and $p -match '(?m)^  relier X1 Y1 X2 Y2 ')

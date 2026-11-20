@@ -102,9 +102,10 @@ The folder is in your Documents, outside the repository: your documents and inst
 | Spinning star | Working |
 | Green dot | Done: click to see the result |
 | Red dot | Error: click to see the message |
+| Red square | Stopped (shortcut pressed again, or 20 minutes): click to see what Claude had done |
 
 Right-click the icon (every choice is remembered):
-- **Sessions**: the answer of the last task (a click on the icon does the same), or what Claude has said and done so far while a task is running. It also holds your earlier sessions, a new session, the choice between Persisted Memory and Ghost Mode, the roles and documents of each session, and how long sessions are kept (see [Sessions](#sessions))
+- **Sessions**: the answer of the last task (a click on the icon does the same), or what Claude has said and done so far while a task is running. It also holds your earlier sessions, a new session, the choice between Persisted Memory and Ghost Mode, the roles and documents of each session, how long sessions are kept, and **Delete session** (see [Sessions](#sessions))
 - **Model**: Auto, Always Sonnet or Always Opus
 - **Smooth mode**: the mouse glides and the text is typed at a human pace
 - **Terminal access**: Claude may also run commands when the screen is not enough
@@ -182,6 +183,16 @@ Ghost Mode does not hide the files that Claude creates for you in `Claude-Work`,
 - A session goes away with its last task, along with its notes, its name and its roles. Its documents go to the Recycle Bin.
 - A session that has documents but no task stays as long as its documents were added within that time.
 - Ghost Mode keeps nothing, whatever this choice.
+
+**Delete session**, next to that choice, deletes the session shown, right away, after a question. Use it when Claude learned something wrong in a session and you don't want it to come back.
+
+- Everything the session left goes to the Recycle Bin, in one folder named after it (`ClaudeScreen - deleted session ...`): its tasks (screenshots, instructions, answers, steps), Claude's notes, its name, its roles, its documents, and the transcripts Claude Code kept of its tasks (in `%USERPROFILE%\.claude\projects`). You can restore it from there; Claude never sees any of it again.
+- The other sessions are not touched.
+- Deleting the session in use replaces it with a new, empty session that has the same roles.
+- On **Earlier tasks**, it deletes the tasks from before sessions existed.
+- On the ghost session, it only forgets it: nothing of it was written anywhere.
+- It cannot be done while a task is running.
+- Claude Code never keeps a transcript of the one-word triage or of the session name: only the task itself has one, and not in Ghost Mode.
 
 About the notes:
 
@@ -355,9 +366,11 @@ Automatic cleanup: at startup and then every 6 hours, the app permanently delete
 - Precise mouse work (drag and drop, cabling in a simulator) is slow and not always reliable.
 - For websites, the Claude in Chrome extension is often more reliable: it reads the page content directly instead of going through screenshots.
 - Only one screen is captured: the one the mouse is on when you press the shortcut.
-- The macOS/Linux port has the Sessions window, the roles, the session documents and the MCP server, but no Terminal access (see its README). It has not been tried on as many machines as the Windows version.
+- The macOS/Linux port has the same features (Sessions window, roles, session documents, MCP server, Terminal access with the same guard), with shell commands instead of PowerShell (see its README). It has not been tried on as many machines as the Windows version.
 
 ## Contributing and versions
 
 The workflow (issue → branch → PR → review → merge) is described in [CONTRIBUTING.md](CONTRIBUTING.md), with how to run the tests; the easiest way is through the [VeD Opps dashboard](https://taskf0rce.github.io/VeD_Opps/).
 Versions are published automatically (the dashboard's « Nouvelle release » button): see the [releases](../../releases) and `CHANGELOG.md`.
+
+The macOS/Linux fixes, file access limits and Terminal access of the port are by [ninis25](https://github.com/ninis25).

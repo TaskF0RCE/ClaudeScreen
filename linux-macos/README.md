@@ -8,6 +8,8 @@ Like the Windows version, it runs on top of the **[Claude Code](https://docs.cla
 
 > Personal project, unofficial, not affiliated with Anthropic.
 
+macOS fixes, file access limits, Terminal access and menu bar state: [ninis25](https://github.com/ninis25).
+
 ## How it works
 
 Same as the Windows version:
@@ -20,7 +22,7 @@ Same as the Windows version:
 4. Claude does the task with the mouse and keyboard, takes a new screenshot after each action to check, then writes a short summary.
 5. Click the icon → **Sessions** to read it.
 
-The bar of **⌃⌥C** / **Ctrl+Alt+C** is in the bottom-left corner: type an instruction ("only do question 4", "configure OSPF on R1 and R2"), then **Enter**. **Esc** or clicking elsewhere cancels; **Enter** on an empty bar starts an automatic task.
+The bar of **⌃⌥C** / **Ctrl+Alt+C** is in the bottom-left corner: type an instruction ("only do question 4", "configure OSPF on R1 and R2"), then **Enter**. **Esc** or clicking elsewhere cancels; **Enter** on an empty bar starts an automatic task. If the bar closes before you press Enter (Esc, a click elsewhere, by accident), what you typed is not lost: it is back in the bar the next time you open it.
 
 Pressing the shortcut again during a task stops it. Automatic stop after 20 minutes. Nothing is lost when a task stops: **Sessions** then lists what Claude had done before the stop. During a task, don't touch the mouse or keyboard.
 
@@ -49,12 +51,16 @@ The folder is in your Documents, outside the repository: its contents never end 
 | Spinning star | Working |
 | Green dot | Done: open "Sessions" |
 | Red dot | Error: open "Sessions" for the message |
+| Red square | Stopped: open "Sessions" to see what Claude had done |
+
+In the macOS menu bar the icon is drawn in one color: the star alone, with the time spent next to it while Claude works, then ✓ (done), ! (error) or ■ (stopped).
 
 Menu:
 
 - **Sessions**: the Sessions window (see [below](#sessions-memory-and-ghost-mode)).
 - **Model**: Auto, Always Sonnet or Always Opus; the choice is remembered.
 - **Smooth mode**.
+- **Terminal access** (see below).
 - **New session** and **Ghost mode**: the same as in the Sessions window.
 - **Roles: ...**: the roles of the session in use.
 - **Open the Claude-Work folder**.
@@ -63,6 +69,12 @@ Menu:
 The icon's tooltip and the windows are named **Claude-Work** too.
 
 On macOS and with most Linux desktops (AppIndicator), clicking the icon opens the menu; "Sessions" is the first entry.
+
+### Terminal access
+
+Same as on Windows: unchecked by default, Claude only has the mouse and keyboard. Check **Terminal access** in the icon menu and Claude can also run shell commands (the first time, the app explains what this allows and asks you to confirm; after one Yes, kept in `data/terminal-accepted.txt`, it does not ask again). It opens what the mouse cannot do well: renaming or sorting many files, processing a CSV, producing or converting a document, reading the state of the system.
+
+The screen comes first: Claude is told to use a command only when the task cannot reasonably be done on screen or is clearly better done that way, and to stay inside the task. Every command goes through the guard `outils/garde.py` before it runs (see [Security](#security)). The choice is remembered (`data/terminal.txt`) and applies from the next task.
 
 ### Smooth mode
 
@@ -79,7 +91,7 @@ The **Sessions** window has the same content and behaviour as on Windows:
 - **Resume** and **New session**;
 - **Persisted Memory** or **Ghost Mode**;
 - the **Roles** and **Documents** of each session;
-- at the bottom, how long persisted sessions are kept (30 days by default).
+- at the bottom, how long persisted sessions are kept (30 days by default), and **Delete session**: everything the session shown left (tasks, notes, name, roles, documents, and the transcripts Claude Code kept in `~/.claude/projects`) goes to the trash in one folder, and the session in use is replaced by an empty one with the same roles.
 
 It is a small Tk window in the bottom-right corner of the screen, above the Dock on macOS. Drag its border to resize it: the size is remembered (`data/window.txt`), and **Default size** brings it back. It closes when you click elsewhere, except while you pick documents. The code is in `outils/fenetres.py` and `outils/sessions.py`.
 
@@ -116,6 +128,7 @@ The script creates a Python environment in `data/.venv`, installs the dependenci
 ### macOS (10.15 or later)
 
 - Requirement: Python 3.9+ ([python.org](https://www.python.org/downloads/macos/) recommended: Tk is included, so the instruction bar and the result window are real windows. With Homebrew: `brew install python python-tk`).
+- For real windows (instruction bar, Sessions window) the Python needs Tk: python.org's has it; with Homebrew, `brew install python-tk@3.X` (your version). `installer.sh` picks a Python with Tk by itself when there is one, and rebuilds an older environment made without Tk.
 - The installer creates **`~/Applications/ClaudeScreen.app`**: open it (Spotlight → "ClaudeScreen").
 - **Permissions**: on first launch, macOS asks for <br>
   1\. System Settings → Privacy & Security → Accessibility <br>
@@ -176,15 +189,30 @@ Wayland deliberately prevents apps from listening to the keyboard, reading the s
 As on Windows, Claude is started with limited permissions (`data/settings.json`, generated at startup). It can only:
 
 - read the screenshots;
-- click, type and scroll, through the `pc` tool of `outils/mcp.py` (there is no terminal: no command can be run);
+- click, type and scroll, through the `pc` tool of `outils/mcp.py`;
+- shell commands, only if **Terminal access** is checked, each one checked first by `outils/garde.py`;
 - create or edit files in `~/Documents/Claude-Work` (except in `System-Context`, which is read-only).
 
 On top of that:
 
 - **`System-Context` is read-only**, locked three times: a `deny` rule in `data/settings.json` (`Edit(//...)`, which also covers Write), the hook `outils/garde.py` that refuses any file write in that folder (including through a symbolic link or `..`), and the `corbeille` action that refuses to touch it (or `Claude-Work`, which contains it). Claude has no way to write there: its [notes](#sessions-memory-and-ghost-mode) are saved by the app itself.
-- **Nothing is deleted permanently.** Claude has no terminal, and to remove a file it sends it to the trash (the `corbeille` action). The hook `outils/garde.py` stays as a second lock: if a command tool were ever given to Claude, it blocks `rm`, `rmdir`, `unlink`, `shred`, `find -delete`, `dd`, `mkfs`, `diskutil erase`, `git clean`, `shutdown`, etc.
+- **Nothing is deleted permanently.** To remove a file Claude sends it to the trash (the `corbeille` action).
+- **Every command is checked before it runs** (Terminal access) by `outils/garde.py`, with the same rules as on Windows. It refuses:
+  - permanent deletions (`rm`, `rmdir`, `unlink`, `shred`, `find -delete`, `dd`, `mkfs`, `diskutil erase`, `git clean`...) and shutting down the computer;
+  - `sudo` and other ways to get administrator rights;
+  - installing, downloading or running code from the internet (`brew`, `pip install`, `curl`, `wget`, `| sh`...);
+  - changing the system: `defaults write`, `launchctl`, `crontab`, `systemctl`, accounts, permissions (`chown`), network and firewall settings, shell startup files;
+  - stopping other programs (`kill`, `pkill`, `killall`);
+  - reading stored passwords or keys (Keychain, `~/.ssh`, browser logins...).
+
+  It is a safety net, not a sandbox: it stops mistakes and the obvious ways, not every possible way. If you don't want commands at all, leave **Terminal access** unchecked.
+- **The ClaudeScreen folder is read-only** for Claude (its scripts, its settings and the guard): file writes and commands that write there are refused.
 - Its instructions forbid buying, paying, sending messages, entering passwords or bank details, changing system settings and deleting anything for good. Text displayed on screen cannot override these rules. This part relies on Claude: what it does with the mouse and keyboard is not filtered by the program.
 - No web access (WebFetch and WebSearch are denied).
+- **Reads are limited** to `~/Documents/Claude-Work`, the folder of the current task (its screenshots) and the text extracted from the PDFs: the hook `outils/garde.py` refuses `Read`, `Glob` and `Grep` anywhere else, and `ecrire-fichier` only types files from those folders. Text shown on screen cannot make Claude read or type a private file (`~/.ssh`, shell history, `.env`...).
+- **The trash is limited** to the files inside `~/Documents/Claude-Work` (never `System-Context`, never the folder itself).
+- **Missing macOS permissions stop the task** before anything is sent to Claude (without Screen Recording the screenshot only shows the wallpaper, and without Accessibility the clicks are silently dropped). A notification says which permission is missing.
+- **Notifications** show when a task starts, ends, stops or fails, even when the menu bar icon is hidden behind the notch. Write `off` in `data/notifications.txt` to turn them off.
 - Claude is started with only the tools a task needs (`Read`, `Write`, `Edit`, `Glob`, `Grep` and the `pc` tool), without the MCP servers, connectors and skills of your account. This needs a recent Claude Code: the app runs `claude update` in the background at startup and then once a day, never during a task.
 
 ## Subscription and usage
@@ -241,5 +269,5 @@ Mapping to the Windows version: `ClaudeScreen.ps1` → `claude_screen.py`, `Lanc
 
 - Same limitations as the Windows version: Claude runs no program other than the control tool; precise mouse work (cabling in Packet Tracer, drag and drop) is slow; only one screen is captured (the one with the mouse).
 - Wayland: see the table above.
-- **Terminal access** is not ported: Claude has the mouse, the keyboard and its files, and runs no command. The MCP server (`outils/mcp.py`) is new here and has been tested with the protocol only, not yet on many real machines: if a result says that the control tool did not start, run `claude update` and try again. The result and the log show how long each task took.
+- The MCP server (`outils/mcp.py`) is new here and has been tested with the protocol only, not yet on many real machines: if a result says that the control tool did not start, run `claude update` and try again. The result and the log show how long each task took.
 - macOS: if you move the folder after installing, run `./installer.sh` again (the app and the autostart contain the path). On macOS 15 and later, the system may periodically ask again for the screen recording permission.

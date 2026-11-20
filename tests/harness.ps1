@@ -24,6 +24,8 @@ Remplacer "`$mutex = New-Object System.Threading.Mutex(`$false, 'Local\ClaudeScr
 Remplacer 'if (-not $mutex.WaitOne(0)) { exit }' ''
 Remplacer '$mutex.ReleaseMutex()' ''
 Remplacer '$Racine = $PSScriptRoot' "`$Racine = '$app'"
+# Claude Code's transcripts: a folder of the sandbox, never the real ~\.claude.
+Remplacer "`$ProjetsClaude = Join-Path `$env:USERPROFILE '.claude\projects'" "`$ProjetsClaude = '$Bac\claude-projects'"
 Remplacer "[Environment]::GetFolderPath('MyDocuments')" "'$docs'"
 Remplacer 'if (-not (Test-Poppler)) {' 'if ($false) {'
 Remplacer '$icone.Visible = $true' '$icone.Visible = $false'

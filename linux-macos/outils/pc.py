@@ -25,6 +25,14 @@ USAGE = """Actions:
 IMAGE = None
 
 
+def dans(chemin, dossier):
+    """Is chemin the folder itself or inside it? (symlinks and ".." resolved)"""
+    a, b = os.path.realpath(chemin), os.path.realpath(dossier)
+    if sys.platform == 'darwin':  # case-insensitive disk by default on macOS
+        a, b = a.lower(), b.lower()
+    return a == b or a.startswith(b.rstrip(os.sep) + os.sep)
+
+
 def main(argv):
     global IMAGE
     IMAGE = None
@@ -109,7 +117,13 @@ def main(argv):
         natif.taper(' '.join(valeurs), doux)
         print('OK')
     elif action == 'ecrire-fichier':
-        with open(' '.join(valeurs), encoding='utf-8-sig') as f:
+        chemin = os.path.abspath(' '.join(valeurs))
+        # Only files of the work folder or of the task: a private file (~/.ssh, history...) is never typed.
+        lisibles = [d for d in os.environ.get('ECRAN_LECTURE', '').split(os.pathsep) if d]
+        if lisibles and not any(dans(chemin, d) for d in lisibles):
+            raise SystemExit('Refused: %s is outside the work folder. Write the text to a file in the current '
+                             'folder first, then type that file.' % chemin)
+        with open(chemin, encoding='utf-8-sig') as f:
             natif.taper(f.read(), doux)
         print('OK')
     elif action == 'touche':
@@ -128,12 +142,12 @@ def main(argv):
         # The context folder (System-Context) is read-only: neither the folder, nor its contents,
         # nor a folder that contains it.
         ctx = os.environ.get('ECRAN_CONTEXTE')
-        if ctx:
-            a, b = os.path.realpath(chemin), os.path.realpath(ctx)
-            if sys.platform == 'darwin':  # case-insensitive disk by default on macOS
-                a, b = a.lower(), b.lower()
-            if a == b or a.startswith(b.rstrip(os.sep) + os.sep) or b.startswith(a.rstrip(os.sep) + os.sep):
-                raise SystemExit('Refused: %s is read-only (the user\'s documents).' % ctx)
+        if ctx and (dans(chemin, ctx) or dans(ctx, chemin)):
+            raise SystemExit('Refused: %s is read-only (the user\'s documents).' % ctx)
+        # Only what is inside the work folder (never the folder itself): the rest of the computer is the user's.
+        travail = os.environ.get('ECRAN_TRAVAIL')
+        if travail and (not dans(chemin, travail) or dans(travail, chemin)):
+            raise SystemExit('Refused: only files of the work folder (%s) can be sent to the trash.' % travail)
         natif.corbeille(chemin)
         print('Sent to the trash: %s' % chemin)
     elif action == 'page-pdf':

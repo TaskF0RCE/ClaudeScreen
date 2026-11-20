@@ -32,6 +32,7 @@ $script:Arret = 'hotkey'
 $script:Proc = Faux-Proc 1
 Processus-Fini
 Verifier 'stopped: the steps are in the result' ($script:Dernier -match '^Task stopped \(hotkey\) after \d+ s\.' -and $script:Dernier -match 'What Claude did before the stop:' -and $script:Dernier -match 'Cabling done\.' -and $script:Dernier -match '  > clic 352 655') $script:Dernier
+Verifier 'stopped: the icon shows the stop sign (red square), not the error dot' ([object]::ReferenceEquals($icone.Icon, $IconeArret) -and -not [object]::ReferenceEquals($IconeArret, $IconeErreur))
 $resultat = Join-Path $cap.Run 'result.txt'
 Verifier 'stopped: kept in the task folder' ((Test-Path $resultat) -and [IO.File]::ReadAllText($resultat, [Text.Encoding]::UTF8) -eq $script:Dernier)
 $reste = [IO.File]::ReadAllText((Join-Path $cap.Run 'responses\task.jsonl'))

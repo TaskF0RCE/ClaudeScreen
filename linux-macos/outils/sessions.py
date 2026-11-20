@@ -414,6 +414,112 @@ def nettoyer(donnees, garder=(), contexte='', limite=0.0, corbeille=None, noter=
                 noter('Documents of session %s: %s' % (nom, ex))
 
 
+# ------------------------------------------------------------------ Delete session (Sessions window)
+# Everything a session left goes to the trash, in one folder named after it: its tasks (screenshots, prompts,
+# instructions, results), Claude's notes, its title, its documents, and the transcripts Claude Code kept of its
+# tasks (~/.claude/projects). Claude never sees any of it again. Its roles are a choice of the user, not something
+# Claude learned: when the session in use is deleted, the empty session that replaces it keeps them (see the app).
+# "Earlier tasks" (ident '') works the same way. A ghost session is only forgotten: nothing of it is on disk.
+
+def dossiers_session(donnees, ident):
+    """The task folders of a persisted session (or of the earlier tasks, ident ''), never a ghost task."""
+    runs = os.path.join(donnees, 'runs')
+    try:
+        noms = sorted(os.listdir(runs))
+    except OSError:
+        return []
+    return [os.path.join(runs, n) for n in noms if os.path.isdir(os.path.join(runs, n))
+            and not os.path.exists(os.path.join(runs, n, 'ghost.txt'))
+            and _lire(os.path.join(runs, n, 'session.txt')).strip() == ident]
+
+
+SESSION_CLAUDE = re.compile(r'"session_id"\s*:\s*"([0-9a-fA-F-]{36})"')
+
+
+def transcripts(dossiers, projets):
+    """The transcripts Claude Code kept of these tasks: it names them after the session id it writes in the stream
+    of each task (<id>.jsonl, and a folder <id> for what a task started)."""
+    ids = []
+    for d in dossiers:
+        try:
+            with open(os.path.join(d, 'responses', 'task.jsonl'), encoding='utf-8', errors='replace') as f:
+                debut = ''.join(f.readline() for _ in range(20))
+        except OSError:
+            continue
+        m = SESSION_CLAUDE.search(debut)
+        if m and m.group(1) not in ids:
+            ids.append(m.group(1))
+    trouves = []
+    try:
+        projets_noms = sorted(os.listdir(projets)) if ids else []
+    except OSError:
+        projets_noms = []
+    for p in projets_noms:
+        for i in ids:
+            for c in (os.path.join(projets, p, i + '.jsonl'), os.path.join(projets, p, i)):
+                if os.path.exists(c):
+                    trouves.append(c)
+    return trouves
+
+
+def texte_suppression(donnees, session, courante):
+    """What the window asks before deleting a session. courante: the id of the persisted session in use."""
+    if session['fantome']:
+        return ('Forget this ghost session now?\n\nNothing of it was written on disk: Claude forgets its notes and its '
+                'results, and the documents added to it are deleted.')
+    n = len(dossiers_session(donnees, session['id']))
+    if session['id']:
+        nom = re.sub(r' \(current\)$', '', session['titre'].split('  -  ')[0])
+        quoi = 'the session "%s"' % nom
+    else:
+        quoi = 'the earlier tasks (from before sessions)'
+    texte = ('Delete %s now?\n\n%s (screenshots, instructions, results), %sand the transcripts Claude Code kept of them '
+             'go to the trash, in one folder. Claude will not use any of it again.'
+             % (quoi, _nombre(n), "Claude's notes, the title and the documents of the session, " if session['id'] else ''))
+    if session['id'] and session['id'] == courante:
+        texte += '\n\nThis is the session in use: a new, empty session replaces it, with the same roles.'
+    return texte
+
+
+def supprimer(donnees, contexte, ident, projets, corbeille, notes='', noter=lambda t: None):
+    """Puts everything the session left in one folder, then sends it to the trash. notes: the path of memory.md
+    when the session is the one in use (a copy goes with the rest; the app empties it). Returns how many tasks
+    went, and how many items could not be removed."""
+    dossiers = dossiers_session(donnees, ident)
+    titre = lire_titre(donnees, ident) if ident else ''
+    nom = 'ClaudeScreen - deleted session ' + (
+        re.sub(r'[\\/:*?"<>|]', '', titre) + ' (%s)' % ident if titre else ident or 'earlier tasks')
+    paquet, n = os.path.join(donnees, nom), 2
+    while os.path.exists(paquet):
+        paquet, n = os.path.join(donnees, '%s %d' % (nom, n)), n + 1
+    os.makedirs(os.path.join(paquet, 'tasks'))
+    os.makedirs(os.path.join(paquet, 'Claude Code transcripts'))
+    elements = [(d, 'tasks') for d in dossiers] + [(t, 'Claude Code transcripts') for t in transcripts(dossiers, projets)]
+    if ident:
+        for c in (fichier_notes(donnees, ident), fichier_titre(donnees, ident), fichier_roles(donnees, ident),
+                  dossier_documents(contexte, ident)):
+            if os.path.exists(c):
+                elements.append((c, ''))
+    if notes and os.path.exists(notes):
+        shutil.copyfile(notes, os.path.join(paquet, 'memory.md'))
+    restes = 0
+    for chemin, ou in elements:
+        try:
+            shutil.move(chemin, os.path.join(paquet, ou, os.path.basename(chemin)))
+        except OSError:
+            try:
+                corbeille(chemin)
+            except Exception as ex:
+                restes += 1
+                noter('Delete session: %s could not be removed (%s)' % (chemin, ex))
+    try:
+        corbeille(paquet)
+    except Exception as ex:
+        restes += 1
+        noter('Delete session: %s could not go to the trash (%s)' % (paquet, ex))
+    return len(dossiers), restes
+
+
 # ------------------------------------------------------------------ size of the window
 
 def taille_fenetre(donnees, ecran):

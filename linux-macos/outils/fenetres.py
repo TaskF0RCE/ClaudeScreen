@@ -159,7 +159,10 @@ class FenetreSessions:
         # Bottom row, the one setting: how long the tasks of the kept sessions stay.
         bas = tk.Frame(root)
         bas.pack(side='bottom', fill='x', padx=6, pady=3)
-        tk.Label(bas, text='Persisted sessions are kept for', anchor='w').pack(side='left', fill='x', expand=True)
+        tk.Label(bas, text='Sessions kept for', anchor='w').pack(side='left', fill='x', expand=True)
+        # Deletes the session shown, now (after a question).
+        self.supprimer = tk.Button(bas, text='Delete session', command=self.supprimer_session)
+        self.supprimer.pack(side='right', padx=(4, 0))
         self.duree = ttk.Combobox(bas, state='readonly', width=8, values=[c[0] for c in sessions.CHOIX_CONSERVATION])
         self.duree.pack(side='right')
         self.duree.bind('<<ComboboxSelected>>', lambda _e: self.action(
@@ -226,7 +229,7 @@ class FenetreSessions:
         self.liste.current(0)
         self.mode.set('fantome' if e.get('fantome') else 'persiste')
         libre = 'disabled' if e.get('occupe') else 'normal'
-        for bouton in (self.nouvelle, self.persiste, self.fantome):
+        for bouton in (self.nouvelle, self.persiste, self.fantome, self.supprimer):
             bouton.config(state=libre)
         self.duree.set(sessions.choix_proche(sessions.conservation(self.donnees)))
         self.montrer_bouton_taille()
@@ -334,6 +337,21 @@ class FenetreSessions:
 
     # ---- actions (done by the app, which answers with the new state)
 
+    def supprimer_session(self):
+        """Says what goes, asks, then has the app delete the session shown (everything to the trash)."""
+        if self.etat.get('occupe') or not self.choix:
+            return
+        s = self.session_affichee()
+        texte = sessions.texte_suppression(self.donnees, s, sessions.lire_session(self.donnees))
+        from tkinter import messagebox
+        self.dialogue = True   # the window stays open while the question is asked
+        try:
+            oui = messagebox.askyesno('ClaudeScreen - Delete session', texte, icon='warning', default='no', parent=self.root)
+        finally:
+            self.dialogue = False
+        if oui:
+            self.action({'action': 'supprimer', 'id': s['id'], 'fantome': bool(s['fantome'])})
+
     def reprendre_session(self):
         self.action({'action': 'reprendre', 'id': self.choix[self.liste.current()]['id']})
 
@@ -409,11 +427,11 @@ def _resultat_sans_tk(fichier):
 
 # ------------------------------------------------------------------ instruction bar
 
-def consigne(x, y):
+def consigne(x, y, brouillon=''):
     try:
         import tkinter as tk
     except ImportError:
-        return _consigne_sans_tk()
+        return _consigne_sans_tk(brouillon)
 
     root = tk.Tk()
     etat = {'fini': False, 'valide': False}
@@ -436,6 +454,9 @@ def consigne(x, y):
     champ = tk.Entry(fond, relief='flat', bd=0, highlightthickness=0, bg='white', fg='#1f1f1f',
                      insertbackground='#1f1f1f', font=('Helvetica' if MAC else 'TkDefaultFont', 12 if MAC else 9))
     champ.pack(fill='both', expand=True, padx=4)
+    if brouillon:  # what was typed in the last bar closed without Enter
+        champ.insert(0, brouillon)
+        champ.icursor('end')
     indice = tk.Label(fond, text='Consigne...', bg='white', fg='#9a9a9a',
                       font=('Helvetica' if MAC else 'TkDefaultFont', 12 if MAC else 9))
     indice.place(x=5, rely=0.5, anchor='w')
@@ -461,6 +482,8 @@ def consigne(x, y):
     root.bind('<Escape>', lambda _e: finir(False))
     root.protocol('WM_DELETE_WINDOW', lambda: finir(False))
     _fermer_si_quitte(root, lambda: finir(False))
+    if brouillon:
+        root.after(0, maj_indice)
 
     def focus():
         _premier_plan(root)
@@ -470,21 +493,20 @@ def consigne(x, y):
     root.after(250, focus)  # second try: some window managers are slow
     root.mainloop()
 
-    if etat['valide']:
-        sys.stdout.write(etat.get('texte', ''))
-        sys.stdout.flush()
-        return 0
-    return 1
+    # Cancelled: the text still goes out (code 1), so that the app shows it again in the next bar.
+    sys.stdout.write(etat.get('texte', ''))
+    sys.stdout.flush()
+    return 0 if etat['valide'] else 1
 
 
-def _consigne_sans_tk():
+def _consigne_sans_tk(brouillon=''):
     if MAC:
-        script = ('try\n'
-                  'set r to display dialog "Instruction for Claude:" default answer "" with title "Claude" '
+        script = ('on run argv\ntry\n'
+                  'set r to display dialog "Instruction for Claude:" default answer (item 1 of argv) with title "Claude" '
                   'buttons {"Annuler", "OK"} default button "OK" cancel button "Annuler"\n'
                   'return text returned of r\n'
-                  'on error\nreturn "\u0001ANNULE"\nend try')
-        r = subprocess.run(['osascript', '-e', script], capture_output=True, text=True)
+                  'on error\nreturn "\u0001ANNULE"\nend try\nend run')
+        r = subprocess.run(['osascript', '-e', script, brouillon], capture_output=True, text=True)
     elif shutil.which('zenity'):
         r = subprocess.run(['zenity', '--entry', '--title=Claude-Work', '--text=Instruction for Claude:'],
                            capture_output=True, text=True)
@@ -505,7 +527,7 @@ def main(argv):
     if len(argv) >= 1 and argv[0] == 'sessions':
         return fenetre_sessions(json.loads(sys.stdin.buffer.read().decode('utf-8')))
     if len(argv) >= 3 and argv[0] == 'consigne':
-        return consigne(float(argv[1]), float(argv[2]))
+        return consigne(float(argv[1]), float(argv[2]), argv[3] if len(argv) > 3 else '')
     sys.stderr.write(__doc__)
     return 2
 

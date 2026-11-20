@@ -38,7 +38,8 @@ and gives them back to Claude at the next tasks of the same session.
 
 You can open `memory.md`, fix a note or remove a line. When you start a **new session**
 (Sessions window of the icon), the file is emptied: the notes go with the session that ended,
-and come back if you resume it.
+and come back if you resume it. **Delete session** in the same window sends a session to the Recycle Bin,
+notes, documents and tasks included: Claude never sees them again.
 
 ## Session documents: the documents of one session
 
