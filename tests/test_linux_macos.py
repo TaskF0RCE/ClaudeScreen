@@ -604,7 +604,7 @@ except ImportError:
 if avec_pil:
     fini_mac, erreur_mac, repos_mac = (cs.dessiner(0, p, barre_mac=True).split()[3] for p in ('vert', 'rouge', None))
     verifier('macOS icon: no disc behind the star (transparent corners)', repos_mac.getpixel((2, 2)) == 0 and repos_mac.getpixel((50, 32)) > 200)
-    verifier('macOS icon: done and error differ in one color (dot vs ring)', fini_mac.getpixel((51, 51)) > 200 and erreur_mac.getpixel((51, 51)) < 50)
+    verifier('macOS icon: done and error differ in one color (dot vs ring)', fini_mac.getpixel((51, 51)) > 200 and erreur_mac.getpixel((51, 51)) < 50)
     def rouge(px):
         return px[0] > 200 and px[1] < 70 and px[2] < 70
 
