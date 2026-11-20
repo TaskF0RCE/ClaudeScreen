@@ -547,7 +547,13 @@ verifier('while it works: no file reading, no MEMORY line, no half-written line'
          'screenshot-01' not in t and 'MEMORY' not in t and 'half wri' not in t, t)
 a.arret = 'raccourci'
 a.proc = types.SimpleNamespace(returncode=-15)
+icones_vues = []
+a.mettre_icone = icones_vues.append
+cs.ICONE_ARRET = object()
 a.processus_fini()
+del a.mettre_icone
+verifier('stopped: the icon shows the stop sign (red square)', icones_vues[-1:] == [cs.ICONE_ARRET], icones_vues)
+cs.ICONE_ARRET = None
 verifier('stopped: the steps are in the result', re.match(r'Task stopped \(raccourci\) after \d+ s\.\n\nWhat Claude did before the stop:\n', a.dernier) is not None
          and 'Cabling done.' in a.dernier and '  > clic 352 655' in a.dernier, a.dernier)
 verifier('stopped: kept in the task folder', lire(os.path.join(c4['run'], 'result.txt')) == a.dernier)
@@ -582,12 +588,13 @@ verifier('notification: task done, with the answer', notifications[-1].startswit
 a.echec('Could not start the task: test')
 verifier('notification: error', notifications[-1] == 'Error: Could not start the task: test', notifications[-1:])
 # macOS menu bar: the state reads as text next to the icon, and the icon keeps its meaning in one color.
-icones_avant = (cs.ICONE_REPOS, cs.ICONE_FINI, cs.ICONE_ERREUR, cs.ICONES_TRAVAIL)
-cs.ICONE_REPOS, cs.ICONE_FINI, cs.ICONE_ERREUR, cs.ICONES_TRAVAIL = object(), object(), object(), [object() for _ in range(9)]
+icones_avant = (cs.ICONE_REPOS, cs.ICONE_FINI, cs.ICONE_ERREUR, cs.ICONE_ARRET, cs.ICONES_TRAVAIL)
+cs.ICONE_REPOS, cs.ICONE_FINI, cs.ICONE_ERREUR, cs.ICONE_ARRET, cs.ICONES_TRAVAIL = object(), object(), object(), object(), [object() for _ in range(9)]
 verifier('menu bar text: the time while Claude works', cs.texte_barre(cs.ICONES_TRAVAIL[3], 100.0, 175.0) == ' 1:15')
 verifier('menu bar text: done, error, idle', cs.texte_barre(cs.ICONE_FINI, 0) == ' \u2713' and cs.texte_barre(cs.ICONE_ERREUR, 0) == ' !'
          and cs.texte_barre(cs.ICONE_REPOS, 0) == '' and cs.texte_barre(None, 0) == '')
-cs.ICONE_REPOS, cs.ICONE_FINI, cs.ICONE_ERREUR, cs.ICONES_TRAVAIL = icones_avant
+verifier('menu bar text: stopped', cs.texte_barre(cs.ICONE_ARRET, 0) == ' \u25a0')
+cs.ICONE_REPOS, cs.ICONE_FINI, cs.ICONE_ERREUR, cs.ICONE_ARRET, cs.ICONES_TRAVAIL = icones_avant
 try:
     import PIL  # noqa: F401  (Pillow: installed by installer.sh, not on the CI runners)
     avec_pil = True
@@ -597,7 +604,15 @@ except ImportError:
 if avec_pil:
     fini_mac, erreur_mac, repos_mac = (cs.dessiner(0, p, barre_mac=True).split()[3] for p in ('vert', 'rouge', None))
     verifier('macOS icon: no disc behind the star (transparent corners)', repos_mac.getpixel((2, 2)) == 0 and repos_mac.getpixel((50, 32)) > 200)
-    verifier('macOS icon: done and error differ in one color (dot vs ring)', fini_mac.getpixel((51, 51)) > 200 and erreur_mac.getpixel((51, 51)) < 50)
+    verifier('macOS icon: done and error differ in one color (dot vs ring)', fini_mac.getpixel((51, 51)) > 200 and erreur_mac.getpixel((51, 51)) < 50)
+    def rouge(px):
+        return px[0] > 200 and px[1] < 70 and px[2] < 70
+
+    arret_mac, arret = cs.dessiner(0, 'arret', barre_mac=True), cs.dessiner(0, 'arret', barre_mac=False)
+    erreur = cs.dessiner(0, 'rouge', barre_mac=False)
+    verifier('stopped icon: a red square, not the round dot of an error (its corner is red, the corner of the dot is not)',
+             rouge(arret.getpixel((44, 44))) and not rouge(erreur.getpixel((44, 44)))
+             and arret_mac.split()[3].getpixel((41, 41)) > 200, (arret.getpixel((44, 44)), erreur.getpixel((44, 44))))
     verifier('macOS icon: the spinning star changes shape', cs.dessiner(0, barre_mac=True).split()[3].tobytes()
              != cs.dessiner(22, barre_mac=True).split()[3].tobytes())
 ecrire(cs.FICHIER_NOTIFICATIONS, 'off')

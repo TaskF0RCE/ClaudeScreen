@@ -51,6 +51,9 @@ The folder is in your Documents, outside the repository: its contents never end 
 | Spinning star | Working |
 | Green dot | Done: open "Sessions" |
 | Red dot | Error: open "Sessions" for the message |
+| Red square | Stopped: open "Sessions" to see what Claude had done |
+
+In the macOS menu bar the icon is drawn in one color: the star alone, with the time spent next to it while Claude works, then ✓ (done), ! (error) or ■ (stopped).
 
 Menu:
 

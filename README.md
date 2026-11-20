@@ -102,6 +102,7 @@ The folder is in your Documents, outside the repository: your documents and inst
 | Spinning star | Working |
 | Green dot | Done: click to see the result |
 | Red dot | Error: click to see the message |
+| Red square | Stopped (shortcut pressed again, or 20 minutes): click to see what Claude had done |
 
 Right-click the icon (every choice is remembered):
 - **Sessions**: the answer of the last task (a click on the icon does the same), or what Claude has said and done so far while a task is running. It also holds your earlier sessions, a new session, the choice between Persisted Memory and Ghost Mode, the roles and documents of each session, how long sessions are kept, and **Delete session** (see [Sessions](#sessions))

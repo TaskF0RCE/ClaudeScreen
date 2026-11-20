@@ -160,7 +160,8 @@ $garde = (Join-Path $Outils 'garde.ps1').Replace('\', '/')
 } | ConvertTo-Json -Depth 6 | Set-Content -Path $Reglages -Encoding UTF8
 
 # --- Icons (drawn once) ---
-function Dessiner([double]$angle, [string]$pastille) {
+# The dot: green = done, red = error; a red square = stopped (the "stop" sign, so it is not taken for an error).
+function Dessiner([double]$angle, [string]$pastille, [switch]$Carre) {
     $bmp = New-Object System.Drawing.Bitmap 32, 32
     $g = [System.Drawing.Graphics]::FromImage($bmp)
     $g.SmoothingMode = 'AntiAlias'
@@ -172,7 +173,10 @@ function Dessiner([double]$angle, [string]$pastille) {
         $g.DrawLine($crayon, [float](16 + 3.5 * [math]::Cos($a)), [float](16 + 3.5 * [math]::Sin($a)),
                              [float](16 + 11 * [math]::Cos($a)), [float](16 + 11 * [math]::Sin($a)))
     }
-    if ($pastille) {
+    if ($pastille -and $Carre) {
+        $g.FillRectangle((New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::White)), 19, 19, 13, 13)
+        $g.FillRectangle((New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromName($pastille))), 21, 21, 9, 9)
+    } elseif ($pastille) {
         $g.FillEllipse((New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::White)), 19, 19, 13, 13)
         $g.FillEllipse((New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromName($pastille))), 21, 21, 9, 9)
     }
@@ -182,6 +186,7 @@ function Dessiner([double]$angle, [string]$pastille) {
 $IconeRepos = Dessiner 0 $null
 $IconeFini = Dessiner 0 'LimeGreen'
 $IconeErreur = Dessiner 0 'Red'
+$IconeArret = Dessiner 0 'Red' -Carre
 $IconesTravail = foreach ($i in 0..8) { Dessiner ($i * 5) $null }
 
 $icone = New-Object System.Windows.Forms.NotifyIcon
@@ -1452,7 +1457,7 @@ function Processus-Fini {
         $etapes = Format-Deroule (Read-Deroule $flux)
         $script:Dernier = "Task stopped ($script:Arret) after $duree s.`n`n" + $(if ($etapes) { "What Claude did before the stop:`n$etapes" } else { 'Claude had not done anything yet.' })
         Finir-Run ''
-        $icone.Icon = $IconeRepos; Infobulle 'stopped'
+        $icone.Icon = $IconeArret; Infobulle 'stopped'
         Noter "Task stopped: $script:Run"
         Nettoyer-Runs
         return

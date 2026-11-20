@@ -116,7 +116,7 @@ def lecture_refusee(entree, entrees):
     if entree.get('tool_name') in ('Glob', 'Grep'):
         for cle in ('pattern', 'glob'):
             motif = entrees.get(cle)
-            if motif and (str(motif).startswith(('/', '~')) or '..' in str(motif)):
+            if motif and (os.path.isabs(str(motif)) or str(motif).startswith('~') or '..' in str(motif)):
                 base = entrees.get('path') or cwd
                 chemins.append(os.path.join(base, os.path.expanduser(racine_motif(motif))))
     if not chemins:

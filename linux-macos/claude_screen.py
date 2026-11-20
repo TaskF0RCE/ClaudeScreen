@@ -184,7 +184,8 @@ def lire_texte(chemin):
 # ------------------------------------------------------------------ icons
 
 def dessiner(angle=0.0, pastille=None, taille=64, barre_mac=None):
-    """White star on an orange circle, with a green (done) or red (error) dot.
+    """White star on an orange circle, with a green (done) or red (error) dot, or a red square (stopped: the
+    "stop" sign, so that it is not taken for an error).
 
     macOS menu bar (barre_mac, True by default on macOS): the bar shows icons in one color, so an orange circle
     became a plain gray disc and the spinning star did not show. There the star is drawn alone (its shape is the
@@ -209,16 +210,16 @@ def dessiner(angle=0.0, pastille=None, taille=64, barre_mac=None):
         for (x, y) in ((x1, y1), (x2, y2)):  # rounded ends
             r = epaisseur / 2
             d.ellipse([x - r, y - r, x + r, y + r], fill=couleur_etoile)
+    couleur = {'vert': (50, 205, 50, 255), 'rouge': (230, 30, 30, 255), 'arret': (230, 30, 30, 255)}.get(pastille)
+    forme = d.rectangle if pastille == 'arret' else d.ellipse
     if pastille and barre_mac:
-        couleur = {'vert': (50, 205, 50, 255), 'rouge': (230, 30, 30, 255)}[pastille]
-        d.ellipse([17 * k, 17 * k, 32 * k - 1, 32 * k - 1], fill=(0, 0, 0, 0))  # gap around the dot
-        d.ellipse([20 * k, 20 * k, 31 * k, 31 * k], fill=couleur)
+        forme([17 * k, 17 * k, 32 * k - 1, 32 * k - 1], fill=(0, 0, 0, 0))  # gap around the dot
+        forme([20 * k, 20 * k, 31 * k, 31 * k], fill=couleur)
         if pastille == 'rouge':  # error: a ring, so it differs from "done" even in one color
             d.ellipse([23 * k, 23 * k, 28 * k, 28 * k], fill=(0, 0, 0, 0))
     elif pastille:
-        couleur = {'vert': (50, 205, 50, 255), 'rouge': (230, 30, 30, 255)}[pastille]
-        d.ellipse([19 * k, 19 * k, 32 * k - 1, 32 * k - 1], fill='white')
-        d.ellipse([21 * k, 21 * k, 30 * k, 30 * k], fill=couleur)
+        forme([19 * k, 19 * k, 32 * k - 1, 32 * k - 1], fill='white')
+        forme([21 * k, 21 * k, 30 * k, 30 * k], fill=couleur)
     return img.resize((taille, taille), getattr(Image, 'LANCZOS', 1))
 
 
@@ -238,6 +239,8 @@ def texte_barre(image, debut, maintenant=None):
         return ' \u2713'
     if image is not None and image is ICONE_ERREUR:
         return ' !'
+    if image is not None and image is ICONE_ARRET:
+        return ' \u25a0'
     return ''
 
 
@@ -1235,7 +1238,7 @@ class Appli:
             self.dernier = 'Task stopped (%s) after %d s.\n\n%s' % (
                 self.arret, duree, 'What Claude did before the stop:\n' + etapes if etapes else 'Claude had not done anything yet.')
             self.finir_run()
-            self.mettre_icone(ICONE_REPOS)
+            self.mettre_icone(ICONE_ARRET)
             self.infobulle('stopped')
             self.notifier('Task stopped (%s) after %d s.' % (self.arret, duree))
             noter('Task stopped: %s' % self.run)
@@ -1524,7 +1527,7 @@ class Appli:
         )
 
     def executer(self):
-        global ICONE_REPOS, ICONE_FINI, ICONE_ERREUR, ICONES_TRAVAIL
+        global ICONE_REPOS, ICONE_FINI, ICONE_ERREUR, ICONE_ARRET, ICONES_TRAVAIL
         import pystray
 
         os.makedirs(RUNS, exist_ok=True)
@@ -1549,6 +1552,7 @@ class Appli:
         ICONE_REPOS = dessiner(0)
         ICONE_FINI = dessiner(0, 'vert')
         ICONE_ERREUR = dessiner(0, 'rouge')
+        ICONE_ARRET = dessiner(0, 'arret')
         ICONES_TRAVAIL = [dessiner(i * 5) for i in range(9)]
 
         self.icone = pystray.Icon('ClaudeScreen', ICONE_REPOS, NOM, self.creer_menu())
@@ -1618,7 +1622,7 @@ class Appli:
             noter('Closed')
 
 
-ICONE_REPOS = ICONE_FINI = ICONE_ERREUR = None
+ICONE_REPOS = ICONE_FINI = ICONE_ERREUR = ICONE_ARRET = None
 ICONES_TRAVAIL = []
 
 
