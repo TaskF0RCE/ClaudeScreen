@@ -229,7 +229,7 @@ def tache_finie(instruction='', reponse='Done.'):
 
 c = capture()
 a.lancer_tache(c, 'connect R0 and R1')
-verifier('triage started with the light options', appels[-1] == ('haiku', 'triage', ['--tools', 'Read', '--effort', 'low']), appels[-1:])
+verifier('triage started with the light options', appels[-1] == ('haiku', 'triage', ['--tools', 'Read', '--effort', 'low', '--no-session-persistence']), appels[-1:])
 p = prompt(c)
 fixe = p[p.index('1. Find what'):]
 verifier('prompt: actions, MEMORY, notes', '\n  relier X1 Y1 X2 Y2 ' in p and 'starting with "MEMORY: "' in p and 'Dupont' in p
@@ -733,6 +733,115 @@ a.nettoyer_runs()
 verifier('Ghost Mode is never kept, whatever the time chosen', not os.path.exists(fantome_run))
 a.commande_sessions({'action': 'conservation', 'jours': 30})
 
+print('--- Delete session')
+# Everything a session left goes to the trash in one folder (tasks, notes, title, roles, documents, Claude Code
+# transcripts), the others are untouched, the session in use is replaced by an empty one with the same roles,
+# the ghost session is only forgotten.
+cs.PROJETS_CLAUDE = os.path.join(bac, 'claude-projects')
+projet = os.path.join(cs.PROJETS_CLAUDE, '-home-someone-Documents-Claude-Work')
+
+
+def sid(n):
+    return '%08d-1111-2222-3333-444444444444' % n
+
+
+def tache_sid(instruction, reponse, n):
+    """A finished task whose stream names the Claude Code session it ran in, with the transcript Claude Code kept."""
+    t = capture()
+    a.proc = None
+    a.lancer_tache(t, instruction)
+    open(os.path.join(t['run'], 'mcp-started.txt'), 'w').close()
+    ecrire_flux(t, [{'type': 'system', 'subtype': 'init', 'cwd': 'x', 'session_id': sid(n), 'tools': []}, ev_texte(reponse),
+                    {'type': 'result', 'subtype': 'success', 'result': reponse}])
+    ecrire(os.path.join(projet, sid(n) + '.jsonl'), '{"secret": "%s"}' % instruction)
+    os.makedirs(os.path.join(projet, sid(n), 'subagents'), exist_ok=True)
+    a.proc = types.SimpleNamespace(returncode=0)
+    a.processus_fini()
+    a.titrage = None
+    return t
+
+
+def paquets():
+    return [n for n in os.listdir(poubelle) if n.startswith('ClaudeScreen - deleted session')]
+
+
+def session_par_id(i):
+    return ([x for x in sessions.lister(cs.DONNEES, False, cs.CONTEXTE) if x['id'] == i] or [None])[0]
+
+
+a.nouvelle_session()
+sa = cs.lire_session()
+a1 = tache_sid('first secret task', 'Done 1.\nMEMORY: a note of A', 1)
+a2 = tache_sid('second secret task', 'Done 2.', 2)
+ecrire(sessions.fichier_titre(cs.DONNEES, sa), 'OSPF lab: routers')
+sessions.enregistrer_roles(cs.DONNEES, sa, ['Network engineer'])
+sessions.ajouter_documents(cs.CONTEXTE, sa, [os.path.join(src, 'network course.md')])
+a.nouvelle_session()
+sb = cs.lire_session()
+b1 = tache_sid('a task of B', 'Done B.\nMEMORY: a note of B', 3)
+sessions.enregistrer_roles(cs.DONNEES, sb, ['Professor'])
+verifier('setup: two sessions, A has its notes put away', sa != sb and os.path.exists(sessions.fichier_notes(cs.DONNEES, sa))
+         and len(session_par_id(sa)['taches']) == 2)
+texte = sessions.texte_suppression(cs.DONNEES, session_par_id(sa), cs.lire_session())
+verifier('the question names the session and what goes', texte.startswith('Delete the session "OSPF lab: routers" now?')
+         and '2 tasks' in texte and 'trash' in texte and 'session in use' not in texte, texte)
+avant_bac = len(os.listdir(poubelle))
+e = a.commande_sessions({'action': 'supprimer', 'id': sa})
+verifier('its tasks are gone, not those of B', not os.path.exists(a1['run']) and not os.path.exists(a2['run']) and os.path.exists(b1['run']))
+verifier('its notes, title, roles and documents are gone', not any(os.path.exists(x) for x in (
+    sessions.fichier_notes(cs.DONNEES, sa), sessions.fichier_titre(cs.DONNEES, sa), sessions.fichier_roles(cs.DONNEES, sa),
+    sessions.dossier_documents(cs.CONTEXTE, sa))))
+verifier('its Claude Code transcripts are gone, not those of B', not os.path.exists(os.path.join(projet, sid(1) + '.jsonl'))
+         and not os.path.exists(os.path.join(projet, sid(2))) and os.path.exists(os.path.join(projet, sid(3) + '.jsonl')))
+pq = paquets()
+verifier('one folder in the trash, named after the session', len(os.listdir(poubelle)) == avant_bac + 1 and len(pq) == 1
+         and pq[0].startswith('ClaudeScreen - deleted session OSPF lab routers (%s)' % sa), pq)
+dedans = os.path.join(poubelle, pq[0])
+verifier('everything is in it', len(os.listdir(os.path.join(dedans, 'tasks'))) == 2
+         and len(os.listdir(os.path.join(dedans, 'Claude Code transcripts'))) == 4
+         and os.path.exists(os.path.join(dedans, sa + '.md')) and os.path.exists(os.path.join(dedans, sa, 'network course.md')),
+         [os.listdir(os.path.join(dedans, x)) if os.path.isdir(os.path.join(dedans, x)) else x for x in os.listdir(dedans)])
+verifier('B is untouched and still in use', cs.lire_session() == sb and 'a note of B' in memoire.notes(cs.FICHIER_NOTES)
+         and a.roles_session(sb) == ['Professor'] and session_par_id(sa) is None and e['donnees'] == cs.DONNEES)
+verifier('logged', 'Session deleted: %s, 2 task(s), everything in the trash' % sa in lire(cs.JOURNAL))
+texte = sessions.texte_suppression(cs.DONNEES, session_par_id(sb), cs.lire_session())
+verifier('the session in use: the question says a new session replaces it',
+         'This is the session in use: a new, empty session replaces it, with the same roles' in texte)
+a.commande_sessions({'action': 'supprimer', 'id': sb})
+sc = cs.lire_session()
+verifier('the session in use: a new empty session, with the same roles', sc != sb and memoire.notes(cs.FICHIER_NOTES) == ''
+         and a.roles_session(sc) == ['Professor'] and not os.path.exists(b1['run']) and session_par_id(sb) is None)
+copies = [os.path.join(r, 'memory.md') for r, _d, f in os.walk(poubelle) if 'memory.md' in f]
+verifier('its notes went to the trash with it', any('a note of B' in lire(x) for x in copies), copies)
+verifier('the window says so', a.dernier.startswith('Session deleted: Claude starts again from nothing'), a.dernier)
+a.proc = types.SimpleNamespace(returncode=None)
+verifier('refused while a task runs', not a.supprimer_session(sc) and cs.lire_session() == sc)
+a.proc = None
+c1 = tache_sid('a task of C', 'Done C.\nMEMORY: a note of C', 4)
+a.basculer_fantome(True)
+tache_sid('a ghost task', 'Ghost.\nMEMORY: a ghost note', 5)
+avant_bac = len(os.listdir(poubelle))
+verifier('setup: a ghost task', len(a.entrees_fantome) == 1 and a.notes_fantome == ['- a ghost note'])
+a.commande_sessions({'action': 'supprimer', 'id': '', 'fantome': True})
+verifier('the ghost session is forgotten, nothing goes to the trash', a.entrees_fantome == [] and a.notes_fantome == []
+         and len(os.listdir(poubelle)) == avant_bac and a.fantome)
+verifier('the persisted session in use is still there', cs.lire_session() == sc and os.path.exists(c1['run'])
+         and 'a note of C' in memoire.notes(cs.FICHIER_NOTES))
+a.commande_sessions({'action': 'supprimer', 'id': sc})
+verifier('from Ghost Mode, the persisted session in use can be deleted too, notes included', cs.lire_session() != sc
+         and memoire.notes(cs.FICHIER_NOTES) == '' and not os.path.exists(c1['run']) and a.fantome)
+a.basculer_fantome(False)
+vieux = os.path.join(cs.RUNS, '20251101-100000-old')
+ecrire(os.path.join(vieux, 'result.txt'), 'an old result')
+fantome_en_cours = os.path.join(cs.RUNS, '20251101-110000-ghost')
+ecrire(os.path.join(fantome_en_cours, 'ghost.txt'), 'on')
+verifier('earlier tasks: the question', sessions.texte_suppression(cs.DONNEES, session_par_id(''), cs.lire_session())
+         .startswith('Delete the earlier tasks (from before sessions) now?'))
+a.commande_sessions({'action': 'supprimer', 'id': ''})
+verifier('earlier tasks: deleted; a ghost task folder is not touched', not os.path.exists(vieux) and os.path.exists(fantome_en_cours)
+         and session_par_id('') is None and len([x for x in paquets() if 'earlier tasks' in x]) == 1)
+shutil.rmtree(fantome_en_cours)
+
 print('--- the Sessions window talks to the app')
 e = a.etat_sessions()
 verifier('the state sent to the window: everything it needs, as JSON',
@@ -899,10 +1008,23 @@ if tk_ok:
         f.duree.event_generate('<<ComboboxSelected>>')
         verifier('window: the time kept, chosen in the list', envoyes[-1] == {'action': 'conservation', 'jours': 90}
                  and sessions.conservation(cs.DONNEES) == 90 and f.duree.get() == '90 days')
+        import tkinter.messagebox
+        questions = []
+        reponses = [False, True]
+        tkinter.messagebox.askyesno = lambda titre, texte, **_kw: questions.append((texte, f.dialogue)) or reponses.pop(0)
+        f.liste.current([i for i, x in enumerate(f.choix) if x['id'] == autre][0])
+        f.choisir(f.liste.current())
+        n = len(envoyes)
+        f.supprimer.invoke()
+        verifier('window: Delete session asks first; No changes nothing', len(envoyes) == n and questions[-1][1]
+                 and questions[-1][0].startswith('Delete the session') and autre in [x['id'] for x in f.choix] and not f.dialogue)
+        f.supprimer.invoke()
+        verifier('window: Yes deletes the session shown', envoyes[-1] == {'action': 'supprimer', 'id': autre, 'fantome': False}
+                 and autre not in [x['id'] for x in f.choix] and not os.path.exists(sessions.dossier_documents(cs.CONTEXTE, autre)))
         f.etat = dict(f.etat, occupe=True)
         f.remplir()
-        verifier('window: during a task, no New session, no mode change, no Resume', all(
-            str(b.cget('state')) == 'disabled' for b in (f.nouvelle, f.persiste, f.fantome, f.reprendre)))
+        verifier('window: during a task, no New session, no mode change, no Resume, no Delete', all(
+            str(b.cget('state')) == 'disabled' for b in (f.nouvelle, f.persiste, f.fantome, f.reprendre, f.supprimer)))
         f.envoyer = lambda _c: None
         f.action({'action': 'nouvelle'})
         verifier('window: the app does not answer: said in the window', 'The app did not answer' in f.zone.get('1.0', 'end'))

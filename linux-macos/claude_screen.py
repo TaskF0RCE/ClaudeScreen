@@ -62,6 +62,7 @@ FICHIER_MEMOIRE = os.path.join(DONNEES, 'memory.txt')  # Claude's notes are alwa
 FICHIER_SESSION = os.path.join(DONNEES, 'session.txt')  # id of the current session (see New session)
 FICHIER_FANTOME = os.path.join(DONNEES, 'ghost.txt')    # ghost mode: "on" or "off" (default)
 DOSSIER_SESSIONS = sessions.dossier(DONNEES)   # per session: <id>.md (notes, when not current), <id>.title.txt, <id>.roles.txt
+PROJETS_CLAUDE = os.path.expanduser('~/.claude/projects')   # where Claude Code keeps the transcripts of its calls
 # Roles shipped with the app (at the root of the repository), copied once into System-Context/Roles.
 ROLES_FOURNIS = os.path.join(os.path.dirname(RACINE), 'roles')
 REGLAGES = os.path.join(DONNEES, 'settings.json')
@@ -107,7 +108,7 @@ VERROU = SOCKET + '.lock'
 # and loading them makes each call slower and heavier.
 OPTIONS_CLAUDE = ['--strict-mcp-config', '--disable-slash-commands']
 # Triage only reads the screenshot. The task gets the file tools, plus the pc tool of outils/mcp.py (see lancer_travail).
-OPTIONS_TRI = ['--tools', 'Read', '--effort', 'low']
+OPTIONS_TRI = ['--tools', 'Read', '--effort', 'low', '--no-session-persistence']   # one word (and the title): no transcript
 OPTIONS_TACHE = ['--tools', 'Read,Write,Edit,Glob,Grep']
 # Apps where triage is pointless: go straight to Opus (networking, maths).
 APPS_OPUS = re.compile(r'packet ?tracer|gns3|putty|mobaxterm|securecrt|wireshark|winbox|matlab|mathematica'
@@ -677,6 +678,42 @@ class Appli:
         noter('Session resumed: %s' % ident)
         return True
 
+    def supprimer_session(self, ident, fantome=False):
+        """Delete session (Sessions window), not during a task: everything the session left goes to the trash in one
+        folder (see sessions.supprimer). The session in use (also while Ghost Mode is on: memory.md holds its notes)
+        is replaced by a new, empty one with the same roles. The ghost session is only forgotten."""
+        if self.proc:
+            noter('Delete session: not during a task')
+            return False
+        if fantome:
+            self.oublier_fantome()
+            self.dernier = ACCUEIL_FANTOME
+            self.dernier_hors_historique = False
+            noter('Ghost session deleted')
+            return True
+        courante = bool(ident) and ident == lire_session()
+        roles = self.roles_session(ident) if ident else []
+        n, restes = sessions.supprimer(DONNEES, CONTEXTE, ident, PROJETS_CLAUDE, natif.corbeille,
+                                       FICHIER_NOTES if courante else '', noter)
+        noter('Session deleted: %s, %d task(s), everything in the trash%s'
+              % (ident or 'earlier tasks', n, ' (%d item(s) left, see above)' % restes if restes else ''))
+        if courante:
+            try:
+                memoire.ecrire(FICHIER_NOTES, memoire.ENTETE)
+            except OSError as ex:
+                noter('memory.md: %s' % ex)
+            nouvelle = sessions.nouvel_id(DONNEES, ident, CONTEXTE)
+            ecrire_texte(FICHIER_SESSION, nouvelle)
+            try:
+                sessions.enregistrer_roles(DONNEES, nouvelle, roles)
+            except OSError as ex:
+                noter('Roles: %s' % ex)
+            noter('New session: %s' % nouvelle)
+            if not self.fantome:
+                self.dernier = 'Session deleted: Claude starts again from nothing.\n\n' + AIDE_RACCOURCIS
+                self.dernier_hors_historique = False
+        return True
+
     def basculer_fantome(self, actif):
         """Ghost Mode on (a ghost session starts, empty, with the roles of the persisted one) or off (back to
         Persisted Memory, in the session that was current, as it was). Either way the ghost session that was
@@ -718,6 +755,8 @@ class Appli:
                 self.reprendre_session(ident)
             elif action == 'fantome':
                 self.basculer_fantome(bool(commande.get('actif')))
+            elif action == 'supprimer':
+                self.supprimer_session(ident, bool(commande.get('fantome')))
             elif action == 'conservation':
                 sessions.enregistrer_conservation(DONNEES, int(commande.get('jours')))
                 noter('Sessions kept for %d days' % sessions.conservation(DONNEES))
@@ -815,7 +854,7 @@ class Appli:
 
     def options_fantome(self):
         """Claude Code keeps a transcript of every call (prompt, screenshots, answer) in ~/.claude/projects: not for
-        a ghost task, which must leave nothing behind."""
+        a ghost task, which must leave nothing behind. (The triage and the session title never keep one.)"""
         return ['--no-session-persistence'] if self.fantome_tache else []
 
     def demarrer_claude(self, modele, nom, options):
@@ -945,7 +984,7 @@ class Appli:
                 return
             ecrire_texte(os.path.join(run, 'prompts', 'triage.txt'), texte_tri(png, fenetre, precision, instructions, noms_roles))
             self.etape = 'tri'
-            self.demarrer_claude('haiku', 'triage', OPTIONS_TRI + self.options_fantome())
+            self.demarrer_claude('haiku', 'triage', OPTIONS_TRI)
             self.infobulle('looking at the screen...')
         except Exception as ex:
             self.echec('Could not start the task: %s' % ex)

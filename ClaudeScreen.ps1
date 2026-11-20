@@ -23,6 +23,7 @@ $FichierMemoire = Join-Path $Donnees 'memory.txt'  # Claude's notes are always k
 $FichierSession = Join-Path $Donnees 'session.txt'  # id of the current session (see New session)
 $FichierFantome = Join-Path $Donnees 'ghost.txt'    # ghost mode: 'on' or 'off' (default)
 $DossierSessions = Join-Path $Donnees 'sessions'    # per session: <id>.md (notes, when not current), <id>.title.txt, <id>.roles.txt
+$ProjetsClaude = Join-Path $env:USERPROFILE '.claude\projects'   # where Claude Code keeps the transcripts of its calls
 $FichierFenetre = Join-Path $Donnees 'window.txt'   # size of the Sessions window, when the user changed it
 $FichierConservation = Join-Path $Donnees 'retention.txt'   # days the tasks of the persisted sessions are kept (default: 30)
 $FichierContexte = Join-Path $Donnees 'context.txt'   # versions before 1.0: the active context (now the roles of the session)
@@ -227,7 +228,7 @@ function Demarrer-Titrage([string]$id, [string]$instruction, [string]$resultat) 
     $question = Join-Path $DossierSessions "$id.title-prompt.txt"
     $sortie = Join-Path $DossierSessions "$id.title-answer.txt"
     [IO.File]::WriteAllText($question, (Texte-Titrage $instruction $resultat), (New-Object System.Text.UTF8Encoding $false))
-    $ligne = "`"`"$Claude`" -p --model haiku $OptionsClaude --tools Read --effort low --settings `"$Reglages`" --output-format text < `"$question`" > `"$sortie`" 2> nul`""
+    $ligne = "`"`"$Claude`" -p --model haiku $OptionsClaude --tools Read --effort low --no-session-persistence --settings `"$Reglages`" --output-format text < `"$question`" > `"$sortie`" 2> nul`""
     $psi = New-Object System.Diagnostics.ProcessStartInfo 'cmd.exe', "/d /s /c $ligne"
     $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.WorkingDirectory = $Travail
     foreach ($cle in @($psi.EnvironmentVariables.Keys)) { if ($cle -match '^(CLAUDE|ANTHROPIC)') { $psi.EnvironmentVariables.Remove($cle) } }
@@ -430,6 +431,17 @@ function Oublier-Fantome {
     Vider-DocumentsFantome
 }
 
+# The id of a new persisted session (the date), which becomes the current one. Never the id of a session that
+# still has something (two new sessions in the same second).
+function Nouvel-IdSession([string]$ancienne) {
+    $base = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $id = $base; $n = 2
+    while ($id -eq $ancienne -or (Test-Path -LiteralPath (Fichier-NotesSession $id)) -or (Test-Path -LiteralPath (Fichier-TitreSession $id)) -or
+           (Test-Path -LiteralPath (Fichier-RolesSession $id)) -or (Test-Path -LiteralPath (Dossier-DocumentsSession $id))) { $id = "$base-$n"; $n++ }
+    Set-Content -Path $FichierSession -Value $id -Encoding ASCII
+    $id
+}
+
 # New session, in the mode that is selected. Not during a task.
 #   Persisted Memory: the notes of the session that ends are put away (it can be resumed later), and the
 #     next tasks start a new history with no notes and no documents.
@@ -446,12 +458,7 @@ function Nouvelle-Session {
     }
     $ancienne = Lire-Session
     try { Sauver-NotesSession $ancienne; Charger-NotesSession '' } catch { Noter "memory.md: $($_.Exception.Message)" }
-    $base = Get-Date -Format 'yyyyMMdd-HHmmss'
-    $id = $base; $n = 2
-    # Never the id of a session that still has something (two new sessions in the same second).
-    while ($id -eq $ancienne -or (Test-Path -LiteralPath (Fichier-NotesSession $id)) -or (Test-Path -LiteralPath (Fichier-TitreSession $id)) -or
-           (Test-Path -LiteralPath (Fichier-RolesSession $id)) -or (Test-Path -LiteralPath (Dossier-DocumentsSession $id))) { $id = "$base-$n"; $n++ }
-    Set-Content -Path $FichierSession -Value $id -Encoding ASCII
+    $id = Nouvel-IdSession $ancienne
     try { Enregistrer-RolesSession $id (Lire-RolesSession $ancienne) } catch { Noter "Roles: $($_.Exception.Message)" }
     $script:Dernier = "New session.`n`n$script:AideRaccourcis"
     Noter "New session: $id"
@@ -471,6 +478,85 @@ function Reprendre-Session([string]$id) {
     $script:Dernier = "Session resumed: Claude has the notes it had.`n`n$script:AideRaccourcis"
     $script:DernierHorsHistorique = $false
     Noter "Session resumed: $id"
+    $true
+}
+
+# --- Delete session (Sessions window) ---
+# Everything a session left goes to the Recycle Bin, in one folder named after it: its tasks (screenshots,
+# prompts, instructions, results), Claude's notes, its title, its documents, and the transcripts Claude Code
+# kept of its tasks (~\.claude\projects). Claude never sees any of it again. Its roles are a choice of the user,
+# not something Claude learned: when the session in use is deleted, the new empty session that replaces it keeps
+# them. The ghost session is only forgotten (nothing of it is on disk). "Earlier tasks" works the same way.
+function Dossiers-Session([string]$id) {
+    @(Get-ChildItem $Runs -Directory -ErrorAction SilentlyContinue | Where-Object {
+        if (Test-Path -LiteralPath (Join-Path $_.FullName 'ghost.txt')) { return $false }
+        $m = Join-Path $_.FullName 'session.txt'
+        $(if (Test-Path -LiteralPath $m) { "$(Get-Content -LiteralPath $m -Raw)".Trim() } else { '' }) -eq $id
+    })
+}
+# The transcripts of these tasks: Claude Code names them after the session id it writes in the stream of each task.
+function Transcripts-Claude($dossiers) {
+    $projets = $ProjetsClaude
+    if (-not (Test-Path -LiteralPath $projets)) { return }
+    $ids = @(foreach ($d in $dossiers) {
+        $flux = Join-Path $d.FullName 'responses\task.jsonl'
+        if (Test-Path -LiteralPath $flux) {
+            $m = [regex]::Match(((Get-Content -LiteralPath $flux -TotalCount 20 -Encoding UTF8) -join "`n"), '"session_id"\s*:\s*"([0-9a-fA-F-]{36})"')
+            if ($m.Success) { $m.Groups[1].Value }
+        }
+    }) | Select-Object -Unique
+    if (-not $ids) { return }
+    foreach ($p in @(Get-ChildItem -LiteralPath $projets -Directory -ErrorAction SilentlyContinue)) {
+        foreach ($i in $ids) {
+            foreach ($c in (Join-Path $p.FullName "$i.jsonl"), (Join-Path $p.FullName $i)) { if (Test-Path -LiteralPath $c) { Get-Item -LiteralPath $c -Force } }
+        }
+    }
+}
+function Supprimer-Session($session) {
+    if ($script:Proc -or -not $session) { return $false }
+    if ($session.Fantome) {
+        Oublier-Fantome
+        $script:Dernier = $script:AccueilFantome; $script:DernierHorsHistorique = $false
+        Noter 'Ghost session deleted'
+        return $true
+    }
+    $id = $session.Id
+    # The persisted session in use (also while Ghost Mode is on: memory.md still holds its notes).
+    $courante = $id -and ($id -eq (Lire-Session))
+    $roles = @(Lire-RolesSession $id)
+    $dossiers = @(Dossiers-Session $id)
+    $titre = if ($id) { Lire-TitreSession $id } else { '' }
+    $nom = 'ClaudeScreen - deleted session ' + $(if ($titre) { ($titre -replace '[\\/:*?"<>|]', '') + " ($id)" } elseif ($id) { $id } else { 'earlier tasks' })
+    $paquet = Join-Path $Donnees $nom; $n = 2
+    while (Test-Path -LiteralPath $paquet) { $paquet = Join-Path $Donnees "$nom $n"; $n++ }
+    New-Item -ItemType Directory -Force (Join-Path $paquet 'tasks'), (Join-Path $paquet 'Claude Code transcripts') | Out-Null
+    $elements = New-Object System.Collections.Generic.List[object]
+    foreach ($d in $dossiers) { $elements.Add(@($d, 'tasks')) }
+    foreach ($t in @(Transcripts-Claude $dossiers)) { $elements.Add(@($t, 'Claude Code transcripts')) }
+    if ($id) {
+        foreach ($c in (Fichier-NotesSession $id), (Fichier-TitreSession $id), (Fichier-RolesSession $id), (Dossier-DocumentsSession $id)) {
+            if (Test-Path -LiteralPath $c) { $elements.Add(@((Get-Item -LiteralPath $c -Force), '')) }
+        }
+    }
+    # The notes of the session in use are in memory.md: a copy goes with the rest, and memory.md is emptied.
+    if ($courante -and (Test-Path -LiteralPath $FichierNotes)) {
+        Copy-Item -LiteralPath $FichierNotes -Destination (Join-Path $paquet 'memory.md')
+        try { Charger-NotesSession '' } catch { Noter "memory.md: $($_.Exception.Message)" }
+    }
+    $restes = 0
+    foreach ($e in $elements) {
+        $chemin = $e[0].FullName
+        try { Move-Item -LiteralPath $chemin -Destination (Join-Path (Join-Path $paquet $e[1]) $e[0].Name) -ErrorAction Stop }
+        catch { try { Send-Corbeille $chemin } catch { $restes++; Noter "Delete session: $chemin could not be removed ($($_.Exception.Message))" } }
+    }
+    try { Send-Corbeille $paquet } catch { $restes++; Noter "Delete session: $paquet could not go to the Recycle Bin ($($_.Exception.Message))" }
+    Noter ("Session deleted: $(if ($id) { $id } else { 'earlier tasks' }), $($dossiers.Count) task(s), everything in the Recycle Bin" + $(if ($restes) { " ($restes item(s) left, see above)" } else { '' }))
+    if ($courante) {
+        $nouvelle = Nouvel-IdSession $id
+        try { Enregistrer-RolesSession $nouvelle $roles } catch { Noter "Roles: $($_.Exception.Message)" }
+        Noter "New session: $nouvelle"
+        if (-not $script:Fantome) { $script:Dernier = "Session deleted: Claude starts again from nothing.`n`n$script:AideRaccourcis"; $script:DernierHorsHistorique = $false }
+    }
     $true
 }
 
@@ -607,6 +693,26 @@ function Choisir-Documents {
     $script:Fenetre.Activate()
 }
 
+# Delete session: says what goes, asks, then deletes the session shown.
+function Texte-Suppression($s) {
+    if ($s.Fantome) { return "Forget this ghost session now?`n`nNothing of it was written on disk: Claude forgets its notes and its results, and the documents added to it are deleted." }
+    $n = @(Dossiers-Session $s.Id).Count
+    $quoi = if ($s.Id) { 'the session "' + (($s.Titre -split '  -  ')[0] -replace ' \(current\)$', '') + '"' } else { 'the earlier tasks (from before sessions)' }
+    "Delete $quoi now?`n`n" + $(if ($n -eq 1) { '1 task' } else { "$n tasks" }) + ' (screenshots, instructions, results), ' +
+        $(if ($s.Id) { "Claude's notes, the title and the documents of the session, " } else { '' }) +
+        'and the transcripts Claude Code kept of them go to the Recycle Bin, in one folder. Claude will not use any of it again.' +
+        $(if ($s.Id -and $s.Id -eq (Lire-Session)) { "`n`nThis is the session in use: a new, empty session replaces it, with the same roles." } else { '' })
+}
+function Confirmer-Suppression {
+    $s = Session-Affichee
+    if (-not $s -or $script:Proc) { return }
+    $script:DialogueOuvert = $true
+    try { $r = [System.Windows.Forms.MessageBox]::Show($script:Fenetre, (Texte-Suppression $s), "$Nom - Delete session", 'YesNo', 'Warning', 'Button2') }
+    finally { $script:DialogueOuvert = $false }
+    if ("$r" -eq 'Yes') { [void](Supprimer-Session $s); Remplir-Fenetre }
+    $script:Fenetre.Activate()
+}
+
 # Reads everything again and shows the session in use (the first of the list).
 function Remplir-Fenetre {
     $script:Choix = Lister-Choix
@@ -620,7 +726,7 @@ function Remplir-Fenetre {
     $script:ListeConservation.SelectedItem = $proche
     $script:ModePersiste.Checked = -not $script:Fantome
     $script:ModeFantome.Checked = $script:Fantome
-    foreach ($c in $script:BoutonSession, $script:ModePersiste, $script:ModeFantome) { $c.Enabled = -not $script:Proc }
+    foreach ($c in $script:BoutonSession, $script:ModePersiste, $script:ModeFantome, $script:BoutonSupprimer) { $c.Enabled = -not $script:Proc }
     $script:Remplissage = $false
     Choisir-Session 0
 }
@@ -708,7 +814,7 @@ function Montrer-Resultat {
         $bas = New-Object System.Windows.Forms.Panel
         $bas.Dock = 'Bottom'; $bas.Height = 28; $bas.Padding = New-Object System.Windows.Forms.Padding 6, 3, 3, 3
         $libelle = New-Object System.Windows.Forms.Label
-        $libelle.Text = 'Persisted sessions are kept for'; $libelle.Dock = 'Fill'; $libelle.TextAlign = 'MiddleLeft'; $libelle.Font = $police
+        $libelle.Text = 'Sessions kept for'; $libelle.Dock = 'Fill'; $libelle.TextAlign = 'MiddleLeft'; $libelle.Font = $police
         $duree = New-Object System.Windows.Forms.ComboBox
         $duree.DropDownStyle = 'DropDownList'; $duree.Dock = 'Right'; $duree.Width = 84; $duree.Font = $police
         foreach ($nom in $ChoixConservation.Keys) { [void]$duree.Items.Add($nom) }
@@ -719,7 +825,12 @@ function Montrer-Resultat {
         $aide = 'Each task of a persisted session is deleted after this time, with its screenshots; a session goes when its last task goes. A shorter time applies at the next cleanup (after the next task, or within 6 hours). Ghost Mode keeps nothing, whatever this says.'
         $bulles.SetToolTip($libelle, $aide)
         $bulles.SetToolTip($duree, $aide)
-        $bas.Controls.AddRange(@($libelle, $duree))
+        $supprimer = New-Object System.Windows.Forms.Button
+        $supprimer.Text = 'Delete session'; $supprimer.Dock = 'Right'; $supprimer.Font = $police; $supprimer.FlatStyle = 'System'
+        $supprimer.Width = [System.Windows.Forms.TextRenderer]::MeasureText('Delete session', $police).Width + 20
+        $supprimer.add_Click({ Confirmer-Suppression })
+        $bulles.SetToolTip($supprimer, 'Deletes the session shown, now: its tasks, Claude''s notes, its documents and the transcripts Claude Code kept go to the Recycle Bin. Claude will not use them again.')
+        $bas.Controls.AddRange(@($libelle, $duree, $supprimer))
         $f.Controls.Add($t)
         $f.Controls.Add($bas)
         $f.Controls.Add($barre)
@@ -732,7 +843,7 @@ function Montrer-Resultat {
         $script:BoutonAncien = $ancien; $script:BoutonRecent = $recent
         $script:ListeSessions = $liste; $script:BoutonSession = $nouvelle; $script:BoutonReprendre = $reprendre
         $script:ModePersiste = $persiste; $script:ModeFantome = $fantome; $script:BoutonTaille = $taille
-        $script:BoutonRoles = $roles; $script:BoutonDocuments = $documents
+        $script:BoutonRoles = $roles; $script:BoutonDocuments = $documents; $script:BoutonSupprimer = $supprimer
     }
     Remplir-Fenetre
     $script:BoutonTaille.Visible = ($script:Fenetre.Size -ne $TailleDefaut)
@@ -764,7 +875,7 @@ $OptionsClaude = '--strict-mcp-config --disable-slash-commands'
 # Triage only reads the screenshot. The task gets the file tools; the PC actions go through the "pc" tool of
 # outils/mcp.ps1, an MCP server that Claude Code starts for the task and stops at the end (several actions
 # per call, the screenshot comes back in the result). With Terminal access, the PowerShell tool is added.
-$OptionsTri = '--tools Read --effort low'
+$OptionsTri = '--tools Read --effort low --no-session-persistence'   # one word: no Claude Code transcript kept
 $OptionsTache = '--tools Read,Write,Edit,Glob,Grep'
 $McpScript = Join-Path $Outils 'mcp.ps1'
 
@@ -940,7 +1051,7 @@ function Mettre-A-Jour-Claude {
 }
 
 # Claude Code keeps a transcript of every call (prompt, screenshots, answer) in ~\.claude\projects: not for a
-# ghost task, which must leave nothing behind.
+# ghost task, which must leave nothing behind. (The triage and the session title never keep one.)
 function Options-Fantome { if ($script:FantomeTache) { ' --no-session-persistence' } else { '' } }
 
 function Demarrer-Claude([string]$modele, [string]$nom, [string]$options) {
@@ -1173,7 +1284,7 @@ Answer with a single word: OPUS or SONNET.
 "@
         [IO.File]::WriteAllText((Join-Path $run 'prompts\triage.txt'), $tri, $utf8)
         $script:Etape = 'tri'
-        Demarrer-Claude 'haiku' 'triage' ($OptionsTri + (Options-Fantome))
+        Demarrer-Claude 'haiku' 'triage' $OptionsTri
         Infobulle 'looking at the screen...'
     } catch {
         Echec "Could not start the task: $($_.Exception.Message)"

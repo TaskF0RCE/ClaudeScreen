@@ -159,7 +159,10 @@ class FenetreSessions:
         # Bottom row, the one setting: how long the tasks of the kept sessions stay.
         bas = tk.Frame(root)
         bas.pack(side='bottom', fill='x', padx=6, pady=3)
-        tk.Label(bas, text='Persisted sessions are kept for', anchor='w').pack(side='left', fill='x', expand=True)
+        tk.Label(bas, text='Sessions kept for', anchor='w').pack(side='left', fill='x', expand=True)
+        # Deletes the session shown, now (after a question).
+        self.supprimer = tk.Button(bas, text='Delete session', command=self.supprimer_session)
+        self.supprimer.pack(side='right', padx=(4, 0))
         self.duree = ttk.Combobox(bas, state='readonly', width=8, values=[c[0] for c in sessions.CHOIX_CONSERVATION])
         self.duree.pack(side='right')
         self.duree.bind('<<ComboboxSelected>>', lambda _e: self.action(
@@ -226,7 +229,7 @@ class FenetreSessions:
         self.liste.current(0)
         self.mode.set('fantome' if e.get('fantome') else 'persiste')
         libre = 'disabled' if e.get('occupe') else 'normal'
-        for bouton in (self.nouvelle, self.persiste, self.fantome):
+        for bouton in (self.nouvelle, self.persiste, self.fantome, self.supprimer):
             bouton.config(state=libre)
         self.duree.set(sessions.choix_proche(sessions.conservation(self.donnees)))
         self.montrer_bouton_taille()
@@ -333,6 +336,21 @@ class FenetreSessions:
         self.recent.config(state='normal' if self.position < len(self.entrees) - 1 else 'disabled')
 
     # ---- actions (done by the app, which answers with the new state)
+
+    def supprimer_session(self):
+        """Says what goes, asks, then has the app delete the session shown (everything to the trash)."""
+        if self.etat.get('occupe') or not self.choix:
+            return
+        s = self.session_affichee()
+        texte = sessions.texte_suppression(self.donnees, s, sessions.lire_session(self.donnees))
+        from tkinter import messagebox
+        self.dialogue = True   # the window stays open while the question is asked
+        try:
+            oui = messagebox.askyesno('ClaudeScreen - Delete session', texte, icon='warning', default='no', parent=self.root)
+        finally:
+            self.dialogue = False
+        if oui:
+            self.action({'action': 'supprimer', 'id': s['id'], 'fantome': bool(s['fantome'])})
 
     def reprendre_session(self):
         self.action({'action': 'reprendre', 'id': self.choix[self.liste.current()]['id']})

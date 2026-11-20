@@ -79,7 +79,7 @@ The **Sessions** window has the same content and behaviour as on Windows:
 - **Resume** and **New session**;
 - **Persisted Memory** or **Ghost Mode**;
 - the **Roles** and **Documents** of each session;
-- at the bottom, how long persisted sessions are kept (30 days by default).
+- at the bottom, how long persisted sessions are kept (30 days by default), and **Delete session**: everything the session shown left (tasks, notes, name, roles, documents, and the transcripts Claude Code kept in `~/.claude/projects`) goes to the trash in one folder, and the session in use is replaced by an empty one with the same roles.
 
 It is a small Tk window in the bottom-right corner of the screen, above the Dock on macOS. Drag its border to resize it: the size is remembered (`data/window.txt`), and **Default size** brings it back. It closes when you click elsewhere, except while you pick documents. The code is in `outils/fenetres.py` and `outils/sessions.py`.
 
