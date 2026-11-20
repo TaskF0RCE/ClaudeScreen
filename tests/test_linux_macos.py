@@ -541,6 +541,7 @@ a.lancer_tache(g, 'a secret instruction')
 pg = prompt(g)
 verifier('ghost: its own roles, the notes of the persisted session not sent', 'Roles of this session: Professor, Network engineer' in pg
          and 'a note of the new session' not in pg and 'a secret instruction' in pg and '(no notes yet)' in pg)
+verifier('ghost: Claude Code keeps no transcript of it', appels[-1][2][-1:] == ['--no-session-persistence'], appels[-1:])
 verifier('ghost: no session id, no instruction file', not os.path.exists(os.path.join(g['run'], 'session.txt')) and not os.path.exists(os.path.join(g['run'], 'instruction.txt')))
 open(os.path.join(g['run'], 'mcp-started.txt'), 'w').close()
 repondre(g, 'Secret answer.\nMEMORY: a ghost note')
