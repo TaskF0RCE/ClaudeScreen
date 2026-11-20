@@ -813,6 +813,11 @@ class Appli:
 
     # -------------------------------------------------- tasks
 
+    def options_fantome(self):
+        """Claude Code keeps a transcript of every call (prompt, screenshots, answer) in ~/.claude/projects: not for
+        a ghost task, which must leave nothing behind."""
+        return ['--no-session-persistence'] if self.fantome_tache else []
+
     def demarrer_claude(self, modele, nom, options):
         claude = trouver_claude()
         if not claude:
@@ -940,7 +945,7 @@ class Appli:
                 return
             ecrire_texte(os.path.join(run, 'prompts', 'triage.txt'), texte_tri(png, fenetre, precision, instructions, noms_roles))
             self.etape = 'tri'
-            self.demarrer_claude('haiku', 'triage', OPTIONS_TRI)
+            self.demarrer_claude('haiku', 'triage', OPTIONS_TRI + self.options_fantome())
             self.infobulle('looking at the screen...')
         except Exception as ex:
             self.echec('Could not start the task: %s' % ex)
@@ -957,7 +962,7 @@ class Appli:
                 'env': {'ECRAN_RUN': self.run, 'ECRAN_CONTEXTE': CONTEXTE,
                         'PYTHONPYCACHEPREFIX': os.environ['PYTHONPYCACHEPREFIX']},
             }}}, indent=2))
-            self.demarrer_claude(modele, 'task', OPTIONS_TACHE + ['--mcp-config', config])
+            self.demarrer_claude(modele, 'task', OPTIONS_TACHE + ['--mcp-config', config] + self.options_fantome())
             self.infobulle('working (%s)...' % modele)
             noter('Model: %s' % modele)
         except Exception as ex:

@@ -939,6 +939,10 @@ function Mettre-A-Jour-Claude {
     } catch { $script:Maj = $null }
 }
 
+# Claude Code keeps a transcript of every call (prompt, screenshots, answer) in ~\.claude\projects: not for a
+# ghost task, which must leave nothing behind.
+function Options-Fantome { if ($script:FantomeTache) { ' --no-session-persistence' } else { '' } }
+
 function Demarrer-Claude([string]$modele, [string]$nom, [string]$options) {
     # An update still running: let it finish first (at most 1 min), claude.exe may be being replaced.
     if ($script:Maj -and -not $script:Maj.HasExited) { [void]$script:Maj.WaitForExit(60000) }
@@ -1169,7 +1173,7 @@ Answer with a single word: OPUS or SONNET.
 "@
         [IO.File]::WriteAllText((Join-Path $run 'prompts\triage.txt'), $tri, $utf8)
         $script:Etape = 'tri'
-        Demarrer-Claude 'haiku' 'triage' $OptionsTri
+        Demarrer-Claude 'haiku' 'triage' ($OptionsTri + (Options-Fantome))
         Infobulle 'looking at the screen...'
     } catch {
         Echec "Could not start the task: $($_.Exception.Message)"
@@ -1189,7 +1193,7 @@ function Lancer-Travail([string]$modele) {
         } } } | ConvertTo-Json -Depth 5
         [IO.File]::WriteAllText($config, $json, (New-Object System.Text.UTF8Encoding $false))
         $outils = $OptionsTache + $(if ($script:TerminalTache) { ',PowerShell' } else { '' })
-        Demarrer-Claude $modele 'task' "$outils --mcp-config `"$config`""
+        Demarrer-Claude $modele 'task' ("$outils --mcp-config `"$config`"" + (Options-Fantome))
         Infobulle "working ($modele)..."
         Noter ("Model: $modele" + $(if ($script:TerminalTache) { ', terminal' } else { '' }))
     } catch {

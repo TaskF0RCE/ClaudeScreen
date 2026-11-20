@@ -7,6 +7,7 @@ Verifier 'no task yet: the icon shows the last message' ((Texte-Resultat) -eq $s
 $cap = Fausse-Capture
 Lancer-Tache $cap 'cable the routers'
 Verifier 'task started as a stream of events' ($global:Appels[-1] -like 'sonnet|task|*')
+Verifier 'a persisted task keeps its Claude Code transcript' ($global:Appels[-1] -notmatch 'no-session-persistence')
 $src = [IO.File]::ReadAllText((Join-Path $Racine 'ClaudeScreen.ps1'), [Text.Encoding]::UTF8)
 Verifier 'the task writes task.jsonl, the triage a text file' ($src -match [regex]::Escape('--output-format stream-json --verbose <') -and $src -match [regex]::Escape('responses\$nom.jsonl') -and $src -match [regex]::Escape('--output-format text <'))
 $flux = @(
@@ -141,6 +142,7 @@ $g = Fausse-Capture
 Lancer-Tache $g 'a secret instruction'
 $p = Lire-Prompt $g
 Verifier 'ghost: the notes of the persisted session are not sent' ($p -notmatch 'a note of the persisted session' -and $p -match '\(no notes yet\)' -and $p -match 'a secret instruction')
+Verifier 'ghost: Claude Code keeps no transcript of it' ($global:Appels[-1] -match ' --no-session-persistence$') $global:Appels[-1]
 Verifier 'ghost: no session id, no instruction file in the task folder' (-not (Test-Path (Join-Path $g.Run 'session.txt')) -and -not (Test-Path (Join-Path $g.Run 'instruction.txt')) -and (Test-Path (Join-Path $g.Run 'ghost.txt')))
 Ecrire-Reponse $g "Secret answer.`nMEMORY: a ghost note"
 $script:Proc = Faux-Proc 0
