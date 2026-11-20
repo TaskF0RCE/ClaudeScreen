@@ -57,6 +57,8 @@ MAC = natif.MAC
 RUNS = os.path.join(DONNEES, 'runs')
 JOURNAL = os.path.join(DONNEES, 'log.txt')
 FICHIER_MODELE = os.path.join(DONNEES, 'model.txt')
+FICHIER_TERMINAL = os.path.join(DONNEES, 'terminal.txt')  # terminal access (Bash tool): 'on' or 'off' (default)
+FICHIER_TERMINAL_ACCEPTE = os.path.join(DONNEES, 'terminal-accepted.txt')  # the user said yes once: not asked again
 FICHIER_SMOOTH = os.path.join(DONNEES, 'smooth.txt')  # smooth mode: "on" or "off", read by pc.py at every action
 FICHIER_MEMOIRE = os.path.join(DONNEES, 'memory.txt')  # Claude's notes are always kept, unless this file says "never"
 FICHIER_SESSION = os.path.join(DONNEES, 'session.txt')  # id of the current session (see New session)
@@ -66,6 +68,7 @@ PROJETS_CLAUDE = os.path.expanduser('~/.claude/projects')   # where Claude Code 
 # Roles shipped with the app (at the root of the repository), copied once into System-Context/Roles.
 ROLES_FOURNIS = os.path.join(os.path.dirname(RACINE), 'roles')
 REGLAGES = os.path.join(DONNEES, 'settings.json')
+FICHIER_NOTIFICATIONS = os.path.join(DONNEES, 'notifications.txt')
 DERNIER = os.path.join(DONNEES, 'last-result.txt')  # versions before 1.0 (the last result, for the History window)
 FICHIER_NOTES_AVANT = os.path.join(DONNEES, 'memory-previous.md')  # the notes cleared by the last New session
 MCP_SCRIPT = os.path.join(OUTILS, 'mcp.py')  # the MCP server Claude controls the computer through
@@ -180,33 +183,78 @@ def lire_texte(chemin):
 
 # ------------------------------------------------------------------ icons
 
-def dessiner(angle=0.0, pastille=None, taille=64):
-    """White star on an orange circle, with a green (done) or red (error) dot."""
+def dessiner(angle=0.0, pastille=None, taille=64, barre_mac=None):
+    """White star on an orange circle, with a green (done) or red (error) dot.
+
+    macOS menu bar (barre_mac, True by default on macOS): the bar shows icons in one color, so an orange circle
+    became a plain gray disc and the spinning star did not show. There the star is drawn alone (its shape is the
+    icon, like the other icons of the bar), and the dot is cut out of it, so that every state reads in one color.
+    """
     from PIL import Image, ImageDraw
+    if barre_mac is None:
+        barre_mac = MAC
     k = 8 * taille / 32.0  # draw 8x larger then scale down (anti-aliasing)
     img = Image.new('RGBA', (int(32 * k), int(32 * k)), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    d.ellipse([1 * k, 1 * k, 31 * k, 31 * k], fill=(217, 119, 87, 255))
-    epaisseur = 2.6 * k
+    if barre_mac:
+        couleur_etoile, centre, interieur, exterieur, epaisseur = (217, 119, 87, 255), 16, 2.5, 14.5, 3.6 * k
+    else:
+        d.ellipse([1 * k, 1 * k, 31 * k, 31 * k], fill=(217, 119, 87, 255))
+        couleur_etoile, centre, interieur, exterieur, epaisseur = 'white', 16, 3.5, 11, 2.6 * k
     for i in range(8):
         a = math.radians(angle + i * 45)
-        x1, y1 = (16 + 3.5 * math.cos(a)) * k, (16 + 3.5 * math.sin(a)) * k
-        x2, y2 = (16 + 11 * math.cos(a)) * k, (16 + 11 * math.sin(a)) * k
-        d.line([x1, y1, x2, y2], fill='white', width=int(epaisseur))
+        x1, y1 = (centre + interieur * math.cos(a)) * k, (centre + interieur * math.sin(a)) * k
+        x2, y2 = (centre + exterieur * math.cos(a)) * k, (centre + exterieur * math.sin(a)) * k
+        d.line([x1, y1, x2, y2], fill=couleur_etoile, width=int(epaisseur))
         for (x, y) in ((x1, y1), (x2, y2)):  # rounded ends
             r = epaisseur / 2
-            d.ellipse([x - r, y - r, x + r, y + r], fill='white')
-    if pastille:
+            d.ellipse([x - r, y - r, x + r, y + r], fill=couleur_etoile)
+    if pastille and barre_mac:
+        couleur = {'vert': (50, 205, 50, 255), 'rouge': (230, 30, 30, 255)}[pastille]
+        d.ellipse([17 * k, 17 * k, 32 * k - 1, 32 * k - 1], fill=(0, 0, 0, 0))  # gap around the dot
+        d.ellipse([20 * k, 20 * k, 31 * k, 31 * k], fill=couleur)
+        if pastille == 'rouge':  # error: a ring, so it differs from "done" even in one color
+            d.ellipse([23 * k, 23 * k, 28 * k, 28 * k], fill=(0, 0, 0, 0))
+    elif pastille:
         couleur = {'vert': (50, 205, 50, 255), 'rouge': (230, 30, 30, 255)}[pastille]
         d.ellipse([19 * k, 19 * k, 32 * k - 1, 32 * k - 1], fill='white')
         d.ellipse([21 * k, 21 * k, 30 * k, 30 * k], fill=couleur)
     return img.resize((taille, taille), getattr(Image, 'LANCZOS', 1))
 
 
+MESSAGE_TERMINAL = ('Terminal access lets Claude run shell commands on this computer during a task, on top of the mouse '
+                    'and keyboard.\n\nEvery command goes through a guard first: no deletion, no sudo, no installation or '
+                    'download, no change to the system. The guard is a list of forbidden things, not a sandbox: a command '
+                    'it does not know can still run.\n\nTurn it on only when a task needs it (many files, data to '
+                    'process). Allow Claude to run commands?')
+
+
+def texte_barre(image, debut, maintenant=None):
+    """Text shown next to the icon in the macOS menu bar for this icon image."""
+    if image is not None and any(image is i for i in ICONES_TRAVAIL):
+        secondes = int((maintenant if maintenant is not None else time.monotonic()) - (debut or 0))
+        return ' %d:%02d' % (secondes // 60, secondes % 60)
+    if image is not None and image is ICONE_FINI:
+        return ' \u2713'
+    if image is not None and image is ICONE_ERREUR:
+        return ' !'
+    return ''
+
+
 # ------------------------------------------------------------------ instructions for Claude
 
+TEXTE_TERMINAL = ("Terminal: you also have the Bash tool. The screen comes first: use a command only when the task cannot "
+                  "reasonably be done on screen, or is clearly better done that way (handling many files, processing data, "
+                  "converting or producing a document, reading the state of the system). Stay inside the task: work in the "
+                  "current folder unless the task is about other files, and change nothing else on the computer. No sudo or "
+                  "administrator rights, no installation, no download, no change to the system, its settings, services, "
+                  "accounts or security, no stopping of other programs, no permanent deletion (send files to the trash with "
+                  "the corbeille action). A command that breaks these rules is blocked: do not try another way round, "
+                  "explain it in your final answer.")
+
+
 def texte_consigne(png, largeur, hauteur, fenetre, precision, instructions='', documents='', bloc_memoire='',
-                   roles=''):
+                   roles='', terminal=False):
     if MAC:
         note_touches = ("  On macOS, editing shortcuts use cmd (cmd+a, cmd+c, cmd+v, cmd+s, cmd+z); "
                         "ctrl stays ctrl (useful in a terminal: ctrl+c, ctrl+z).\n")
@@ -228,7 +276,7 @@ Active window: {fenetre[0]} - "{fenetre[1]}"
 3. Your final answer: plain text, short, in the language of this computer (language code: {LANGUE}) unless the user's instructions ask for another language. What you did and/or the answer, and the path of any files created. It is shown when the user clicks the icon.
 
 Computer control tool: the "pc" tool (mcp__pc__pc). Give it "actions": the list of actions to run in order (it stops at the first error), for example ["clic 412 300", "remplacer Paris", "touche enter"], 40 actions at most. Each call takes time: put in one call all the actions that need no look at the screen in between (several answers to tick, a field to click then fill, a text then enter). Chain only clicks on things you have already seen at that place: when a click opens a menu, a list or a window that you have not seen yet, end the call there and read the screenshot instead of guessing where its items will be. A click on a guessed position that is a little off lands on something else, which can open or close a window, and every action after it then goes wrong. The result ends with a new screenshot taken after the last action: look at it instead of asking for another one, and pass "capture": false only when you do not need it. The result also names the active window when it can be read, and says at which action another window came to the front: if that was not expected, the actions after it may have gone to the wrong place, so check the screenshot before going on. If the active window is not one of the task, stop.
-There is no terminal.
+{TEXTE_TERMINAL if terminal else 'There is no terminal.'}
 Actions:
   capture                 new screenshot of the same screen; the image comes back in the result
   zoom X Y W H            enlarged image of an area (to read small text; do not click using its coordinates)
@@ -486,6 +534,14 @@ def lire_session():
     return sessions.lire_session(DONNEES)
 
 
+def dossiers_lisibles(run):
+    """The only folders Claude may read (os.pathsep-separated): the work folder (System-Context included),
+    the folder of the task (its screenshots) and the text extracted from the PDFs. Checked by outils/garde.py
+    (Read, Glob, Grep) and outils/pc.py (ecrire-fichier), so that text on screen cannot make Claude read or
+    type a private file (~/.ssh, shell history, passwords...)."""
+    return os.pathsep.join([TRAVAIL, run, CACHE_CONTEXTE])
+
+
 def preparer_outils():
     """Writes data/settings.json (limited permissions + guard hook).
 
@@ -495,7 +551,7 @@ def preparer_outils():
     reglages = {
         'permissions': {
             'defaultMode': 'acceptEdits',
-            'allow': ['Read', 'Glob', 'Grep', 'mcp__pc'],
+            'allow': ['Read', 'Glob', 'Grep', 'mcp__pc', 'Bash'],  # Bash is only given with Terminal access
             # System-Context is read-only (Edit also covers Write and NotebookEdit). "//" = absolute path.
             'deny': ['WebFetch', 'WebSearch', 'Edit(/%s/**)' % CONTEXTE],
         },
@@ -504,6 +560,8 @@ def preparer_outils():
                 {'matcher': 'Bash', 'hooks': [garde]},
                 # File writes: refused inside System-Context (backs up the deny rule).
                 {'matcher': 'Edit|Write|MultiEdit|NotebookEdit', 'hooks': [garde]},
+                # File reads: only the work folder, the task folder and the PDF text (see dossiers_lisibles).
+                {'matcher': 'Read|Glob|Grep|NotebookRead|LS', 'hooks': [garde]},
             ],
         },
     }
@@ -535,6 +593,9 @@ class Appli:
         if self.choix_modele not in ('auto', 'sonnet', 'opus'):
             self.choix_modele = 'auto'
         self.smooth = lire_texte(FICHIER_SMOOTH).lower() == 'on'
+        self.terminal = lire_texte(FICHIER_TERMINAL).lower() == 'on'
+        self.terminal_tache = False
+        self.brouillon = ''  # text typed in the instruction bar closed without Enter: shown again next time
         self.memoire = memoire.active(FICHIER_MEMOIRE)
         self.fantome = lire_texte(FICHIER_FANTOME).lower() == 'on'
         self.dernier = ACCUEIL_FANTOME if self.fantome else ACCUEIL
@@ -561,12 +622,37 @@ class Appli:
 
     def mettre_icone(self, image):
         self.ui(lambda: setattr(self.icone, 'icon', image))
+        self.mettre_texte_barre(texte_barre(image, self.debut))
+
+    def mettre_texte_barre(self, texte):
+        """macOS: a short text next to the icon in the menu bar (the time spent while Claude works, ✓ when done,
+        ! on error), so the state shows at a glance, like the icon of the Windows version."""
+        if not MAC or texte == getattr(self, 'texte_barre', None):
+            return
+        self.texte_barre = texte
+
+        def appliquer():
+            try:
+                self.icone._status_item.button().setTitle_(texte)
+            except Exception:
+                pass  # pystray not started yet, or another version: the icon alone is still there
+        self.ui(appliquer)
 
     def infobulle(self, texte):
         texte = re.sub(r'\s+', ' ', NOM + ' - ' + texte)
         if len(texte) > 63:
             texte = texte[:60] + '...'
         self.ui(lambda: setattr(self.icone, 'title', texte))
+
+    def regler_terminal(self, actif):
+        self.terminal = actif
+        ecrire_texte(FICHIER_TERMINAL, 'on' if actif else 'off')
+        noter('Terminal access: %s' % ('on' if actif else 'off'))
+
+    def notifier(self, texte):
+        """Notification, so that the work shows even when the icon is hidden. Off with "off" in data/notifications.txt."""
+        if lire_texte(FICHIER_NOTIFICATIONS).strip().lower() not in ('off', 'non', 'no', 'never'):
+            natif.notifier(NOM, texte)
 
     def poster(self, *evenement):
         self.evenements.put(evenement)
@@ -870,6 +956,7 @@ class Appli:
         env = {k: v for k, v in os.environ.items() if not k.startswith('CLAUDE')}
         env['ECRAN_RUN'] = run
         env['ECRAN_CONTEXTE'] = CONTEXTE  # garde.py refuses to touch it (pc.py gets it through mcp.json)
+        env['ECRAN_LECTURE'] = dossiers_lisibles(run)  # garde.py refuses to read anything else
         chemins = [os.path.dirname(claude), os.path.expanduser('~/.local/bin'), '/opt/homebrew/bin', '/usr/local/bin']
         env['PATH'] = os.pathsep.join(chemins + [env.get('PATH', '/usr/bin:/bin')])
         # The task writes a stream of events (what Claude says and does, as it goes): the app reads its steps
@@ -911,10 +998,20 @@ class Appli:
         self.dernier_hors_historique = True
         self.mettre_icone(ICONE_ERREUR)
         self.infobulle('error (click to see)')
+        self.notifier('Error: ' + message)
         noter(message)
 
     def capturer(self):
         """Captures the screen under the mouse into a new task folder."""
+        if MAC:
+            # Without these permissions the screenshot only shows the wallpaper and the clicks are dropped
+            # without an error: refuse the task rather than send Claude a blank screen.
+            droits = natif.autorisations()
+            manque = [n for n, ok in (('Screen Recording', droits.get('ecran')),
+                                      ('Accessibility', droits.get('accessibilite'))) if ok is False]
+            if manque:
+                raise RuntimeError('missing macOS permissions: %s. Allow ClaudeScreen in System Settings > '
+                                   'Privacy & Security, then quit and relaunch it.' % ', '.join(manque))
         nom, titre, ident = natif.fenetre_active()
         ecran = natif.ecran_sous_curseur()
         run = os.path.join(RUNS, datetime.datetime.now().strftime('%Y%m%d-%H%M%S'))
@@ -955,6 +1052,7 @@ class Appli:
             for nom in self.coupes:
                 noter('%s is longer than 4000 characters: its end was not sent to Claude' % nom)
             self.fantome_tache = self.fantome
+            self.terminal_tache = self.terminal  # a change in the menu applies to the next task
             self.instruction_tache = instruction
             self.memoire_tache = self.memoire
             if self.fantome_tache:
@@ -972,7 +1070,8 @@ class Appli:
             documents = lister_documents(sessions.lister_documents(CONTEXTE, ident)) + fichiers_recents()
             ecrire_texte(os.path.join(run, 'prompts', 'task.txt'),
                          texte_consigne(png, capture['largeur'], capture['hauteur'], fenetre, precision,
-                                        instructions, documents, bloc_memoire, texte_roles(noms_roles, roles)))
+                                        instructions, documents, bloc_memoire, texte_roles(noms_roles, roles),
+                                        terminal=self.terminal_tache))
 
             modele = self.choix_modele
             if modele == 'auto' and fenetre[0] and APPS_OPUS.search(fenetre[0]):
@@ -998,12 +1097,15 @@ class Appli:
             ecrire_texte(config, json.dumps({'mcpServers': {'pc': {
                 'command': sys.executable,
                 'args': [MCP_SCRIPT],
-                'env': {'ECRAN_RUN': self.run, 'ECRAN_CONTEXTE': CONTEXTE,
+                'env': {'ECRAN_RUN': self.run, 'ECRAN_CONTEXTE': CONTEXTE, 'ECRAN_TRAVAIL': TRAVAIL,
+                        'ECRAN_LECTURE': dossiers_lisibles(self.run),
                         'PYTHONPYCACHEPREFIX': os.environ['PYTHONPYCACHEPREFIX']},
             }}}, indent=2))
-            self.demarrer_claude(modele, 'task', OPTIONS_TACHE + ['--mcp-config', config] + self.options_fantome())
+            outils = OPTIONS_TACHE[:-1] + [OPTIONS_TACHE[-1] + (',Bash' if self.terminal_tache else '')]
+            self.demarrer_claude(modele, 'task', outils + ['--mcp-config', config] + self.options_fantome())
             self.infobulle('working (%s)...' % modele)
-            noter('Model: %s' % modele)
+            self.notifier('Claude is working (%s)... Press the shortcut again to stop.' % modele)
+            noter('Model: %s%s' % (modele, ', terminal' if self.terminal_tache else ''))
         except Exception as ex:
             self.echec('Could not start the task: %s' % ex)
 
@@ -1022,8 +1124,9 @@ class Appli:
         def attendre():
             texte, valide, erreur = '', False, ''
             try:
-                r = subprocess.run([sys.executable, FENETRES, 'consigne', str(e['gauche']), str(e['haut'] + e['hauteur'])],
-                                   capture_output=True, text=True, timeout=900, stdin=subprocess.DEVNULL)
+                # The text typed last time in a bar closed without Enter comes back in the new bar.
+                r = subprocess.run([sys.executable, FENETRES, 'consigne', str(e['gauche']), str(e['haut'] + e['hauteur']),
+                                    self.brouillon], capture_output=True, text=True, timeout=900, stdin=subprocess.DEVNULL)
                 valide, texte = r.returncode == 0, r.stdout.strip()
                 if r.returncode not in (0, 1):
                     erreur = r.stderr.strip() or 'code %d' % r.returncode
@@ -1035,6 +1138,8 @@ class Appli:
 
     def consigne_finie(self, capture, texte, valide, erreur):
         self.boite = None
+        # Closed without Enter (Esc, a click elsewhere, by accident): what was typed is kept for the next bar.
+        self.brouillon = '' if valide or erreur else texte
         if valide:
             natif.activer(capture['ident'])
             time.sleep(0.2)
@@ -1132,6 +1237,7 @@ class Appli:
             self.finir_run()
             self.mettre_icone(ICONE_REPOS)
             self.infobulle('stopped')
+            self.notifier('Task stopped (%s) after %d s.' % (self.arret, duree))
             noter('Task stopped: %s' % self.run)
             self.nettoyer_runs()
             return
@@ -1170,11 +1276,13 @@ class Appli:
             self.dernier = '[%s, %d s] %s' % (self.modele, duree, reponse)
             self.mettre_icone(ICONE_FINI)
             self.infobulle('done: ' + reponse)
+            self.notifier('Done in %d s: %s' % (duree, reponse))
         else:
             self.dernier = ('The task failed (code %s, %s, %d s).\n%s\n%s' % (
                 code, self.modele, duree, self.lire_run(os.path.join('responses', 'task-errors.txt')), reponse)).strip()
             self.mettre_icone(ICONE_ERREUR)
             self.infobulle('error (click to see)')
+            self.notifier('The task failed (%s, %d s). Open Sessions for the details.' % (self.modele, duree))
         fini = code == 0 and bool(reponse)
         self.finir_run(deroule.texte(etapes, omises))
         noter('Task finished (code %s, %d s): %s' % (code, duree, self.run))
@@ -1353,6 +1461,24 @@ class Appli:
             noter('Smooth mode: %s' % ('on' if self.smooth else 'off'))
             icone.update_menu()
 
+        def basculer_terminal(icone, _item):
+            # Off -> on asks once (the answer is kept); the dialog runs in a thread so the menu bar is not frozen.
+            if self.terminal:
+                self.regler_terminal(False)
+                icone.update_menu()
+                return
+
+            def demander():
+                if os.path.exists(FICHIER_TERMINAL_ACCEPTE) or natif.confirmer(NOM + ' - Terminal access', MESSAGE_TERMINAL):
+                    if not os.path.exists(FICHIER_TERMINAL_ACCEPTE):
+                        ecrire_texte(FICHIER_TERMINAL_ACCEPTE, datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+                        noter('Terminal access: allowed by the user (not asked again)')
+                    self.regler_terminal(True)
+                else:
+                    noter('Terminal access: not allowed (the user answered No)')
+                self.ui(icone.update_menu)
+            threading.Thread(target=demander, daemon=True).start()
+
         def nouvelle_session(icone, _item):
             self.nouvelle_session()
             icone.update_menu()
@@ -1388,6 +1514,7 @@ class Appli:
                 M('Always Sonnet', choisir('sonnet'), checked=coche('sonnet'), radio=True),
                 M('Always Opus', choisir('opus'), checked=coche('opus'), radio=True))),
             M('Smooth mode', basculer_smooth, checked=lambda _item: self.smooth),
+            M('Terminal access', basculer_terminal, checked=lambda _item: self.terminal),
             M('New session', nouvelle_session),
             M('Ghost mode', basculer_fantome, checked=lambda _item: self.fantome),
             M(lambda _item: 'Roles: %s' % sessions.nom_roles(self.roles_session(self.id_en_cours())), pystray.Menu(menu_roles)),
@@ -1461,12 +1588,18 @@ class Appli:
                 self.dernier = ('Permissions to grant in System Settings > Privacy & Security: %s. '
                                 'Then quit and relaunch ClaudeScreen.' % ', '.join(manque))
                 self.icone.icon = ICONE_ERREUR
+                self.notifier(self.dernier)
                 noter('Missing permissions: %s' % ', '.join(manque))
         texte = 'ready (%s)' % ', '.join(actifs) if actifs else 'ready (desktop shortcut or menu)'
+        if not (MAC and manque):
+            self.notifier('Ready: %s' % (', '.join(actifs) or 'desktop shortcut or menu'))
         self.icone.title = re.sub(r'\s+', ' ', NOM + ' - ' + texte)[:63]
 
         try:
-            self.icone.run()
+            def visible(icone):
+                icone.visible = True
+                self.mettre_texte_barre(texte_barre(icone.icon, self.debut))
+            self.icone.run(setup=visible)
         finally:
             self.poster('arreter', 'fermeture')
             self.poster('quitter')
@@ -1561,8 +1694,8 @@ def main():
     a = p.parse_args()
     if a.icone:
         tailles = [(16, 16), (32, 32), (64, 64), (128, 128), (256, 256), (512, 512)]
-        dessiner(0, taille=512).save(a.icone, sizes=tailles) if a.icone.endswith('.icns') else \
-            dessiner(0, taille=256).save(a.icone)
+        dessiner(0, taille=512, barre_mac=False).save(a.icone, sizes=tailles) if a.icone.endswith('.icns') else \
+            dessiner(0, taille=256, barre_mac=False).save(a.icone)
         return 0
     if a.commande == 'diagnostic':
         return diagnostic()
